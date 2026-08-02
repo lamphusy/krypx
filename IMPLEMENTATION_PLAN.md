@@ -6,7 +6,7 @@
 **Last updated:** 2026-08-02
 **Current implementation scope:** Phase 1 — Baseline Research Pipeline
 **Primary implementation assistant:** Codex
-**Author:** [Your Name]
+**Author:** Sy Lam
 
 ---
 
