@@ -2,11 +2,17 @@
 
 ## Implementation Plan and Technical Specification
 
-**Version:** 2.0.0
+**Version:** 2.1.0
 **Last updated:** 2026-08-02
 **Current implementation scope:** Phase 1 — Baseline Research Pipeline
 **Primary implementation assistant:** Codex
 **Author:** Sy Lam
+
+**Version 2.1 corrections:** Added holdout-boundary purging and label timestamp
+provenance; separated decision rows from execution-price context; fixed full-equity
+position sizing, state-machine ordering, and metric definitions; aligned label and
+backtest cost math; moved configuration inside the package; and required immutable
+content-addressed data snapshots.
 
 ---
 
@@ -157,7 +163,7 @@ Validation or test data occurs strictly afterward.
 
 ## 2.2 Point-in-Time Correctness
 
-A feature for decision row (t) may use only information available at or before the close of candle (t).
+A feature for decision row $t$ may use only information available at or before the close of candle $t$.
 
 It may not use:
 
@@ -173,9 +179,9 @@ It may not use:
 
 ## 2.3 Executable Assumptions
 
-The system observes the completed candle at time (t).
+The system observes the completed candle at time $t$.
 
-It cannot use the close of candle (t) and assume execution at that same close.
+It cannot use the close of candle $t$ and assume execution at that same close.
 
 The Phase 1 execution policy is:
 
@@ -252,7 +258,7 @@ The production model must never be used to claim holdout performance because it 
 
 ## 3.1 Decision Row
 
-A row at timestamp (t) represents information available after candle (t) has fully closed.
+A row at timestamp $t$ represents information available after candle $t$ has fully closed.
 
 The timestamp column refers to the candle open time, following the exchange OHLCV convention.
 
@@ -262,13 +268,13 @@ The timestamp column refers to the candle open time, following the exchange OHLC
 
 The input vector is:
 
-[
+$$
 \mathbf{x}_t \in \mathbb{R}^{d}
-]
+$$
 
-where (d) is the number of selected feature columns.
+where $d$ is the number of selected feature columns.
 
-Every feature in (\mathbf{x}_t) must be computable from rows whose timestamps are less than or equal to (t).
+Every feature in $\mathbf{x}_t$ must be computable from rows whose timestamps are less than or equal to $t$.
 
 ---
 
@@ -276,17 +282,14 @@ Every feature in (\mathbf{x}_t) must be computable from rows whose timestamps ar
 
 Let:
 
-* (O_{t+1}) be the open price of the next candle.
-* (O_{t+H+1}) be the open price after holding for (H) candles.
+* $O_{t+1}$ is the open price of the next candle.
+* $O_{t+H+1}$ is the open price after holding for $H$ candles.
 
 The gross executable forward return is:
 
-[
-r_t^{(H)}
-=========
-
-\frac{O_{t+H+1}}{O_{t+1}} - 1
-]
+$$
+r_t^{(H)} = \frac{O_{t+H+1}}{O_{t+1}} - 1
+$$
 
 This return definition must be shared by:
 
@@ -302,31 +305,30 @@ This return definition must be shared by:
 
 The label is:
 
-[
+$$
 y_t =
 \begin{cases}
-1, & r_t^{(H)} > \tau \
+1, & r_t^{(H)} > \tau \\
 0, & r_t^{(H)} \leq \tau
 \end{cases}
-]
+$$
 
 where:
 
-* (y_t=1) means BUY.
-* (y_t=0) means STAY_OUT.
-* (\tau) is the minimum required gross return.
+* $y_t=1$ means BUY.
+* $y_t=0$ means STAY_OUT.
+* $\tau$ is the minimum required gross return.
 
 The minimum required return accounts for estimated trading costs and a configurable safety margin.
 
-Example:
+Use the shared cost helper defined in Section 6.3:
 
 ```python
-ROUND_TRIP_COST_RATE = 0.0024
-MIN_EDGE_RATE = 0.0006
-
-MIN_REQUIRED_RETURN = (
-    ROUND_TRIP_COST_RATE
-    + MIN_EDGE_RATE
+MIN_REQUIRED_RETURN = minimum_gross_return_for_net_edge(
+    fee_rate=TAKER_FEE_RATE,
+    slippage_bps_per_side=SLIPPAGE_BPS_PER_SIDE,
+    half_spread_bps_per_side=HALF_SPREAD_BPS_PER_SIDE,
+    minimum_net_edge_bps=MIN_EDGE_BPS,
 )
 ```
 
@@ -340,19 +342,19 @@ The label distribution is not required to be 50/50.
 
 The model produces:
 
-[
+$$
 p_t = P(y_t=1 \mid \mathbf{x}_t)
-]
+$$
 
 The Phase 1 signal rule is:
 
-[
+$$
 \text{signal}_t =
 \begin{cases}
-\text{BUY}, & p_t \geq \theta \
+\text{BUY}, & p_t \geq \theta \\
 \text{STAY_OUT}, & p_t < \theta
 \end{cases}
-]
+$$
 
 The initial Phase 1 threshold is fixed in configuration:
 
@@ -384,8 +386,22 @@ Rules:
 6. Ignore new BUY signals while a position is already open.
 7. Do not open overlapping trades.
 8. Do not short when the signal is STAY_OUT.
-9. Force all positions to close within the evaluated data range.
+9. Accept a trade only when its scheduled exit is within the evaluated price context.
 10. Do not evaluate decision rows without a valid future exit price.
+11. Invest 100% of currently available equity on each entry.
+12. Permit fractional asset quantities.
+13. Do not use leverage, borrowed capital, or partial position sizing.
+14. Cash earns no yield during Phase 1.
+
+The quantity purchased at entry is:
+
+```python
+investable_capital = equity_before_entry * (1.0 - fee_rate)
+position_quantity = investable_capital / entry_fill_price
+```
+
+The implementation may use an algebraically equivalent cash-flow representation,
+but it must reconcile exactly with the net-growth-factor formula in Section 13.3.
 
 This stateful logic may use a clear chronological loop. Vectorization is not required.
 
@@ -408,7 +424,7 @@ Correctness is more important than avoiding loops.
 │ Raw-data validation                                       │
 │        │                                                  │
 │        ▼                                                  │
-│ Versioned raw OHLCV file                                  │
+│ Immutable raw snapshot plus latest-data convenience file  │
 └──────────────────────────────┬────────────────────────────┘
                                │
 ┌──────────────────────────────▼────────────────────────────┐
@@ -426,11 +442,13 @@ Correctness is more important than avoiding loops.
 │                                                           │
 │ Chronological development/holdout split                   │
 │        │                                                  │
+│ Boundary purge covering complete label lookahead          │
+│        │                                                  │
 │ Purged walk-forward validation on development data        │
 │        │                                                  │
 │ Out-of-fold predictions and classification metrics        │
 │        │                                                  │
-│ Train evaluation model on full development period         │
+│ Train evaluation model on boundary-purged development     │
 └──────────────────────────────┬────────────────────────────┘
                                │
 ┌──────────────────────────────▼────────────────────────────┐
@@ -470,9 +488,6 @@ Use a Python `src` package layout.
 ```text
 crypto-ai/
 │
-├── config/
-│   └── settings.py
-│
 ├── data/
 │   ├── raw/
 │   ├── processed/
@@ -486,6 +501,10 @@ crypto-ai/
 ├── src/
 │   └── crypto_ai/
 │       ├── __init__.py
+│       │
+│       ├── config/
+│       │   ├── __init__.py
+│       │   └── settings.py
 │       │
 │       ├── data/
 │       │   ├── __init__.py
@@ -508,7 +527,6 @@ crypto-ai/
 │       ├── backtesting/
 │       │   ├── __init__.py
 │       │   ├── engine.py
-│       │   ├── costs.py
 │       │   └── metrics.py
 │       │
 │       ├── artifacts/
@@ -516,6 +534,7 @@ crypto-ai/
 │       │   ├── manifest.py
 │       │   └── registry.py
 │       │
+│       ├── costs.py
 │       ├── cli.py
 │       └── logging_config.py
 │
@@ -541,8 +560,9 @@ crypto-ai/
 │   │
 │   ├── backtesting/
 │   │   ├── test_engine.py
-│   │   ├── test_costs.py
 │   │   └── test_metrics.py
+│   │
+│   ├── test_costs.py
 │   │
 │   └── integration/
 │       └── test_pipeline.py
@@ -563,7 +583,7 @@ crypto-ai/
 
 ## 6.1 General Rule
 
-All configurable values must be defined in `config/settings.py`.
+All configurable values must be defined in `src/crypto_ai/config/settings.py`.
 
 Functions must accept settings or explicit parameters where practical. Business logic must not contain hidden magic numbers.
 
@@ -574,7 +594,7 @@ CLI arguments may override configuration values for a specific run.
 ## 6.2 Settings Specification
 
 ```python
-# config/settings.py
+# src/crypto_ai/config/settings.py
 
 from pathlib import Path
 
@@ -583,10 +603,11 @@ from pathlib import Path
 # Paths
 # ==========================================================
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parents[3]
 
 DATA_DIR = BASE_DIR / "data"
 DATA_RAW_DIR = DATA_DIR / "raw"
+DATA_RAW_SNAPSHOTS_DIR = DATA_RAW_DIR / "snapshots"
 DATA_INTERIM_DIR = DATA_DIR / "interim"
 DATA_PROCESSED_DIR = DATA_DIR / "processed"
 
@@ -662,6 +683,13 @@ PURGE_GAP_ROWS = PREDICTION_HORIZON + 1
 
 
 # ==========================================================
+# Reproducibility
+# ==========================================================
+
+RANDOM_SEED = 42
+
+
+# ==========================================================
 # Model
 # ==========================================================
 
@@ -678,8 +706,13 @@ XGBOOST_PARAMS = {
     "colsample_bytree": 0.8,
     "reg_alpha": 0.0,
     "reg_lambda": 1.0,
-    "random_state": 42,
+    "random_state": RANDOM_SEED,
     "n_jobs": -1,
+}
+
+LOGISTIC_REGRESSION_PARAMS = {
+    "max_iter": 1000,
+    "random_state": RANDOM_SEED,
 }
 
 
@@ -688,17 +721,28 @@ XGBOOST_PARAMS = {
 # ==========================================================
 
 INITIAL_CAPITAL = 10_000.0
-RISK_FREE_RATE = 0.0
+# Annual rate used only for risk-adjusted reporting. Cash earns no yield.
+ANNUAL_RISK_FREE_RATE = 0.0
 
-FORCE_FINAL_LIQUIDATION = True
+RANDOM_BASELINE_SIMULATIONS = 1_000
 
-
-# ==========================================================
-# Reproducibility
-# ==========================================================
-
-RANDOM_SEED = 42
-
+COST_SCENARIOS = {
+    "low": {
+        "fee_rate": TAKER_FEE_RATE,
+        "slippage_bps_per_side": 1.0,
+        "half_spread_bps_per_side": 0.5,
+    },
+    "base": {
+        "fee_rate": TAKER_FEE_RATE,
+        "slippage_bps_per_side": SLIPPAGE_BPS_PER_SIDE,
+        "half_spread_bps_per_side": HALF_SPREAD_BPS_PER_SIDE,
+    },
+    "high": {
+        "fee_rate": TAKER_FEE_RATE,
+        "slippage_bps_per_side": 5.0,
+        "half_spread_bps_per_side": 2.0,
+    },
+}
 
 # ==========================================================
 # Columns
@@ -714,6 +758,8 @@ RAW_COLUMNS = [
 ]
 
 LABEL_COLUMNS = [
+    "entry_timestamp",
+    "exit_timestamp",
     "entry_open",
     "exit_open",
     "gross_forward_return",
@@ -738,9 +784,48 @@ NON_FEATURE_COLUMNS = [
 Use helper functions instead of duplicating cost formulas.
 
 ```python
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class CostConfig:
+    """Per-side fee and adverse execution assumptions."""
+
+    fee_rate: float
+    slippage_bps_per_side: float
+    half_spread_bps_per_side: float
+
+
 def bps_to_rate(bps: float) -> float:
+    """Convert basis points to a decimal rate."""
     return bps / 10_000.0
+
+
+def minimum_gross_return_for_net_edge(
+    fee_rate: float,
+    slippage_bps_per_side: float,
+    half_spread_bps_per_side: float,
+    minimum_net_edge_bps: float,
+) -> float:
+    """Return the gross market return required to retain a net edge."""
+    one_side_execution_rate = bps_to_rate(
+        slippage_bps_per_side + half_spread_bps_per_side
+    )
+    minimum_net_edge_rate = bps_to_rate(minimum_net_edge_bps)
+    return (
+        (1.0 + minimum_net_edge_rate)
+        * (1.0 + one_side_execution_rate)
+        / (
+            (1.0 - one_side_execution_rate)
+            * (1.0 - fee_rate) ** 2
+        )
+        - 1.0
+    )
 ```
+
+Validate that fee and execution rates are non-negative and strictly below `1.0`.
+`CostConfig` and these helpers belong in `crypto_ai/costs.py` and are shared by
+label generation and backtesting.
 
 Estimated one-side non-fee execution cost:
 
@@ -766,16 +851,29 @@ Estimated round-trip cost:
 round_trip_cost_rate = 2.0 * one_side_total_cost
 ```
 
-Minimum required gross return:
+`round_trip_cost_rate` is an additive reporting approximation only. It must not be
+used to construct the label threshold.
+
+Minimum required gross market return must use the same multiplicative execution
+model as the backtest:
 
 ```python
+minimum_net_edge_rate = bps_to_rate(MIN_EDGE_BPS)
+
 minimum_required_return = (
-    round_trip_cost_rate
-    + bps_to_rate(MIN_EDGE_BPS)
+    (1.0 + minimum_net_edge_rate)
+    * (1.0 + one_side_execution_rate)
+    / (
+        (1.0 - one_side_execution_rate)
+        * (1.0 - TAKER_FEE_RATE) ** 2
+    )
+    - 1.0
 )
 ```
 
-These are modeling assumptions, not guaranteed real transaction costs.
+This is the minimum raw open-to-open market return expected to leave the configured
+net edge after adverse entry and exit fills and both fees. These are modeling
+assumptions, not guaranteed real transaction costs.
 
 ---
 
@@ -909,6 +1007,10 @@ candle_close_time <= current_utc_time
 
 All training and inference data must use completed candles only.
 
+Pass an explicit timezone-aware `current_utc_time` into the candle-filtering helper.
+Production callers supply the real current time; tests supply a fixed time. Do not
+read the clock separately for every row.
+
 ---
 
 # 7.2 `data/storage.py`
@@ -920,6 +1022,8 @@ All training and inference data must use completed candles only.
 * Merge incremental data.
 * Remove duplicates.
 * Save files atomically.
+* Persist immutable content-addressed snapshots.
+* Return the exact snapshot identity used by downstream steps.
 * Preserve UTC timestamps.
 
 ---
@@ -952,21 +1056,47 @@ def get_raw_data_path(
     symbol: str,
     timeframe: str,
 ) -> Path:
+    """Return the mutable latest-data convenience path."""
     slug = symbol_to_slug(symbol)
     return DATA_RAW_DIR / f"{slug}_{timeframe}.csv"
 ```
+
+This path is a convenience pointer containing the latest successfully validated
+dataset. It is not the immutable research input.
+
+Every successful update must also store the exact finalized CSV bytes under a
+content-addressed snapshot path:
+
+```text
+data/raw/snapshots/{symbol_slug}_{timeframe}/{sha256}.csv
+```
+
+If a snapshot with that hash already exists, reuse it. Never modify or overwrite an
+existing snapshot. Every training or evaluation manifest must reference the snapshot
+path and SHA-256 hash actually used. Keeping only a hash of the mutable latest-data
+file is insufficient for reproducibility.
 
 ---
 
 ## Incremental Update Function
 
 ```python
+@dataclass(frozen=True)
+class MarketDataResult:
+    """Validated market data and its persisted snapshot identity."""
+
+    data: pd.DataFrame
+    latest_path: Path
+    snapshot_path: Path
+    sha256: str
+
+
 def load_or_update_ohlcv(
     symbol: str,
     timeframe: str,
     lookback_days: int,
-) -> pd.DataFrame:
-    """Load existing OHLCV data and fetch any missing closed candles."""
+) -> MarketDataResult:
+    """Update OHLCV and return data with its immutable snapshot identity."""
 ```
 
 Behavior:
@@ -977,7 +1107,7 @@ Behavior:
 2. Fetch the complete available range.
 3. Validate it.
 4. Save it atomically.
-5. Return it.
+5. Return the validated data and snapshot identity.
 
 ### When a local file exists
 
@@ -991,7 +1121,7 @@ Behavior:
 8. Remove incomplete candles.
 9. Validate the result.
 10. Save atomically.
-11. Return it.
+11. Return the validated data and snapshot identity.
 
 Do not skip fetching merely because the local file is “recent.”
 
@@ -1008,6 +1138,10 @@ btc_usdt_1h.csv.tmp
 Then replace the final file only after a successful write.
 
 A failed write must not corrupt the previous valid dataset.
+
+Hash the finalized temporary file, persist its immutable snapshot, and only then
+replace the latest-data convenience file. Tests must verify that an earlier snapshot
+remains byte-for-byte unchanged after an incremental update.
 
 ---
 
@@ -1029,9 +1163,11 @@ Validation must verify:
 10. `low <= open <= high`.
 11. `low <= close <= high`.
 12. Candle intervals match the configured timeframe.
-13. Missing intervals are reported.
-14. The final candle is closed.
-15. Numeric price columns use `float64`.
+13. Candle timestamps align to the exchange timeframe grid; for `1h`, timestamps
+    must fall exactly on the UTC hour.
+14. Missing intervals are reported.
+15. The final candle is closed.
+16. Numeric price columns use `float64`.
 
 ---
 
@@ -1117,29 +1253,20 @@ close_to_ema_long
 
 Definitions:
 
-[
-\text{ema_ratio}_t
-==================
+$$
+\text{ema_ratio}_t =
+\frac{\text{EMA}_{short,t}}{\text{EMA}_{long,t}} - 1
+$$
 
-\frac{\text{EMA}*{short,t}}
-{\text{EMA}*{long,t}} - 1
-]
+$$
+\text{close_to_ema_short}_t =
+\frac{C_t}{\text{EMA}_{short,t}} - 1
+$$
 
-[
-\text{close_to_ema_short}_t
-===========================
-
-\frac{C_t}
-{\text{EMA}_{short,t}} - 1
-]
-
-[
-\text{close_to_ema_long}_t
-==========================
-
-\frac{C_t}
-{\text{EMA}_{long,t}} - 1
-]
+$$
+\text{close_to_ema_long}_t =
+\frac{C_t}{\text{EMA}_{long,t}} - 1
+$$
 
 ---
 
@@ -1175,26 +1302,17 @@ body_return
 
 Definitions:
 
-[
-\text{atr_pct}_t
-================
+$$
+\text{atr_pct}_t = \frac{\text{ATR}_t}{C_t}
+$$
 
-\frac{\text{ATR}_t}{C_t}
-]
+$$
+\text{candle_range_pct}_t = \frac{H_t-L_t}{C_t}
+$$
 
-[
-\text{candle_range_pct}_t
-=========================
-
-\frac{H_t-L_t}{C_t}
-]
-
-[
-\text{body_return}_t
-====================
-
-\frac{C_t}{O_t}-1
-]
+$$
+\text{body_return}_t = \frac{C_t}{O_t}-1
+$$
 
 ---
 
@@ -1207,20 +1325,14 @@ volume_ma_ratio
 
 Definitions:
 
-[
-\text{volume_change}_t
-======================
+$$
+\text{volume_change}_t = \frac{V_t}{V_{t-1}}-1
+$$
 
-\frac{V_t}{V_{t-1}}-1
-]
-
-[
-\text{volume_ma_ratio}_t
-========================
-
-\frac{V_t}
-{\operatorname{MA}_{volume,t}} - 1
-]
+$$
+\text{volume_ma_ratio}_t =
+\frac{V_t}{\operatorname{MA}_{volume,t}} - 1
+$$
 
 ---
 
@@ -1239,12 +1351,32 @@ return_24
 
 Definition:
 
-[
-\text{return}_{n,t}
-===================
+$$
+\text{return}_{n,t} = \frac{C_t}{C_{t-n}}-1
+$$
 
-\frac{C_t}{C_{t-n}}-1
-]
+---
+
+## Exact Indicator Contract
+
+Use the pinned `ta` package version from `requirements-lock.txt` with
+`fillna=False`. Use `EMAIndicator`, `MACD`, `RSIIndicator`,
+`StochRSIIndicator`, `BollingerBands`, and `AverageTrueRange` with the configured
+windows. Do not substitute pandas defaults or another indicator implementation
+without changing the specification and re-freezing the development configuration.
+
+`stoch_rsi` means the raw `StochRSIIndicator.stochrsi()` output, not its smoothed
+`%K` or `%D` output. Define Bollinger features explicitly so library percentage
+scaling cannot change their meaning:
+
+```python
+bb_width = (bb_upper - bb_lower) / bb_middle
+bb_pct = (close - bb_lower) / (bb_upper - bb_lower)
+```
+
+Use trailing rolling means with `min_periods` equal to the configured window. Use
+explicit shift-based ratios for lagged returns and volume change; do not rely on an
+implicit `pct_change()` fill policy.
 
 ---
 
@@ -1298,6 +1430,12 @@ def add_labels(
 ## Label Columns
 
 ```python
+result["entry_timestamp"] = result["timestamp"].shift(-1)
+
+result["exit_timestamp"] = result["timestamp"].shift(
+    -(horizon + 1)
+)
+
 result["entry_open"] = result["open"].shift(-1)
 
 result["exit_open"] = result["open"].shift(
@@ -1316,7 +1454,13 @@ result["label"] = (
 ).astype("int8")
 ```
 
-Rows without both an entry and exit price must be removed from the labeled training dataset.
+Rows without both entry and exit timestamps and prices must be removed from the
+labeled training dataset. The timestamp provenance columns are required for leakage
+audits and must never be model features.
+
+Removing these rows from the labeled decision dataset must not remove them from the
+raw or inference-ready feature dataset. The backtest needs those retained OHLCV rows
+as execution-price context for otherwise valid tail decisions.
 
 ---
 
@@ -1336,12 +1480,18 @@ This value determines the minimum purge gap used between training and validation
 
 # 9.1 Development and Final Holdout Split
 
-The full labeled dataset must first be divided chronologically:
+The full labeled decision-row dataset must first be divided chronologically. The
+holdout size is calculated before removing the boundary-purge rows:
 
 ```text
-First 80%: Development period
-Last 20%: Final holdout
+Earlier rows: Development candidates
+Next H+1 rows: Boundary purge; never fitted
+Last 20%: Final holdout decision rows
 ```
+
+The boundary purge is mandatory because a development label at row `t` reads the
+open at `t + H + 1`. Without it, the final development labels would contain prices
+from the final holdout even though the fitted feature indexes appear disjoint.
 
 Function:
 
@@ -1349,26 +1499,50 @@ Function:
 def split_development_holdout(
     df: pd.DataFrame,
     holdout_ratio: float,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Create chronological development and untouched holdout datasets."""
+    label_lookahead_rows: int,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Return development, boundary-purge, and untouched holdout rows."""
 ```
 
-Requirements:
+Required boundary calculation:
 
 ```python
-assert development.index.max() < holdout.index.min()
+holdout_size = max(1, math.ceil(len(df) * holdout_ratio))
+holdout_start = len(df) - holdout_size
+purge_start = holdout_start - label_lookahead_rows
+
+if purge_start <= 0:
+    raise DatasetSplitError("Insufficient rows for development, purge, and holdout")
+
+development = df.iloc[:purge_start]
+boundary_purge = df.iloc[purge_start:holdout_start]
+holdout = df.iloc[holdout_start:]
 ```
 
-When using timestamps:
+Required invariants:
 
 ```python
 assert (
     development["timestamp"].max()
+    < boundary_purge["timestamp"].min()
+    <= boundary_purge["timestamp"].max()
+    < holdout["timestamp"].min()
+)
+
+assert len(boundary_purge) == label_lookahead_rows
+
+assert (
+    development["exit_timestamp"].max()
     < holdout["timestamp"].min()
 )
 ```
 
-The split boundary and timestamps must be saved in the run manifest.
+The boundary calculation is positional and does not depend on DataFrame index-label
+arithmetic. Preserve the input indexes in each returned partition and always verify
+the actual `exit_timestamp` invariant directly.
+
+The holdout start, boundary-purge range, row counts, and timestamps must be saved in
+the run manifest.
 
 ---
 
@@ -1380,7 +1554,12 @@ After the holdout is created:
 * Baseline selection uses only the development period.
 * Model configuration uses only the development period.
 * Debug plots use only the development period.
+* Boundary-purge rows are not used for fitting or development metric calculation.
 * The holdout file should not be inspected during routine model development.
+
+The leakage test must inspect label provenance, not only the indexes passed to
+`model.fit()`. For every fitted development row, `exit_timestamp` must be strictly
+earlier than the first holdout timestamp.
 
 ---
 
@@ -1416,6 +1595,18 @@ Fold 3:
 Training expands over time.
 
 The validation set always occurs in the future.
+
+Successive validation blocks must be non-overlapping and contiguous so concatenated
+out-of-fold predictions define one continuous development backtest window:
+
+```python
+assert max(test_indices_for_fold_k) + 1 == min(
+    test_indices_for_fold_k_plus_1
+)
+```
+
+Rows validated in earlier folds may enter the expanding training window of later
+folds; they must never reappear as validation rows.
 
 ---
 
@@ -1459,15 +1650,34 @@ The implementation must verify that enough observations exist for all folds, rol
 
 # 10. Feature Schema
 
-Feature columns must be derived at runtime:
+Feature columns must be derived at runtime immediately after `compute_features()`,
+then checked against the exact expected schema. A denylist alone is insufficient
+because an accidental helper, fold, or future-derived column could otherwise become
+a model input silently.
 
 ```python
-feature_columns = [
+derived_feature_columns = [
     column
     for column in df.columns
     if column not in NON_FEATURE_COLUMNS
 ]
+
+expected_feature_columns = get_expected_feature_columns(
+    return_periods=RETURN_PERIODS,
+)
+
+if derived_feature_columns != expected_feature_columns:
+    raise FeatureEngineeringError(
+        "Derived feature columns do not match the ordered expected schema"
+    )
+
+feature_columns = expected_feature_columns
 ```
+
+`get_expected_feature_columns()` belongs in `features/build.py` and returns the
+ordered required feature names from Section 8, expanding `return_{n}` columns in
+configured order. Training and inference both use it only for validation; inference
+still loads the authoritative saved model schema.
 
 Before training:
 
@@ -1580,7 +1790,8 @@ Accuracy must not be treated as the primary measure of strategy quality.
 
 # 11.3 Evaluation Model
 
-After completing walk-forward validation, train an evaluation model on the complete development dataset:
+After completing walk-forward validation, train an evaluation model on every row of
+the boundary-purged development dataset:
 
 ```python
 def train_evaluation_model(
@@ -1591,7 +1802,8 @@ def train_evaluation_model(
     """Train the model used for untouched holdout evaluation."""
 ```
 
-The evaluation model must not use any holdout row.
+The evaluation model must not use any holdout or boundary-purge row. Its final label
+exit timestamp must be strictly earlier than the holdout start timestamp.
 
 Save it separately from the production model.
 
@@ -1654,10 +1866,7 @@ Pipeline([
     ("scaler", StandardScaler()),
     (
         "classifier",
-        LogisticRegression(
-            max_iter=1000,
-            random_state=RANDOM_SEED,
-        ),
+        LogisticRegression(**LOGISTIC_REGRESSION_PARAMS),
     ),
 ])
 ```
@@ -1673,15 +1882,15 @@ Implement:
 Never enters the market.
 
 ```text
-Return: 0 before optional cash yield
+Return: 0; Phase 1 cash earns no yield
 Exposure: 0%
 Trades: 0
 ```
 
 ### Buy & Hold
 
-* Enter at the first executable holdout open.
-* Exit at the final executable holdout open.
+* Enter at the first open of the common performance window.
+* Exit at the final open of the common performance window.
 * Apply one entry cost and one exit cost.
 
 ### EMA crossover
@@ -1708,16 +1917,23 @@ Use the same execution assumptions.
 
 ### Random exposure baseline
 
-Generate random signals using a fixed random seed.
+Generate independent Bernoulli BUY signals whose probability equals the model's
+predicted-positive rate on the same out-of-sample decision rows. This uses model
+predictions, never actual labels or realized returns, and is a descriptive null
+comparison rather than a fitted strategy.
 
-Match approximately:
+Run exactly `RANDOM_BASELINE_SIMULATIONS` simulations. Simulation `i` uses a
+deterministic seed derived from `RANDOM_SEED + i`. Apply the same execution delay,
+position sizing, costs, fixed holding period, no-overlap state machine, and common
+performance window as the model.
 
-* The model’s BUY frequency, or
-* The model’s market exposure.
+Report at least the median, 5th percentile, and 95th percentile for total return,
+Sharpe ratio, and maximum drawdown, plus the fraction of simulations whose total
+return equals or exceeds the model's total return.
 
-Run multiple random simulations and report the distribution rather than only one random result.
-
-Random baselines must use development data for research comparisons and must not be tuned on the final holdout.
+The random-baseline definition and simulation count must be frozen using development
+data. Apply that frozen procedure once to the final holdout; do not change it after
+seeing holdout outcomes.
 
 ---
 
@@ -1731,7 +1947,9 @@ Random baselines must use development data for research comparisons and must not
 def run_backtest(
     market_df: pd.DataFrame,
     probability_scores: pd.Series,
+    actual_labels: pd.Series | None,
     horizon: int,
+    timeframe: str,
     signal_threshold: float,
     initial_capital: float,
     cost_config: CostConfig,
@@ -1741,12 +1959,25 @@ def run_backtest(
 
 Requirements:
 
-* Inputs must share the same index.
-* Inputs must share the same chronological rows.
+* `market_df` contains the complete chronological OHLCV price context, including
+  any rows needed to execute the final decision rows at `t+1` and `t+H+1`.
+* `probability_scores.index` contains only decision rows and must be an ordered,
+  unique subset of `market_df.index`.
+* When classification context is requested, `actual_labels` must be non-null and
+  have exactly the same ordered index as `probability_scores`. Live inference may
+  pass `None`, in which case label-dependent metrics are omitted.
+* The engine must never create signals on market-context rows that are absent from
+  `probability_scores`.
 * Probability scores must contain no missing values.
 * The engine must not call the model.
 * The engine receives already-generated out-of-sample predictions.
 * Backtesting logic must be independent from training logic.
+* Entry and exit positions are resolved against the positional order of
+  `market_df`, not by adding integers to arbitrary index labels.
+
+For a holdout backtest, pass the untouched holdout predictions together with the
+original market frame extending through the last required exit open. Do not truncate
+the market frame to the labeled decision rows.
 
 ---
 
@@ -1756,19 +1987,32 @@ Maintain:
 
 ```text
 position_open
+pending_entry_index
 entry_index
 scheduled_exit_index
 entry_price
 ```
 
-For each decision row (t):
+Process each market row chronologically in this order:
 
-### When no position is open
+1. At the candle open, execute any scheduled exit.
+2. At the candle open, execute any pending entry.
+3. Mark the position through the current open-to-next-open interval.
+4. After the candle closes, evaluate a signal only if the row index exists in
+   `probability_scores`.
+
+This ordering means a position that exited at the current open is flat when the
+current candle's close becomes a decision point. A BUY at that close may schedule a
+new entry for the following open. Same-open exit and re-entry are not allowed.
+
+For each eligible decision row (t):
+
+### When no position is open and no entry is pending
 
 If:
 
 ```python
-probability_score >= SIGNAL_THRESHOLD
+probability_score >= signal_threshold
 ```
 
 then schedule:
@@ -1780,13 +2024,22 @@ Exit index: t+H+1
 
 Only schedule the trade when both indexes exist inside the evaluable period.
 
+Scheduling sets `pending_entry_index = t+1`. The position becomes open only when
+that entry is executed; it must not receive market returns before the entry open.
+
 ### When a position is already open
 
-Ignore new signals until the scheduled exit.
+Ignore new signals until the scheduled exit has executed. Because exits are
+processed before close-time decisions, the exit candle itself may generate a new
+signal for entry at the next candle open.
 
 ### At scheduled exit
 
 Close the position and record the completed trade.
+
+Every accepted trade must already have a valid scheduled exit. Never shorten the
+fixed holding period merely to liquidate at the end of available data. Encountering
+an unresolved final position is an error.
 
 ---
 
@@ -1850,45 +2103,55 @@ Do not subtract the fee only once.
 
 The backtest must produce a candle-level equity curve.
 
+The common performance window for the model and all trading baselines begins at the
+open immediately after the first decision row and ends at the latest exit open
+required by the final eligible decision row. The market context may contain rows
+outside this window, but they must not affect reported performance.
+
 For each open-to-open interval:
 
-[
-r_i^{open}
-==========
-
-\frac{O_{i+1}}{O_i}-1
-]
+$$
+r_i^{open} = \frac{O_{i+1}}{O_i}-1
+$$
 
 When the strategy holds a position during interval (i):
 
-[
-r_i^{strategy}
-==============
-
-r_i^{open}
-]
+$$
+r_i^{strategy} = r_i^{open}
+$$
 
 Otherwise:
 
-[
+$$
 r_i^{strategy}=0
-]
+$$
 
 Entry and exit costs must be applied at their actual transaction timestamps.
 
+Equity is marked at every open in the performance window after processing transactions
+scheduled for that open. Entry equity reflects the adverse fill and entry fee. Exit
+equity reflects the adverse fill and exit fee. The final equity must reconcile with
+compounding the completed trade `net_return` values in ledger order.
+
 Cumulative equity is:
 
-[
-E_t
-===
-
-E_0
-\prod_{i=1}^{t}(1+r_i^{net})
-]
+$$
+E_t = E_0 \prod_{i=1}^{t}(1+r_i^{net})
+$$
 
 The implementation must avoid index misalignment.
 
 All result series must explicitly use the market-data index.
+
+The equity output must include at least:
+
+```text
+timestamp
+equity
+period_return
+position_open
+market_exposure
+```
 
 ---
 
@@ -1903,8 +2166,15 @@ entry_timestamp
 exit_timestamp
 entry_market_price
 entry_fill_price
+position_quantity
+equity_before_entry
+entry_fee
+entry_execution_cost
 exit_market_price
 exit_fill_price
+exit_fee
+exit_execution_cost
+equity_after_exit
 holding_candles
 gross_market_return
 filled_gross_return
@@ -1915,6 +2185,33 @@ pnl
 probability_score
 winning_trade
 ```
+
+All fee and execution-cost amount columns use quote currency. Define adverse fill
+costs against the contemporaneous market open for the executed quantity:
+
+```python
+entry_fee = equity_before_entry * fee_rate
+entry_execution_cost = position_quantity * (
+    entry_fill_price - entry_market_price
+)
+
+gross_exit_value = position_quantity * exit_fill_price
+exit_fee = gross_exit_value * fee_rate
+exit_execution_cost = position_quantity * (
+    exit_market_price - exit_fill_price
+)
+equity_after_exit = gross_exit_value - exit_fee
+
+total_fee_rate = 1.0 - (1.0 - fee_rate) ** 2
+total_execution_cost_rate = 1.0 - (
+    (1.0 - one_side_execution_rate)
+    / (1.0 + one_side_execution_rate)
+)
+```
+
+`pnl = equity_after_exit - equity_before_entry`. Ledger PnL and all four cost amount
+columns must reconcile with the candle-level equity curve within floating-point
+tolerance.
 
 `num_trades` equals the number of completed trade-ledger rows.
 
@@ -1965,6 +2262,32 @@ Also include:
 * Average BUY probability.
 * Actual positive-label rate.
 
+Use these exact Phase 1 definitions:
+
+* `total_return = final_equity / initial_capital - 1`.
+* Annualized return uses geometric compounding over the number of open-to-open
+  intervals in the common performance window.
+* Annualized volatility is the sample standard deviation (`ddof=1`) of candle-level
+  net returns multiplied by `sqrt(periods_per_year)`.
+* Maximum drawdown duration is the largest number of consecutive open-to-open
+  intervals for which equity remains below its previous running peak. Include an
+  unrecovered drawdown at the end of the evaluation.
+* Calmar ratio is annualized return divided by the absolute maximum drawdown. Return
+  `None` when maximum drawdown is zero.
+* Market exposure is held open-to-open intervals divided by all open-to-open intervals
+  in the common performance window.
+* Turnover is the sum of absolute entry and exit market notionals divided by average
+  candle-level equity over the common performance window. It is reported for the
+  complete evaluation window, not annualized.
+* Average holding period is the arithmetic mean of `holding_candles` across completed
+  trades.
+* Total estimated costs are the sum, in quote currency, of entry fees, exit fees,
+  adverse entry-fill cost, and adverse exit-fill cost recorded by the trade ledger.
+
+For empty-trade cases, return zero for total return, exposure, turnover, trade count,
+and total estimated costs. Trade-distribution metrics that have no observations must
+be `None`, not invented as zero.
+
 ---
 
 # 13.7 Annualization
@@ -1984,51 +2307,75 @@ PERIODS_PER_YEAR = {
 
 Sharpe ratio:
 
-[
-\text{Sharpe}
-=============
-
-\frac{\bar r-r_f}
-{s_r}
-\sqrt{P}
-]
+$$
+\text{Sharpe} = \frac{\bar r-r_f}{s_r}\sqrt{P}
+$$
 
 where:
 
-* (\bar r) is mean candle return.
-* (r_f) is the per-period risk-free rate.
-* (s_r) is return standard deviation.
-* (P) is periods per year.
+* $\bar r$ is mean candle return.
+* $r_f$ is the per-period risk-free rate.
+* $s_r$ is return standard deviation.
+* $P$ is periods per year.
 
 If standard deviation is zero, return `None` or `NaN`.
 
 Do not return infinity.
 
+Convert the configured annual risk-free rate before calculating excess returns:
+
+```python
+risk_free_rate_per_period = (
+    (1.0 + ANNUAL_RISK_FREE_RATE) ** (1.0 / periods_per_year)
+    - 1.0
+)
+```
+
+Annualized return is:
+
+```python
+annualized_return = (
+    (1.0 + total_return) ** (periods_per_year / n_periods)
+    - 1.0
+)
+```
+
+Sortino uses all periods in the performance window, including zero-return cash
+periods:
+
+```python
+excess_returns = period_returns - risk_free_rate_per_period
+downside_deviation = np.sqrt(
+    np.mean(np.minimum(excess_returns, 0.0) ** 2)
+)
+sortino = (
+    excess_returns.mean()
+    / downside_deviation
+    * np.sqrt(periods_per_year)
+)
+```
+
+Return `None` when there are too few observations or the downside deviation is zero.
+
 ---
 
 # 13.8 Maximum Drawdown
 
-Given equity (E_t):
+Given equity $E_t$:
 
-[
-\text{Peak}_t
-=============
+$$
+\text{Peak}_t = \max_{u \leq t}E_u
+$$
 
-\max_{u \leq t}E_u
-]
-
-[
-\text{Drawdown}_t
-=================
-
-\frac{E_t}{\text{Peak}_t}-1
-]
+$$
+\text{Drawdown}_t = \frac{E_t}{\text{Peak}_t}-1
+$$
 
 Maximum drawdown is:
 
-[
+$$
 \min_t \text{Drawdown}_t
-]
+$$
 
 It must be zero or negative.
 
@@ -2036,13 +2383,11 @@ It must be zero or negative.
 
 # 13.9 Profit Factor
 
-[
-\text{Profit Factor}
-====================
-
+$$
+\text{Profit Factor} =
 \frac{\sum \text{positive trade PnL}}
 {\left|\sum \text{negative trade PnL}\right|}
-]
+$$
 
 If no losing trades exist, return `None` and add an explanatory warning rather than infinity.
 
@@ -2050,17 +2395,14 @@ If no losing trades exist, return `None` and add an explanatory warning rather t
 
 # 13.10 Cost Sensitivity
 
-The final evaluation report must include multiple cost scenarios.
-
-At minimum:
+The final evaluation report must use the exact frozen `COST_SCENARIOS` from
+configuration:
 
 ```text
 Low-cost scenario
 Base-cost scenario
 High-cost scenario
 ```
-
-Example:
 
 ```text
 Low:
@@ -2079,7 +2421,9 @@ Half-spread: 2 bps per side
 
 The base scenario is the official Phase 1 result.
 
-Cost scenarios must be defined before inspecting holdout performance.
+Cost scenarios must be defined and committed before inspecting holdout performance.
+Sensitivity changes execution costs only; it does not regenerate labels or retrain
+the frozen evaluation model.
 
 ---
 
@@ -2114,7 +2458,8 @@ artifacts/runs/{run_id}/
 ├── oof_predictions.csv
 ├── classification_report.json
 ├── feature_importance.csv
-└── logs.txt
+├── logs.txt
+└── holdout_evaluation_claim.json  # created only by evaluate-holdout
 ```
 
 ---
@@ -2123,6 +2468,7 @@ artifacts/runs/{run_id}/
 
 ```text
 artifacts/evaluations/{run_id}/
+├── input_data_snapshot.csv
 ├── evaluation_model.json
 ├── feature_columns.json
 ├── holdout_predictions.csv
@@ -2169,6 +2515,7 @@ exchange
 symbol
 timeframe
 data path
+immutable snapshot path
 data hash
 data start timestamp
 data end timestamp
@@ -2179,6 +2526,7 @@ label definition
 prediction horizon
 minimum required return
 development boundary
+boundary-purge start and end
 holdout boundary
 purge gap
 walk-forward configuration
@@ -2190,7 +2538,14 @@ slippage assumptions
 classification metrics
 strategy metrics
 warnings
+holdout-evaluation claim status
+invalidation reason, when applicable
 ```
+
+`input_data_snapshot.csv` must be a byte-for-byte copy or verified hard link of the
+snapshot named by the manifest. Its SHA-256 must be checked after placement. This
+makes a finalized evaluation self-contained even if convenience data files later
+change.
 
 ---
 
@@ -2249,7 +2604,9 @@ Behavior:
 * Load existing data.
 * Fetch missing closed candles.
 * Validate.
-* Save atomically.
+* Save the latest-data file atomically.
+* Persist or reuse its immutable content-addressed snapshot.
+* Print the snapshot path and SHA-256 hash.
 
 ---
 
@@ -2261,7 +2618,7 @@ python scripts/run_pipeline.py prepare
 
 Behavior:
 
-1. Load valid raw data.
+1. Load a valid immutable raw snapshot and record its hash.
 2. Compute features.
 3. Save inference-ready feature data.
 4. Add labels.
@@ -2273,7 +2630,11 @@ Behavior:
    * Feature count.
    * Removed warm-up rows.
    * Removed unlabeled tail rows.
-   * Label distribution.
+
+`prepare` must not print or log label distributions or return summaries from the full
+real dataset because the final rows have not yet been isolated as holdout. Outcome
+summaries begin only after `validate` creates the boundary and must cover development
+rows only.
 
 ---
 
@@ -2286,13 +2647,16 @@ python scripts/run_pipeline.py validate
 Behavior:
 
 1. Load labeled data.
-2. Create development and holdout partitions.
-3. Keep holdout isolated.
-4. Run purged walk-forward validation on development data.
-5. Evaluate XGBoost.
-6. Evaluate logistic regression.
-7. Save out-of-fold predictions and metrics.
-8. Train and save the evaluation XGBoost model using development data only.
+2. Create development, boundary-purge, and holdout partitions.
+3. Verify development label exit timestamps precede the holdout start.
+4. Keep boundary-purge and holdout rows isolated.
+5. Run purged walk-forward validation on development data.
+6. Evaluate XGBoost.
+7. Evaluate logistic regression.
+8. Save out-of-fold predictions and metrics.
+9. Train and save the evaluation XGBoost model using development data only.
+10. Print the development-only label distribution and split boundaries, but no
+    holdout label or return statistics.
 
 This command must not backtest the final holdout.
 
@@ -2307,15 +2671,24 @@ python scripts/run_pipeline.py evaluate-holdout \
 
 Behavior:
 
-1. Load the frozen evaluation model.
-2. Verify the model was trained only through the development boundary.
-3. Load the untouched holdout.
-4. Generate probabilities.
-5. Run the strategy backtest.
-6. Run trading baselines.
-7. Run cost-sensitivity scenarios.
-8. Save immutable evaluation artifacts.
-9. Print a comparison table.
+1. Complete all preflight validation without loading holdout values.
+2. Verify from frozen metadata that the evaluation model used no boundary-purge or
+   holdout labels.
+3. Atomically create a holdout-evaluation claim for the development run.
+4. Load the frozen evaluation model, exact immutable data snapshot, and untouched
+   holdout only after the claim succeeds.
+5. Generate probabilities.
+6. Run the strategy backtest using market context through the final required exit.
+7. Run trading baselines over the identical performance window.
+8. Run the frozen cost-sensitivity scenarios.
+9. Save immutable evaluation artifacts and mark the claim completed.
+10. Print a comparison table.
+
+The claim is an exclusive file created with failure-if-exists semantics under the
+development run directory. If any claim already exists, including a failed or
+incomplete claim, the command must refuse to expose the holdout again. Recovery
+requires an explicit human research decision and must be recorded as an invalidated
+evaluation; it is not a normal retry path.
 
 This command should display a warning:
 
@@ -2429,16 +2802,9 @@ Create deterministic synthetic data containing:
 
 Example design:
 
-[
-C_t
-===
-
-100
-
-* 0.01t
-* 2\sin(t/24)
-* \epsilon_t
-  ]
+$$
+C_t = 100 + 0.01t + 2\sin(t/24) + \epsilon_t
+$$
 
 Construct:
 
@@ -2467,7 +2833,11 @@ test_incomplete_last_candle_is_removed
 test_incremental_fetch_starts_after_last_timestamp
 test_duplicate_timestamps_are_removed
 test_atomic_write_preserves_previous_file_on_failure
+test_incremental_update_preserves_immutable_snapshot
+test_market_data_result_identifies_exact_snapshot
+test_manifest_references_exact_snapshot_hash
 test_timestamp_is_utc
+test_timestamp_aligns_to_timeframe_grid
 test_missing_candle_is_detected
 test_invalid_ohlc_relationship_is_rejected
 test_negative_volume_is_rejected
@@ -2520,8 +2890,10 @@ Required tests:
 ```text
 test_entry_uses_next_open
 test_exit_uses_horizon_plus_one_open
+test_label_records_entry_and_exit_timestamp_provenance
 test_label_uses_executable_forward_return
 test_label_uses_minimum_required_return
+test_minimum_gross_return_reconciles_with_net_edge
 test_unrealizable_tail_rows_are_removed
 test_features_are_unchanged_when_labels_are_added
 ```
@@ -2550,8 +2922,11 @@ test_development_precedes_holdout
 test_holdout_ratio_is_correct_with_rounding
 test_walk_forward_training_precedes_validation
 test_walk_forward_training_expands
+test_walk_forward_validation_blocks_are_contiguous
 test_purge_gap_is_applied
 test_training_labels_do_not_touch_validation_prices
+test_holdout_boundary_purge_covers_label_lookahead
+test_development_label_exits_precede_holdout_start
 test_holdout_is_not_present_in_any_walk_forward_fold
 test_insufficient_rows_raises_error
 ```
@@ -2595,7 +2970,11 @@ Required tests:
 ```text
 test_signal_enters_at_next_open
 test_trade_holds_exact_horizon
+test_backtest_uses_price_context_beyond_final_decision_row
+test_market_context_rows_do_not_generate_signals
+test_trade_invests_full_current_equity
 test_new_signals_are_ignored_while_position_open
+test_exit_is_processed_before_exit_candle_signal
 test_entry_fee_is_charged
 test_exit_fee_is_charged
 test_slippage_is_adverse_on_entry
@@ -2622,9 +3001,15 @@ Required:
 
 ```text
 test_holdout_is_never_used_during_training
+test_prepare_does_not_report_full_dataset_outcome_statistics
+test_holdout_evaluation_claim_prevents_second_access
+test_failed_holdout_claim_is_not_silently_removed
 ```
 
-The test should patch or instrument model fitting and verify that no holdout index is passed into `fit()`.
+The test must patch or instrument model fitting and verify that no holdout or
+boundary-purge index is passed into `fit()`. It must also verify that every fitted
+row's `exit_timestamp` is earlier than the first holdout timestamp; checking fitted
+indexes alone is not sufficient.
 
 ---
 
@@ -2641,11 +3026,11 @@ The integration test must:
 3. Validate data.
 4. Compute features.
 5. Add labels.
-6. Split development and holdout.
+6. Split development, boundary-purge, and holdout rows.
 7. Run walk-forward validation.
 8. Train an evaluation model.
 9. Generate holdout predictions.
-10. Run the backtest.
+10. Run the backtest with market-price context through the final required exit.
 11. Save artifacts.
 12. Verify expected artifact files exist.
 
@@ -2731,7 +3116,7 @@ Log:
 * Number of duplicates removed.
 * Missing-candle validation.
 * Number of feature warm-up rows removed.
-* Label distribution.
+* Development-only label distribution after holdout isolation.
 * Split boundaries.
 * Fold boundaries.
 * Model training completion.
@@ -2789,6 +3174,8 @@ Codex must not report a task as complete until relevant checks pass or it clearl
 Use absolute project imports:
 
 ```python
+from crypto_ai.config import settings
+from crypto_ai.costs import CostConfig
 from crypto_ai.features.build import compute_features
 ```
 
@@ -2927,6 +3314,8 @@ Do not ignore example configuration or test fixtures that are required for repro
 
 ## Deliverables
 
+* Git repository initialization when the project is not already a worktree.
+* `.gitignore` and `phase-1-baseline` working branch.
 * Repository structure.
 * `pyproject.toml`.
 * Runtime and development requirements.
@@ -2940,6 +3329,7 @@ Do not ignore example configuration or test fixtures that are required for repro
 ## Acceptance Criteria
 
 ```bash
+git rev-parse --is-inside-work-tree
 pip install -e .
 black --check .
 ruff check .
@@ -2961,6 +3351,7 @@ All commands complete successfully.
 * Incomplete-candle filtering.
 * Incremental update.
 * Atomic CSV storage.
+* Immutable content-addressed raw snapshots.
 * Data validation.
 * Unit tests.
 
@@ -2972,6 +3363,7 @@ All commands complete successfully.
 * Current incomplete candle is excluded.
 * Incremental fetching starts at the correct timestamp.
 * Valid BTC/USDT hourly data can be downloaded and stored.
+* Incremental updates never modify an existing snapshot.
 
 ---
 
@@ -2985,6 +3377,7 @@ All commands complete successfully.
 * `add_labels()`.
 * Executable forward-return target.
 * Cost-aware label threshold.
+* Shared `CostConfig` and multiplicative cost helpers.
 * Processed dataset storage.
 
 ## Acceptance Criteria
@@ -2992,6 +3385,7 @@ All commands complete successfully.
 * Future-data perturbation does not change past features.
 * Latest closed row remains available for inference.
 * Labels use next-open entry and horizon-based next-open exit.
+* Labels store entry and exit timestamp provenance.
 * Training-tail rows without known outcomes are removed.
 * No feature column contains missing or infinite values after training preparation.
 
@@ -3001,7 +3395,7 @@ All commands complete successfully.
 
 ## Deliverables
 
-* Development/holdout split.
+* Development/boundary-purge/holdout split.
 * Purged expanding walk-forward splits.
 * Split metadata.
 * Split tests.
@@ -3009,9 +3403,11 @@ All commands complete successfully.
 ## Acceptance Criteria
 
 * Holdout appears in no training or validation fold.
+* Boundary-purge rows appear in no model fit.
 * Every fold is chronological.
 * Purge gap is at least `PREDICTION_HORIZON + 1`.
 * Training labels do not reference validation-period prices.
+* Every development label exit timestamp precedes the holdout start.
 
 ---
 
@@ -3034,6 +3430,7 @@ All commands complete successfully.
 * Validation rows are never used for fitting that fold.
 * Saved and reloaded models produce matching predictions.
 * Evaluation model training ends before the holdout begins.
+* Evaluation model training excludes all boundary-purge rows.
 * Results are reproducible with the same seed and data.
 
 ---
@@ -3061,9 +3458,12 @@ All commands complete successfully.
 * Manual trade calculations match engine output.
 * Entry and exit costs are both applied.
 * All positions have valid exits.
+* Tail decisions use the retained market-price context needed for valid exits.
+* Every entry invests exactly 100% of current equity without leverage.
 * No missing or infinite equity values.
 * Trade count equals ledger length.
 * Baselines use equivalent execution assumptions.
+* Model and baseline metrics use the identical performance window.
 
 ---
 
@@ -3115,10 +3515,13 @@ Commit the frozen configuration to Git.
 ## Acceptance Criteria
 
 * Evaluation model uses development data only.
+* An exclusive claim prevents routine repeat evaluation of the holdout under the
+  development run.
 * Holdout is evaluated once under the frozen configuration.
 * All costs are included.
 * Results are compared against all required baselines.
 * Evaluation artifacts cannot be silently overwritten.
+* The exact immutable input snapshot is included and hash-verified.
 * Limitations and uncertainty are documented.
 
 ---
@@ -3153,6 +3556,8 @@ Phase 1 is technically complete only when all conditions below are satisfied.
 * Only closed candles are used.
 * OHLCV relationships are valid.
 * Incremental updates work.
+* Timestamps align to the configured exchange timeframe grid.
+* Every research run references an immutable, content-addressed raw snapshot.
 
 ## Feature Integrity
 
@@ -3161,11 +3566,15 @@ Phase 1 is technically complete only when all conditions below are satisfied.
 * Feature and label creation are separate.
 * The latest closed candle can produce an inference feature row.
 * Feature columns are deterministic and ordered.
+* Derived columns exactly match the expected feature allowlist.
 
 ## Split Integrity
 
 * The final holdout is selected chronologically.
 * The final holdout is excluded from all development activity.
+* Boundary-purge rows cover the full label lookahead and enter no fit or development
+  metric.
+* Every fitted development label exit timestamp precedes the holdout start.
 * Walk-forward folds are chronological.
 * The purge gap covers the complete label lookahead.
 
@@ -3182,10 +3591,13 @@ Phase 1 is technically complete only when all conditions below are satisfied.
 * Signals execute no earlier than the next open.
 * The holding period matches the label horizon.
 * Overlapping positions are not allowed.
+* Trades use 100% of current equity, fractional quantities, and no leverage.
 * Entry and exit fees are included.
 * Spread and slippage are included.
 * The equity curve is index-aligned.
 * The trade ledger reconciles with total returns.
+* Decision rows and their extended execution-price context are handled separately.
+* All strategies use an identical performance window and metric definitions.
 * Results are compared against simple baselines.
 * Cost-sensitivity results are reported.
 
@@ -3193,7 +3605,8 @@ Phase 1 is technically complete only when all conditions below are satisfied.
 
 * A dependency lockfile exists.
 * Random seeds are stored.
-* Data hashes are stored.
+* Data hashes and immutable snapshot paths are stored.
+* Final evaluation artifacts include a verified copy of their exact input snapshot.
 * Git commit information is stored.
 * Run manifests are complete.
 * Artifacts are versioned.
@@ -3258,10 +3671,10 @@ A failed or neutral Phase 1 result is still useful because it establishes a vali
 
 # 27. Known Risks and Mitigations
 
-| Risk                                           |  Likelihood | Mitigation                                                             |
-| ---------------------------------------------- | ----------: | ---------------------------------------------------------------------- |
+| Risk                                           | Assessment  | Mitigation                                                              |
+| ---------------------------------------------- | ----------- | ----------------------------------------------------------------------- |
 | Model performance is close to random           |        High | Treat Phase 1 as a baseline; compare with simple models and strategies |
-| Look-ahead leakage                             | High impact | Point-in-time feature tests, purge gaps, holdout isolation             |
+| Look-ahead leakage                             | High impact | Point-in-time tests, fold and holdout-boundary purges, label timestamps |
 | Target and execution mismatch                  | High impact | Shared next-open target and backtest definition                        |
 | Historical overfitting                         |        High | Fixed Phase 1 parameters, walk-forward validation, untouched holdout   |
 | Optimistic transaction costs                   |        High | Fees, spread, slippage, and cost-sensitivity scenarios                 |
@@ -3270,7 +3683,8 @@ A failed or neutral Phase 1 result is still useful because it establishes a vali
 | Incomplete current candle                      |      Medium | Explicit close-time filtering                                          |
 | DataFrame index misalignment                   |      Medium | Preserve indexes and assert equality before arithmetic                 |
 | Probability misinterpretation                  |      Medium | Use `probability_score`; do not claim calibrated confidence            |
-| Artifact overwrite                             |      Medium | Unique run IDs and immutable evaluation directories                    |
+| Artifact overwrite                             |      Medium | Unique run IDs, evaluation claims, and immutable directories            |
+| Mutable source data prevents reproduction      |      Medium | Content-addressed snapshots copied into final evaluations               |
 | Dependency drift                               |      Medium | Exact dependency lockfile                                              |
 | Exchange behavior changes                      |      Medium | Isolate exchange adapter and preserve raw data                         |
 | Very small number of trades                    |      Medium | Report trade count and avoid strong conclusions                        |
@@ -3355,6 +3769,8 @@ This section is informational only. No API code belongs in Phase 1.
 | Point-in-time correctness | Ensuring historical rows use only information available at that time                  |
 | Look-ahead bias           | Future information leaking into training or historical predictions                    |
 | Purge gap                 | Rows removed between training and validation to prevent overlapping label information |
+| Boundary purge            | Rows excluded before the final holdout so development labels cannot use holdout prices |
+| Price context             | OHLCV rows retained for execution even when they are not eligible decision rows        |
 | Walk-forward validation   | Chronological evaluation using expanding training periods                             |
 | Development period        | Data used for model development and validation                                        |
 | Final holdout             | Untouched future data used for one final evaluation                                   |
@@ -3382,8 +3798,12 @@ Before completing any Phase 1 coding task, Codex must verify:
 [ ] The implementation follows this specification.
 [ ] No future information enters a feature.
 [ ] No final-holdout row enters model fitting.
+[ ] No boundary-purge row enters fitting or development metrics.
+[ ] Every fitted development label exits before the holdout begins.
 [ ] Purge gap covers horizon plus next-open execution.
 [ ] Label and backtest use the same entry and exit prices.
+[ ] The backtest retains price context through every scheduled exit.
+[ ] Position sizing and metric windows match the fixed Phase 1 definitions.
 [ ] Current incomplete candles are excluded.
 [ ] DataFrame indexes are intentionally preserved.
 [ ] Entry and exit costs are both included.
@@ -3392,6 +3812,7 @@ Before completing any Phase 1 coding task, Codex must verify:
 [ ] Linting passes.
 [ ] Tests pass.
 [ ] Artifacts are not silently overwritten.
+[ ] The run references an immutable data snapshot and verified hash.
 [ ] Files changed and limitations are reported.
 ```
 
@@ -3410,6 +3831,9 @@ Create the specified src-based repository structure, configuration module,
 project-specific exception classes, logging configuration, pyproject.toml,
 runtime and development requirement files, pytest configuration, and a minimal
 CI workflow.
+
+If the directory is not already a Git worktree, initialize it and create the
+`phase-1-baseline` branch. Do not create a commit unless the human developer asks.
 
 Do not implement market-data fetching, feature engineering, model training, or
 backtesting yet.

@@ -1,0 +1,4 @@
+black>=24.10,<27
+pytest>=8.3,<10
+pytest-mock>=3.14,<4
+ruff>=0.8,<1
