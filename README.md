@@ -29,6 +29,3 @@ Run the required checks:
 
 Project behavior and research invariants are defined in
 [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
-
-
-TEst
