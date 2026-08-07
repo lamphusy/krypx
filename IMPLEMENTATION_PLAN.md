@@ -3372,6 +3372,9 @@ validation, incremental atomic storage, and immutable SHA-256 snapshots are avai
 
 # Milestone 2 — Features and Labels
 
+**Status:** Implemented with deterministic point-in-time, executable-label, cost-reconciliation,
+raw-snapshot provenance, processed-storage, and CLI coverage.
+
 ## Deliverables
 
 * `compute_features()`.

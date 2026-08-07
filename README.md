@@ -4,11 +4,10 @@ KrypX is a reproducible research pipeline for testing long-or-cash cryptocurrenc
 trading signals without look-ahead leakage. Phase 1 targets BTC/USDT hourly candles,
 next-open execution, fixed holding periods, and an XGBoost classifier.
 
-The implementation is intentionally milestone-driven. Milestone 1 provides the market-data
-foundation: paginated public CCXT downloads, transient-network retries, strict candle
-validation, incremental updates, atomic latest-file replacement, and immutable
-content-addressed raw snapshots. Feature engineering, training, and backtesting remain future
-milestones.
+The implementation is intentionally milestone-driven. Milestones 1 and 2 provide the complete
+data-preparation foundation: reproducible market-data snapshots, trailing-only technical
+features, executable next-open labels, multiplicative cost thresholds, and processed dataset
+storage. Dataset splitting, model training, and backtesting remain future milestones.
 
 ## Fetch market data
 
@@ -37,6 +36,39 @@ data/raw/snapshots/{symbol_slug}_{timeframe}/{sha256}.csv
 The first file is the atomically replaced latest-data convenience copy. The second is the exact
 immutable input that downstream research must reference. The command prints both paths and the
 snapshot SHA-256 digest.
+
+## Prepare features and labels
+
+After fetching market data, build the inference-ready and labeled datasets:
+
+```bash
+krypx prepare
+python scripts/run_pipeline.py prepare
+```
+
+Symbol and timeframe overrides must identify an existing fetched dataset:
+
+```bash
+krypx prepare --symbol ETH/USDT --timeframe 4h
+```
+
+Preparation resolves the mutable latest file to its matching immutable SHA-256 snapshot and
+verifies those exact bytes before computing anything. It then:
+
+1. Computes 24 ordered, trailing-only trend, momentum, volatility, volume, and return features.
+2. Removes only the leading indicator warm-up rows from the inference dataset.
+3. Labels decisions using entry at `t + 1` open and exit at `t + horizon + 1` open.
+4. Removes the final `horizon + 1` unrealizable rows only from the labeled training dataset.
+5. Atomically writes:
+
+```text
+data/interim/{symbol_slug}_{timeframe}_features.csv
+data/processed/{symbol_slug}_{timeframe}_labeled.csv
+```
+
+The inference file retains the latest complete feature row. Label files also retain entry and
+exit timestamps and prices so future split and leakage checks can audit exactly which market
+observations each target used.
 
 ## Development setup
 
