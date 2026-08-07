@@ -89,6 +89,8 @@ def test_cli_parser_uses_expected_program_name() -> None:
 
 
 def test_cli_without_command_prints_help(capsys: pytest.CaptureFixture[str]) -> None:
-    """The bootstrap CLI explains its current surface without failing."""
+    """The CLI explains its current command surface without failing."""
     assert main([]) == 0
-    assert "bootstrap only" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "cryptocurrency research pipeline" in output
+    assert "fetch" in output

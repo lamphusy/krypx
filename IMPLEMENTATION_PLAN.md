@@ -3342,6 +3342,9 @@ All commands complete successfully.
 
 # Milestone 1 — Market Data
 
+**Status:** Implemented with mocked-network coverage. The `fetch` command, strict OHLCV
+validation, incremental atomic storage, and immutable SHA-256 snapshots are available.
+
 ## Deliverables
 
 * Symbol slug helper.
