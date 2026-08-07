@@ -4,10 +4,10 @@ KrypX is a reproducible research pipeline for testing long-or-cash cryptocurrenc
 trading signals without look-ahead leakage. Phase 1 targets BTC/USDT hourly candles,
 next-open execution, fixed holding periods, and an XGBoost classifier.
 
-The implementation is intentionally milestone-driven. Milestones 1 and 2 provide the complete
-data-preparation foundation: reproducible market-data snapshots, trailing-only technical
-features, executable next-open labels, multiplicative cost thresholds, and processed dataset
-storage. Dataset splitting, model training, and backtesting remain future milestones.
+The implementation is intentionally milestone-driven. Milestones 1 through 3 provide the data
+and evaluation-boundary foundation: reproducible market-data snapshots, trailing-only technical
+features, executable next-open labels, multiplicative cost thresholds, isolated holdout data,
+and purged walk-forward folds. Model training and backtesting remain future milestones.
 
 ## Fetch market data
 
@@ -69,6 +69,27 @@ data/processed/{symbol_slug}_{timeframe}_labeled.csv
 The inference file retains the latest complete feature row. Label files also retain entry and
 exit timestamps and prices so future split and leakage checks can audit exactly which market
 observations each target used.
+
+## Plan chronological evaluation splits
+
+Milestone 3 exposes a reusable split API for the later `validate` command:
+
+```python
+from pathlib import Path
+
+from crypto_ai.features.dataset import load_labeled_dataset
+from crypto_ai.modeling.splits import create_split_plan, save_split_metadata
+
+labeled = load_labeled_dataset(Path("data/processed/btc_usdt_1h_labeled.csv"))
+plan = create_split_plan(labeled)
+save_split_metadata(plan, Path("data/processed/btc_usdt_1h_split_metadata.json"))
+```
+
+The holdout is ceiling-rounded to 20% before removing a separate `horizon + 1` boundary purge.
+Walk-forward validation then operates only on development rows, with expanding training windows,
+contiguous validation blocks, and another complete label-lookahead gap before every validation
+block. Both holdout and fold boundaries are checked against the stored `exit_timestamp` values,
+not merely their DataFrame positions.
 
 ## Development setup
 

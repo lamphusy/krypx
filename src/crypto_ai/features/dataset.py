@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from crypto_ai.config import settings
@@ -38,6 +39,58 @@ class PreparedDatasetResult:
     warmup_rows_removed: int
     unlabeled_rows_removed: int
     minimum_required_return: float
+
+
+def load_labeled_dataset(path: Path) -> pd.DataFrame:
+    """Load and validate the exact persisted labeled-dataset schema."""
+    try:
+        result = pd.read_csv(path)
+    except (OSError, pd.errors.ParserError) as exc:
+        raise FeatureEngineeringError(f"Unable to load labeled dataset {path}: {exc}") from exc
+
+    feature_columns = get_expected_feature_columns()
+    expected_columns = [*settings.RAW_COLUMNS, *feature_columns, *settings.LABEL_COLUMNS]
+    if result.columns.tolist() != expected_columns:
+        raise FeatureEngineeringError(
+            "Persisted labeled columns do not match the ordered expected schema"
+        )
+
+    try:
+        for column in ("timestamp", "entry_timestamp", "exit_timestamp"):
+            result[column] = pd.to_datetime(result[column], utc=True, errors="raise")
+        numeric_columns = [
+            *settings.RAW_COLUMNS[1:],
+            *feature_columns,
+            "entry_open",
+            "exit_open",
+            "gross_forward_return",
+        ]
+        for column in numeric_columns:
+            result[column] = pd.to_numeric(result[column], errors="raise").astype("float64")
+        labels = pd.to_numeric(result["label"], errors="raise")
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise FeatureEngineeringError(
+            f"Persisted labeled dataset {path} contains invalid values: {exc}"
+        ) from exc
+
+    if result.empty:
+        raise FeatureEngineeringError(f"Persisted labeled dataset {path} is empty")
+    if not labels.isin([0, 1]).all():
+        raise FeatureEngineeringError("Persisted labels must contain only 0 and 1")
+    result["label"] = labels.astype("int8")
+    if not np.isfinite(result[numeric_columns].to_numpy(dtype="float64")).all():
+        raise FeatureEngineeringError(
+            "Persisted labeled dataset contains missing or infinite values"
+        )
+    if result["timestamp"].duplicated().any() or not result["timestamp"].is_monotonic_increasing:
+        raise FeatureEngineeringError(
+            "Persisted labeled decisions must be unique and chronological"
+        )
+    if (result["entry_timestamp"] <= result["timestamp"]).any():
+        raise FeatureEngineeringError("Every entry_timestamp must follow its decision timestamp")
+    if (result["exit_timestamp"] <= result["entry_timestamp"]).any():
+        raise FeatureEngineeringError("Every exit_timestamp must follow its entry_timestamp")
+    return result
 
 
 def _atomic_write_dataframe(df: pd.DataFrame, destination: Path) -> None:

@@ -639,6 +639,7 @@ DROP_INCOMPLETE_LAST_CANDLE = True
 # ==========================================================
 
 PREDICTION_HORIZON = 4
+LABEL_LOOKAHEAD_ROWS = PREDICTION_HORIZON + 1
 
 EMA_SHORT = 9
 EMA_LONG = 21
@@ -679,7 +680,7 @@ N_WALK_FORWARD_SPLITS = 5
 WALK_FORWARD_TEST_RATIO = 0.10
 
 # Label uses open at t+1 and open at t+H+1.
-PURGE_GAP_ROWS = PREDICTION_HORIZON + 1
+PURGE_GAP_ROWS = LABEL_LOOKAHEAD_ROWS
 
 
 # ==========================================================
@@ -3398,6 +3399,9 @@ raw-snapshot provenance, processed-storage, and CLI coverage.
 ---
 
 # Milestone 3 — Dataset Splitting
+
+**Status:** Implemented with positional holdout isolation, explicit boundary purging,
+provenance-checked expanding walk-forward folds, manifest-ready metadata, and serialization.
 
 ## Deliverables
 
