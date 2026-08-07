@@ -2,9 +2,9 @@
 
 ## Implementation Plan and Technical Specification
 
-**Version:** 2.1.0
-**Last updated:** 2026-08-02
-**Current implementation scope:** Phase 1 — Baseline Research Pipeline
+**Version:** 2.2.0
+**Last updated:** 2026-08-07
+**Current implementation scope:** Phase 1 — Baseline Research Pipeline (implemented)
 **Primary implementation assistant:** Codex
 **Author:** Sy Lam
 
@@ -13,6 +13,10 @@ provenance; separated decision rows from execution-price context; fixed full-equ
 position sizing, state-machine ordering, and metric definitions; aligned label and
 backtest cost math; moved configuration inside the package; and required immutable
 content-addressed data snapshots.
+
+**Version 2.2 implementation status:** All Phase 1 milestones are implemented. The
+one-time final-holdout workflow is available but no real holdout result is asserted by
+this document; engineering completion remains separate from research success.
 
 ---
 
@@ -3423,6 +3427,10 @@ provenance-checked expanding walk-forward folds, manifest-ready metadata, and se
 
 # Milestone 4 — Models and Validation
 
+**Status:** Implemented with fresh per-fold XGBoost/logistic models, single-class fold
+handling, complete classification metrics, serialized evaluation models, authoritative
+feature schemas, and global gain/weight/cover importance artifacts.
+
 ## Deliverables
 
 * XGBoost training.
@@ -3446,6 +3454,10 @@ provenance-checked expanding walk-forward folds, manifest-ready metadata, and se
 ---
 
 # Milestone 5 — Backtesting
+
+**Status:** Implemented with a next-open fixed-horizon state machine, full-equity
+non-overlapping positions, two-sided fees and adverse fills, candle-level accounting,
+trade reconciliation, all required deterministic baselines, and frozen cost sensitivity.
 
 ## Deliverables
 
@@ -3479,6 +3491,10 @@ provenance-checked expanding walk-forward folds, manifest-ready metadata, and se
 
 # Milestone 6 — Development Report
 
+**Status:** Implemented. Each development run saves fold and aggregate model comparisons,
+continuous out-of-fold predictions, trading-baseline results, global feature importance,
+limitations, split provenance, and the frozen Phase 1 evaluation configuration.
+
 ## Deliverables
 
 * Development-period walk-forward report.
@@ -3511,6 +3527,11 @@ Commit the frozen configuration to Git.
 
 # Milestone 7 — Final Holdout Evaluation
 
+**Status:** Implemented as an explicit one-time command with preflight validation,
+failure-if-exists claims, verified immutable input snapshots, frozen configuration replay,
+complete strategy/baseline/cost artifacts, and an immutable evaluation manifest. Running
+the command on real data remains an explicit human research decision.
+
 ## Deliverables
 
 * Holdout predictions.
@@ -3537,6 +3558,10 @@ Commit the frozen configuration to Git.
 ---
 
 # Milestone 8 — Production Model
+
+**Status:** Implemented as a separate explicit command that trains on all labeled history
+and writes a new immutable version containing the model, authoritative feature schema, and
+full model metadata without automatic activation.
 
 ## Deliverables
 

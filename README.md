@@ -1,99 +1,100 @@
 # KrypX
 
-KrypX is a reproducible research pipeline for testing long-or-cash cryptocurrency
-trading signals without look-ahead leakage. Phase 1 targets BTC/USDT hourly candles,
-next-open execution, fixed holding periods, and an XGBoost classifier.
+KrypX is a reproducible Phase 1 research pipeline for testing long-or-cash
+cryptocurrency signals without look-ahead leakage. The baseline configuration uses
+BTC/USDT hourly candles, trailing technical features, an XGBoost classifier, next-open
+execution, a fixed four-candle holding period, and explicit fees, spread, and slippage.
 
-The implementation is intentionally milestone-driven. Milestones 1 through 3 provide the data
-and evaluation-boundary foundation: reproducible market-data snapshots, trailing-only technical
-features, executable next-open labels, multiplicative cost thresholds, isolated holdout data,
-and purged walk-forward folds. Model training and backtesting remain future milestones.
+Phase 1 is implemented end to end. Engineering completion means the pipeline can produce
+auditable out-of-sample results; it does not mean the strategy is profitable or suitable
+for live trading.
 
-## Fetch market data
+## Pipeline
 
-Fetch the default BTC/USDT hourly history with either entry point:
+The normal workflow has four deliberately separate stages:
 
 ```bash
+# 1. Fetch and validate closed candles; create an immutable raw snapshot.
 krypx fetch
-python scripts/run_pipeline.py fetch
+
+# 2. Build point-in-time features and executable next-open labels.
+krypx prepare
+
+# 3. Run development-only purged walk-forward validation.
+krypx validate
+
+# 4. After reviewing and freezing the development run, evaluate its holdout once.
+krypx evaluate-holdout --run-id <development-run-id>
 ```
 
-Override the defaults when needed:
+`validate` compares XGBoost with fold-local scaled logistic regression, saves continuous
+out-of-fold predictions, runs development-period trading baselines, trains an evaluation
+model only on the boundary-purged development rows, and leaves the final holdout
+unevaluated.
+
+`evaluate-holdout` is intentionally irreversible for a development run. It creates an
+exclusive claim before reading holdout values; completed, failed, and interrupted claims
+all prevent routine repeat access. The command recreates features from the verified raw
+snapshot and uses the run's frozen schema, split, threshold, execution, cost, and random
+baseline configuration.
+
+Train a distinct, versioned model on all labeled history only after the final report is
+accepted:
 
 ```bash
-krypx fetch --symbol ETH/USDT --timeframe 4h --lookback-days 1095
+krypx train-production
 ```
 
-The command loads any valid local history, resumes at the next expected candle, excludes the
-current incomplete candle, and rejects duplicate, missing, off-grid, non-UTC, or invalid OHLCV
-records. A successful update writes:
+This does not overwrite or activate an older production model. To fetch, prepare, and
+validate in one development-only command, use `krypx run-development`; it never evaluates
+the final holdout.
+
+Every command is also available through:
+
+```bash
+python scripts/run_pipeline.py <command>
+```
+
+## What is saved
+
+Market data is stored as both a latest-data convenience file and an immutable,
+content-addressed snapshot:
 
 ```text
 data/raw/{symbol_slug}_{timeframe}.csv
 data/raw/snapshots/{symbol_slug}_{timeframe}/{sha256}.csv
 ```
 
-The first file is the atomically replaced latest-data convenience copy. The second is the exact
-immutable input that downstream research must reference. The command prints both paths and the
-snapshot SHA-256 digest.
+Development runs under `artifacts/runs/{run_id}/` contain the frozen configuration,
+manifest, split metadata, feature schema, fold metrics, classification comparison,
+out-of-fold predictions, development strategy metrics, global XGBoost feature importance,
+and a readable development report.
 
-## Prepare features and labels
+The matching `artifacts/evaluations/{run_id}/` directory contains a verified copy of the
+exact raw snapshot, the development-only evaluation model and metadata, and—only after the
+one-time command—holdout predictions, trade ledger, candle-level equity curve, model and
+baseline metrics, cost sensitivity, and an immutable evaluation manifest.
 
-After fetching market data, build the inference-ready and labeled datasets:
+Production versions are stored separately under
+`artifacts/production/versions/{model_version}/`, each with its own model, authoritative
+feature order, schema hash, and training manifest.
 
-```bash
-krypx prepare
-python scripts/run_pipeline.py prepare
-```
+## Execution and comparison contract
 
-Symbol and timeframe overrides must identify an existing fetched dataset:
+A decision is made after candle `t` closes, enters at open `t+1`, and exits at open
+`t+H+1`. The backtest invests all current equity without leverage, supports fractional
+quantity, forbids overlapping positions, processes exits before new close-time signals,
+and applies adverse entry and exit fills plus fees on both sides.
 
-```bash
-krypx prepare --symbol ETH/USDT --timeframe 4h
-```
-
-Preparation resolves the mutable latest file to its matching immutable SHA-256 snapshot and
-verifies those exact bytes before computing anything. It then:
-
-1. Computes 24 ordered, trailing-only trend, momentum, volatility, volume, and return features.
-2. Removes only the leading indicator warm-up rows from the inference dataset.
-3. Labels decisions using entry at `t + 1` open and exit at `t + horizon + 1` open.
-4. Removes the final `horizon + 1` unrealizable rows only from the labeled training dataset.
-5. Atomically writes:
-
-```text
-data/interim/{symbol_slug}_{timeframe}_features.csv
-data/processed/{symbol_slug}_{timeframe}_labeled.csv
-```
-
-The inference file retains the latest complete feature row. Label files also retain entry and
-exit timestamps and prices so future split and leakage checks can audit exactly which market
-observations each target used.
-
-## Plan chronological evaluation splits
-
-Milestone 3 exposes a reusable split API for the later `validate` command:
-
-```python
-from pathlib import Path
-
-from crypto_ai.features.dataset import load_labeled_dataset
-from crypto_ai.modeling.splits import create_split_plan, save_split_metadata
-
-labeled = load_labeled_dataset(Path("data/processed/btc_usdt_1h_labeled.csv"))
-plan = create_split_plan(labeled)
-save_split_metadata(plan, Path("data/processed/btc_usdt_1h_split_metadata.json"))
-```
-
-The holdout is ceiling-rounded to 20% before removing a separate `horizon + 1` boundary purge.
-Walk-forward validation then operates only on development rows, with expanding training windows,
-contiguous validation blocks, and another complete label-lookahead gap before every validation
-block. Both holdout and fold boundaries are checked against the stored `exit_timestamp` values,
-not merely their DataFrame positions.
+The model is compared over an identical performance window with cash, cost-aware Buy &
+Hold, EMA crossover, 24-period momentum, and deterministic random exposure. Low, base,
+and high execution-cost scenarios are reported; the base scenario is the official Phase 1
+result.
 
 ## Development setup
 
-Python 3.11 or newer is required.
+Python 3.11 or newer is required. XGBoost also needs a working OpenMP runtime; on macOS,
+installing `libomp` through Homebrew may be necessary.
 
 ```bash
 python3 -m venv .venv
@@ -110,5 +111,5 @@ Run the required checks:
 .venv/bin/pytest
 ```
 
-Project behavior and research invariants are defined in
-[`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
+The complete data contracts, metric definitions, invariants, and research limitations are
+defined in [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).

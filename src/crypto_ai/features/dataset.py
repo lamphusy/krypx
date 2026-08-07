@@ -41,6 +41,29 @@ class PreparedDatasetResult:
     minimum_required_return: float
 
 
+def load_feature_dataset(path: Path) -> pd.DataFrame:
+    """Load the exact persisted inference-ready feature schema."""
+    try:
+        result = pd.read_csv(path)
+    except (OSError, pd.errors.ParserError) as exc:
+        raise FeatureEngineeringError(f"Unable to load feature dataset {path}: {exc}") from exc
+    feature_columns = get_expected_feature_columns()
+    expected = [*settings.RAW_COLUMNS, *feature_columns]
+    if result.columns.tolist() != expected:
+        raise FeatureEngineeringError("Persisted feature columns do not match expected schema")
+    try:
+        result["timestamp"] = pd.to_datetime(result["timestamp"], utc=True, errors="raise")
+        for column in expected[1:]:
+            result[column] = pd.to_numeric(result[column], errors="raise").astype("float64")
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise FeatureEngineeringError(
+            f"Persisted feature dataset contains invalid values: {exc}"
+        ) from exc
+    if result.empty or not np.isfinite(result[expected[1:]].to_numpy()).all():
+        raise FeatureEngineeringError("Persisted feature dataset is empty or incomplete")
+    return result
+
+
 def load_labeled_dataset(path: Path) -> pd.DataFrame:
     """Load and validate the exact persisted labeled-dataset schema."""
     try:
