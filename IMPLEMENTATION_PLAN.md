@@ -2,9 +2,9 @@
 
 ## Implementation Plan and Technical Specification
 
-**Version:** 2.2.0
-**Last updated:** 2026-08-07
-**Current implementation scope:** Phase 1 — Baseline Research Pipeline (implemented)
+**Version:** 2.3.0
+**Last updated:** 2026-08-08
+**Current implementation scope:** Phase 1 — Pipeline implementation; real research evaluation pending
 **Primary implementation assistant:** Codex
 **Author:** Sy Lam
 
@@ -14,9 +14,10 @@ position sizing, state-machine ordering, and metric definitions; aligned label a
 backtest cost math; moved configuration inside the package; and required immutable
 content-addressed data snapshots.
 
-**Version 2.2 implementation status:** All Phase 1 milestones are implemented. The
-one-time final-holdout workflow is available but no real holdout result is asserted by
-this document; engineering completion remains separate from research success.
+**Version 2.3 compliance status:** The Phase 1 pipeline implementation is complete when
+the acceptance checks in this document pass. That engineering status is not a completed
+real research evaluation. No real final-holdout result, production decision, or
+profitability conclusion is asserted by this document.
 
 ---
 
@@ -1816,7 +1817,7 @@ Save it separately from the production model.
 
 # 11.4 Production Model
 
-Only after final evaluation is completed and the report is frozen:
+Only after final evaluation is completed, reviewed, and explicitly accepted:
 
 ```python
 def train_production_model(
@@ -1828,6 +1829,13 @@ def train_production_model(
 ```
 
 Production training must be a separate explicit CLI command.
+
+The command must require the accepted evaluation run ID as authorization and provenance.
+Before fitting, it must verify that the development run and completed evaluation claim
+exist, the immutable evaluation manifest and required artifacts are intact, the snapshot
+hash matches, and the feature schema and relevant frozen configuration are compatible.
+The evaluation reference must not make holdout labels or metrics inputs to production
+fitting.
 
 It must not automatically overwrite the evaluation model.
 
@@ -2707,16 +2715,21 @@ Do not use these results for iterative model tuning.
 ## 15.5 Train Production Model
 
 ```bash
-python scripts/run_pipeline.py train-production
+python scripts/run_pipeline.py train-production \
+  --evaluation-run-id <accepted-development-run-id>
 ```
 
 Behavior:
 
-1. Load all currently labeled data.
-2. Train a production model.
-3. Save it under a new version.
-4. Do not overwrite previous versions.
-5. Do not automatically activate it unless explicitly requested.
+1. Treat the provided evaluation run ID as an explicit human acceptance decision.
+2. Verify that the development run exists and its holdout claim is completed.
+3. Verify the immutable evaluation manifest, snapshot hash, required evaluation
+   artifacts, feature schema, and relevant frozen configuration.
+4. Load the verified prepared dataset without using holdout metrics as fit inputs.
+5. Train a production model on all currently labeled rows.
+6. Save it under a new immutable version with the evaluation reference recorded.
+7. Do not overwrite previous versions.
+8. Do not automatically activate it unless explicitly requested.
 
 ---
 
@@ -3317,6 +3330,9 @@ Do not ignore example configuration or test fixtures that are required for repro
 
 # Milestone 0 — Repository Bootstrap
 
+**Pipeline implementation status:** Implemented with an importable source-layout package,
+frozen dependencies, project configuration, logging, exceptions, tests, and CI checks.
+
 ## Deliverables
 
 * Git repository initialization when the project is not already a worktree.
@@ -3347,8 +3363,9 @@ All commands complete successfully.
 
 # Milestone 1 — Market Data
 
-**Status:** Implemented with mocked-network coverage. The `fetch` command, strict OHLCV
-validation, incremental atomic storage, and immutable SHA-256 snapshots are available.
+**Pipeline implementation status:** Implemented with mocked-network coverage. The `fetch`
+command, strict OHLCV validation, incremental atomic storage, and immutable SHA-256
+snapshots are available.
 
 ## Deliverables
 
@@ -3377,8 +3394,9 @@ validation, incremental atomic storage, and immutable SHA-256 snapshots are avai
 
 # Milestone 2 — Features and Labels
 
-**Status:** Implemented with deterministic point-in-time, executable-label, cost-reconciliation,
-raw-snapshot provenance, processed-storage, and CLI coverage.
+**Pipeline implementation status:** Implemented with deterministic point-in-time,
+executable-label, cost-reconciliation, raw-snapshot provenance, processed-storage, and
+CLI coverage.
 
 ## Deliverables
 
@@ -3404,8 +3422,9 @@ raw-snapshot provenance, processed-storage, and CLI coverage.
 
 # Milestone 3 — Dataset Splitting
 
-**Status:** Implemented with positional holdout isolation, explicit boundary purging,
-provenance-checked expanding walk-forward folds, manifest-ready metadata, and serialization.
+**Pipeline implementation status:** Implemented with positional holdout isolation,
+explicit boundary purging, provenance-checked expanding walk-forward folds,
+manifest-ready metadata, and serialization.
 
 ## Deliverables
 
@@ -3427,9 +3446,10 @@ provenance-checked expanding walk-forward folds, manifest-ready metadata, and se
 
 # Milestone 4 — Models and Validation
 
-**Status:** Implemented with fresh per-fold XGBoost/logistic models, single-class fold
-handling, complete classification metrics, serialized evaluation models, authoritative
-feature schemas, and global gain/weight/cover importance artifacts.
+**Pipeline implementation status:** Implemented with fresh per-fold XGBoost/logistic
+models, single-class fold handling, complete classification metrics, serialized
+evaluation models, authoritative feature schemas, and global gain/weight/cover importance
+artifacts.
 
 ## Deliverables
 
@@ -3455,9 +3475,10 @@ feature schemas, and global gain/weight/cover importance artifacts.
 
 # Milestone 5 — Backtesting
 
-**Status:** Implemented with a next-open fixed-horizon state machine, full-equity
-non-overlapping positions, two-sided fees and adverse fills, candle-level accounting,
-trade reconciliation, all required deterministic baselines, and frozen cost sensitivity.
+**Pipeline implementation status:** Implemented with a next-open fixed-horizon state
+machine, full-equity non-overlapping positions, two-sided fees and adverse fills,
+candle-level accounting, trade reconciliation, all required deterministic baselines, and
+frozen cost sensitivity.
 
 ## Deliverables
 
@@ -3491,9 +3512,11 @@ trade reconciliation, all required deterministic baselines, and frozen cost sens
 
 # Milestone 6 — Development Report
 
-**Status:** Implemented. Each development run saves fold and aggregate model comparisons,
-continuous out-of-fold predictions, trading-baseline results, global feature importance,
-limitations, split provenance, and the frozen Phase 1 evaluation configuration.
+**Pipeline implementation status:** Implemented. Each development run saves fold and
+aggregate model comparisons, continuous out-of-fold predictions, trading-baseline
+results, global feature importance, limitations, split provenance, and the frozen Phase 1
+evaluation configuration. These development artifacts are not final-holdout evidence and
+do not establish profitability.
 
 ## Deliverables
 
@@ -3527,10 +3550,14 @@ Commit the frozen configuration to Git.
 
 # Milestone 7 — Final Holdout Evaluation
 
-**Status:** Implemented as an explicit one-time command with preflight validation,
-failure-if-exists claims, verified immutable input snapshots, frozen configuration replay,
-complete strategy/baseline/cost artifacts, and an immutable evaluation manifest. Running
-the command on real data remains an explicit human research decision.
+**Pipeline implementation status:** Implemented as an explicit one-time command with
+preflight validation, failure-if-exists claims, verified immutable input snapshots,
+frozen configuration replay, complete strategy/baseline/cost artifacts, and an immutable
+evaluation manifest.
+
+**Real research status:** Pending a separate human authorization. Code completion and
+tests do not mean a real final holdout has been evaluated. If authorized, the base-cost
+scenario is the official Phase 1 result; low and high costs are sensitivity checks.
 
 ## Deliverables
 
@@ -3559,9 +3586,14 @@ the command on real data remains an explicit human research decision.
 
 # Milestone 8 — Production Model
 
-**Status:** Implemented as a separate explicit command that trains on all labeled history
-and writes a new immutable version containing the model, authoritative feature schema, and
-full model metadata without automatic activation.
+**Pipeline implementation status:** Implemented as a separate, evaluation-gated command
+that requires an explicitly accepted completed evaluation, then trains on all labeled
+history and writes a new immutable version containing the model, authoritative feature
+schema, evaluation provenance, and full model metadata without automatic activation.
+
+**Operational status:** Production training is not authorized merely because the code is
+complete. It follows review and acceptance of a real final evaluation, and the new model
+still requires a separate activation decision.
 
 ## Deliverables
 
@@ -3573,6 +3605,7 @@ full model metadata without automatic activation.
 ## Acceptance Criteria
 
 * Production model is stored separately from the evaluation model.
+* Production training requires an explicitly accepted completed evaluation reference.
 * Production model is not used to calculate historical holdout metrics.
 * Previous production versions remain available.
 * Inference uses the exact saved feature order.
@@ -3581,7 +3614,10 @@ full model metadata without automatic activation.
 
 # 24. Phase 1 Acceptance Criteria
 
-Phase 1 is technically complete only when all conditions below are satisfied.
+Phase 1 pipeline implementation is technically complete only when all conditions below
+are satisfied. Real Phase 1 research evaluation is complete only after a human-authorized
+one-time holdout run has produced and frozen valid artifacts. Neither status alone is a
+profitability conclusion.
 
 ## Data Integrity
 

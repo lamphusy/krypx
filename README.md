@@ -5,13 +5,14 @@ cryptocurrency signals without look-ahead leakage. The baseline configuration us
 BTC/USDT hourly candles, trailing technical features, an XGBoost classifier, next-open
 execution, a fixed four-candle holding period, and explicit fees, spread, and slippage.
 
-Phase 1 is implemented end to end. Engineering completion means the pipeline can produce
-auditable out-of-sample results; it does not mean the strategy is profitable or suitable
-for live trading.
+The Phase 1 pipeline is implemented end to end, but the real Phase 1 research evaluation
+is a separate milestone. Code completion means the pipeline can produce auditable
+out-of-sample results; it does not mean the strategy is profitable, useful, or suitable
+for live trading. No profitability conclusion follows from passing the test suite.
 
 ## Pipeline
 
-The normal workflow has four deliberately separate stages:
+The normal workflow has five deliberately separate stages:
 
 ```bash
 # 1. Fetch and validate closed candles; create an immutable raw snapshot.
@@ -23,8 +24,11 @@ krypx prepare
 # 3. Run development-only purged walk-forward validation.
 krypx validate
 
-# 4. After reviewing and freezing the development run, evaluate its holdout once.
+# 4. Human-authorized action only: evaluate the frozen holdout once.
 krypx evaluate-holdout --run-id <development-run-id>
+
+# 5. After explicitly accepting that completed evaluation, train a production version.
+krypx train-production --evaluation-run-id <development-run-id>
 ```
 
 `validate` compares XGBoost with fold-local scaled logistic regression, saves continuous
@@ -32,22 +36,25 @@ out-of-fold predictions, runs development-period trading baselines, trains an ev
 model only on the boundary-purged development rows, and leaves the final holdout
 unevaluated.
 
-`evaluate-holdout` is intentionally irreversible for a development run. It creates an
-exclusive claim before reading holdout values; completed, failed, and interrupted claims
-all prevent routine repeat access. The command recreates features from the verified raw
-snapshot and uses the run's frozen schema, split, threshold, execution, cost, and random
-baseline configuration.
+`evaluate-holdout` is a separate, human-authorized research action and is intentionally
+irreversible for a development run. It creates an exclusive claim before reading holdout
+values; completed, failed, and interrupted claims all prevent routine repeat access. The
+command recreates features from the verified raw snapshot and uses the run's frozen
+schema, split, threshold, execution, cost, and random-baseline configuration. Running
+`validate` never grants permission to evaluate the holdout automatically.
 
-Train a distinct, versioned model on all labeled history only after the final report is
-accepted:
+Train a distinct, versioned model on all labeled history only after a completed final
+evaluation has been reviewed and explicitly accepted:
 
 ```bash
-krypx train-production
+krypx train-production --evaluation-run-id <development-run-id>
 ```
 
-This does not overwrite or activate an older production model. To fetch, prepare, and
-validate in one development-only command, use `krypx run-development`; it never evaluates
-the final holdout.
+The evaluation run ID is workflow authorization and provenance only: production fitting
+does not use holdout metrics as inputs. Preflight checks require a completed claim and
+compatible, intact evaluation artifacts. The command does not overwrite or activate an
+older production model. To fetch, prepare, and validate in one development-only command,
+use `krypx run-development`; it never evaluates the final holdout.
 
 Every command is also available through:
 
@@ -64,6 +71,11 @@ content-addressed snapshot:
 data/raw/{symbol_slug}_{timeframe}.csv
 data/raw/snapshots/{symbol_slug}_{timeframe}/{sha256}.csv
 ```
+
+Each prepared feature/label bundle has a completion manifest containing file hashes,
+feature schema, frozen feature/label settings, and the exact immutable raw snapshot that
+produced it. Development and production workflows reject incomplete or mismatched bundles
+instead of silently following a newer latest-data file.
 
 Development runs under `artifacts/runs/{run_id}/` contain the frozen configuration,
 manifest, split metadata, feature schema, fold metrics, classification comparison,
@@ -89,7 +101,8 @@ and applies adverse entry and exit fills plus fees on both sides.
 The model is compared over an identical performance window with cash, cost-aware Buy &
 Hold, EMA crossover, 24-period momentum, and deterministic random exposure. Low, base,
 and high execution-cost scenarios are reported; the base scenario is the official Phase 1
-result.
+result. Low- and high-cost scenarios are sensitivity checks and must not replace the base
+scenario when stating the official result.
 
 ## Development setup
 

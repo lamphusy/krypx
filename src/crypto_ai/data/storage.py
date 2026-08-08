@@ -76,7 +76,7 @@ def load_ohlcv_csv(
     """Load and validate a canonical OHLCV CSV file."""
     try:
         result = pd.read_csv(path)
-    except (OSError, pd.errors.ParserError) as exc:
+    except (OSError, UnicodeError, pd.errors.ParserError) as exc:
         raise MarketDataValidationError(f"Unable to load OHLCV file {path}: {exc}") from exc
 
     missing_columns = [column for column in settings.RAW_COLUMNS if column not in result.columns]
@@ -234,13 +234,18 @@ def load_or_update_ohlcv(
     ).reset_index(drop=True)
     validate_ohlcv(combined, timeframe=timeframe, current_utc_time=now)
 
-    snapshot_path, digest = _persist_market_data(
-        combined,
-        latest_path=latest_path,
-        snapshot_root=snapshot_root,
-        symbol=symbol,
-        timeframe=timeframe,
-    )
+    try:
+        snapshot_path, digest = _persist_market_data(
+            combined,
+            latest_path=latest_path,
+            snapshot_root=snapshot_root,
+            symbol=symbol,
+            timeframe=timeframe,
+        )
+    except OSError as exc:
+        raise MarketDataValidationError(
+            f"Unable to persist OHLCV artifacts for {symbol} {timeframe}: {exc}"
+        ) from exc
 
     logger.info(
         "Stored %s %s %s candles at %s; removed %s duplicates; snapshot %s",

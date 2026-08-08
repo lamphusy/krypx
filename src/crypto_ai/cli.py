@@ -137,11 +137,18 @@ def _run_evaluate_holdout(args: argparse.Namespace) -> int:
         logger.error("Final holdout evaluation failed: %s", exc)
         return 1
     rows = {"XGBoost": result["metrics"], **result["baselines"]}
+    display_names = {
+        "XGBoost": "XGBoost",
+        "cash": "Cash",
+        "buy_and_hold": "Buy & Hold",
+        "ema": "EMA",
+        "momentum": "Momentum",
+    }
     print("Strategy               Return    Sharpe   Max DD    Exposure  Trades")
     for name, metrics in rows.items():
         if name == "random":
             continue
-        display_name = name if name == "XGBoost" else name.replace("_", " ").title()
+        display_name = display_names.get(name, name.replace("_", " ").title())
         print(
             f"{display_name:<22} "
             f"{_metric_text(metrics['total_return'], percent=True):>8}  "
@@ -161,14 +168,19 @@ def _run_evaluate_holdout(args: argparse.Namespace) -> int:
 
 
 def _run_train_production(args: argparse.Namespace) -> int:
-    """Train a separately versioned production model on all labeled rows."""
+    """Train a versioned production model after an accepted final evaluation."""
     configure_logging()
     try:
-        path = train_versioned_production_model(args.symbol, args.timeframe)
+        path = train_versioned_production_model(
+            args.evaluation_run_id,
+            symbol=args.symbol,
+            timeframe=args.timeframe,
+        )
     except CryptoAIError as exc:
         logger.error("Production training failed: %s", exc)
         return 1
     print(f"Production model version: {path}")
+    print(f"Authorized by completed evaluation: {args.evaluation_run_id}")
     print("The new version was not automatically activated.")
     return 0
 
@@ -220,7 +232,13 @@ def build_parser() -> argparse.ArgumentParser:
     holdout_parser.set_defaults(handler=_run_evaluate_holdout)
 
     production_parser = subparsers.add_parser(
-        "train-production", help="train a new versioned production model"
+        "train-production",
+        help="train a versioned production model after accepting a final evaluation",
+    )
+    production_parser.add_argument(
+        "--evaluation-run-id",
+        required=True,
+        help="completed final-evaluation run explicitly accepted for production authorization",
     )
     production_parser.add_argument("--symbol", default=settings.SYMBOL)
     production_parser.add_argument("--timeframe", default=settings.TIMEFRAME)

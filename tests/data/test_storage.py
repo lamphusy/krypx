@@ -10,11 +10,20 @@ import pytest
 import crypto_ai.data.storage as storage
 from crypto_ai.data.storage import (
     get_raw_data_path,
+    load_ohlcv_csv,
     load_or_update_ohlcv,
     sha256_file,
     symbol_to_slug,
 )
 from crypto_ai.exceptions import MarketDataValidationError
+
+
+def test_invalid_utf8_market_data_is_a_domain_error(tmp_path: Path) -> None:
+    path = tmp_path / "corrupt.csv"
+    path.write_bytes(b"\xff\xfe\x00")
+
+    with pytest.raises(MarketDataValidationError, match="Unable to load OHLCV file"):
+        load_ohlcv_csv(path, "1h")
 
 
 def _fixed_fetcher(data: pd.DataFrame, calls: list[dict[str, Any]] | None = None) -> Any:
@@ -159,7 +168,7 @@ def test_atomic_write_preserves_previous_file_on_failure(
         raise OSError("simulated disk failure")
 
     monkeypatch.setattr(storage, "_write_csv", fail_write)
-    with pytest.raises(OSError, match="simulated disk failure"):
+    with pytest.raises(MarketDataValidationError, match="simulated disk failure"):
         load_or_update_ohlcv(
             "BTC/USDT",
             "1h",

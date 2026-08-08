@@ -8,7 +8,7 @@ import pytest
 
 from crypto_ai.cli import main
 from crypto_ai.data.storage import MarketDataResult
-from crypto_ai.exceptions import MarketDataNetworkError
+from crypto_ai.exceptions import ArtifactError, MarketDataNetworkError
 from crypto_ai.features.dataset import PreparedDatasetResult
 
 
@@ -49,8 +49,9 @@ def test_fetch_command_reports_snapshot_identity(
 
 def test_fetch_command_returns_failure_for_project_error(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Expected market-data failures produce a nonzero process status."""
+    """Expected market-data failures produce a clean nonzero process status."""
 
     def fail(**kwargs: object) -> MarketDataResult:
         raise MarketDataNetworkError("network unavailable")
@@ -58,6 +59,7 @@ def test_fetch_command_returns_failure_for_project_error(
     monkeypatch.setattr("crypto_ai.cli.load_or_update_ohlcv", fail)
 
     assert main(["fetch"]) == 1
+    assert "Traceback" not in capsys.readouterr().err
 
 
 def test_prepare_command_reports_rows_schema_and_raw_provenance(
@@ -176,11 +178,96 @@ def test_train_production_reports_non_activation(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     version = tmp_path / "production" / "versions" / "v1"
+    arguments: dict[str, object] = {}
+
+    def train(
+        evaluation_run_id: str,
+        *,
+        symbol: str,
+        timeframe: str,
+    ) -> Path:
+        arguments.update(
+            {
+                "evaluation_run_id": evaluation_run_id,
+                "symbol": symbol,
+                "timeframe": timeframe,
+            }
+        )
+        return version
+
     monkeypatch.setattr(
         "crypto_ai.cli.train_versioned_production_model",
-        lambda symbol, timeframe: version,
+        train,
     )
-    assert main(["train-production"]) == 0
+    assert (
+        main(
+            [
+                "train-production",
+                "--evaluation-run-id",
+                "evaluation-1",
+                "--symbol",
+                "ETH/USDT",
+                "--timeframe",
+                "4h",
+            ]
+        )
+        == 0
+    )
     output = capsys.readouterr().out
+    assert arguments == {
+        "evaluation_run_id": "evaluation-1",
+        "symbol": "ETH/USDT",
+        "timeframe": "4h",
+    }
     assert str(version) in output
+    assert "Authorized by completed evaluation: evaluation-1" in output
     assert "not automatically activated" in output
+
+
+def test_train_production_requires_evaluation_run_id() -> None:
+    """Production training cannot be requested without an accepted evaluation."""
+    with pytest.raises(SystemExit) as exc_info:
+        main(["train-production"])
+
+    assert exc_info.value.code == 2
+
+
+@pytest.mark.parametrize(
+    ("arguments", "target", "message"),
+    [
+        (["prepare"], "crypto_ai.cli.prepare_datasets", "prepared manifest is corrupt"),
+        (
+            ["validate"],
+            "crypto_ai.cli.run_development_validation",
+            "development manifest contains invalid JSON",
+        ),
+        (
+            ["evaluate-holdout", "--run-id", "run-1"],
+            "crypto_ai.cli.evaluate_final_holdout",
+            "evaluation model could not be loaded",
+        ),
+        (
+            ["train-production", "--evaluation-run-id", "run-1"],
+            "crypto_ai.cli.train_versioned_production_model",
+            "evaluation artifacts are incomplete",
+        ),
+    ],
+)
+def test_expected_operational_errors_return_nonzero_without_traceback(
+    arguments: list[str],
+    target: str,
+    message: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Expected artifact failures are logged cleanly by every artifact command."""
+
+    def fail(*args: object, **kwargs: object) -> object:
+        raise ArtifactError(message)
+
+    monkeypatch.setattr(target, fail)
+
+    assert main(arguments) == 1
+    error_output = capsys.readouterr().err
+    assert message in error_output
+    assert "Traceback" not in error_output

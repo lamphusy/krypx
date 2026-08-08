@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from crypto_ai.config import settings
-from crypto_ai.exceptions import DatasetSplitError
+from crypto_ai.exceptions import ArtifactError, DatasetSplitError
 from crypto_ai.modeling.splits import (
     create_split_plan,
     save_split_metadata,
@@ -201,6 +201,25 @@ def test_split_plan_contains_manifest_ready_metadata(
     assert payload["partitions"]["holdout"]["start_position"] == 80
     assert payload["folds"][0]["gap"]["row_count"] == 5
     assert "label" not in payload["partitions"]["holdout"]
+
+
+def test_split_metadata_write_failure_is_an_artifact_error(
+    tmp_path: Path,
+    labeled_split_data: pd.DataFrame,
+) -> None:
+    plan = create_split_plan(
+        labeled_split_data,
+        holdout_ratio=0.20,
+        label_lookahead_rows=5,
+        n_splits=3,
+        test_ratio=0.10,
+        gap_rows=5,
+    )
+    blocked_parent = tmp_path / "blocked"
+    blocked_parent.write_text("not a directory", encoding="utf-8")
+
+    with pytest.raises(ArtifactError, match="artifact directory"):
+        save_split_metadata(plan, blocked_parent / "split_metadata.json")
 
 
 def test_gap_shorter_than_label_lookahead_is_rejected(

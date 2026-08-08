@@ -5,10 +5,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from crypto_ai.backtesting.engine import BacktestResult, run_backtest
+from crypto_ai.backtesting.engine import BacktestResult, resolve_performance_window, run_backtest
 from crypto_ai.backtesting.metrics import calculate_backtest_metrics
 from crypto_ai.config import settings
 from crypto_ai.costs import CostConfig
+from crypto_ai.exceptions import BacktestError
 
 
 def cash_baseline(
@@ -43,11 +44,7 @@ def buy_and_hold_backtest(
     initial_capital: float = settings.INITIAL_CAPITAL,
 ) -> BacktestResult:
     """Enter once at the common window's first open and exit at its final open."""
-    positions = {index: position for position, index in enumerate(market_df.index)}
-    decision_positions = [positions[index] for index in decision_index]
-    valid = [position for position in decision_positions if position + horizon + 1 < len(market_df)]
-    start = min(decision_positions) + 1
-    end = max(valid) + horizon + 1
+    start, end = resolve_performance_window(market_df, decision_index, horizon)
     entry_market = float(market_df.iloc[start]["open"])
     exit_market = float(market_df.iloc[end]["open"])
     execution = cost_config.one_side_execution_rate
@@ -59,7 +56,6 @@ def buy_and_hold_backtest(
     exit_fee = gross_exit * cost_config.fee_rate
     final_equity = gross_exit - exit_fee
     rows: list[dict[str, object]] = []
-    previous = float(initial_capital)
     indexes = market_df.index[start : end + 1]
     for position in range(start, end + 1):
         if position == start:
@@ -72,12 +68,21 @@ def buy_and_hold_backtest(
             {
                 "timestamp": market_df.iloc[position]["timestamp"],
                 "equity": equity,
-                "period_return": equity / previous - 1.0,
                 "position_open": position < end,
-                "market_exposure": 1.0 if position < end else 0.0,
+                # Exposure is aligned to the interval ending at this mark.  The
+                # first mark has no preceding performance interval; every later
+                # interval was held, including the one ending at the exit open.
+                "market_exposure": np.nan if position == start else 1.0,
             }
         )
-        previous = equity
+    equity_curve = pd.DataFrame(rows, index=indexes)
+    equity_curve["period_return"] = np.nan
+    equities = equity_curve["equity"].to_numpy(dtype="float64")
+    interval_returns = np.empty(len(equities) - 1, dtype="float64")
+    interval_returns[0] = equities[1] / initial_capital - 1.0
+    if len(interval_returns) > 1:
+        interval_returns[1:] = equities[2:] / equities[1:-1] - 1.0
+    equity_curve.iloc[1:, equity_curve.columns.get_loc("period_return")] = interval_returns
     ledger = pd.DataFrame(
         [
             {
@@ -109,7 +114,7 @@ def buy_and_hold_backtest(
         ]
     )
     scores = pd.Series(1.0, index=decision_index)
-    return BacktestResult(ledger, pd.DataFrame(rows, index=indexes), initial_capital, scores, None)
+    return BacktestResult(ledger, equity_curve, initial_capital, scores, None)
 
 
 def rule_backtest(
@@ -208,6 +213,11 @@ def run_cost_sensitivity(
     """Backtest frozen predictions under every configured execution-cost scenario."""
     results: dict[str, dict[str, Any]] = {}
     scenarios = settings.COST_SCENARIOS if cost_scenarios is None else cost_scenarios
+    if not scenarios:
+        raise BacktestError("At least one cost-sensitivity scenario is required")
+    fee_rates = {float(values["fee_rate"]) for values in scenarios.values()}
+    if len(fee_rates) != 1:
+        raise BacktestError("Cost sensitivity must keep the fee assumption unchanged")
     for name, values in scenarios.items():
         cost = CostConfig(**values)
         backtest = run_backtest(

@@ -30,7 +30,7 @@ def json_safe(value: Any) -> Any:
     if isinstance(value, Path):
         return str(value)
     if isinstance(value, np.generic):
-        return value.item()
+        return json_safe(value.item())
     if isinstance(value, dict):
         return {str(key): json_safe(item) for key, item in value.items()}
     if is_dataclass(value) and not isinstance(value, type):
@@ -44,11 +44,20 @@ def json_safe(value: Any) -> Any:
 
 def atomic_write_json(path: Path, payload: dict[str, Any], *, exclusive: bool = False) -> None:
     """Write formatted JSON atomically, optionally refusing an existing destination."""
-    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise ArtifactError(f"Unable to create artifact directory {path.parent}: {exc}") from exc
     if exclusive:
         try:
             with path.open("x", encoding="utf-8") as file_handle:
-                json.dump(json_safe(payload), file_handle, indent=2, sort_keys=True)
+                json.dump(
+                    json_safe(payload),
+                    file_handle,
+                    indent=2,
+                    sort_keys=True,
+                    allow_nan=False,
+                )
                 file_handle.write("\n")
                 file_handle.flush()
                 os.fsync(file_handle.fileno())
@@ -56,19 +65,34 @@ def atomic_write_json(path: Path, payload: dict[str, Any], *, exclusive: bool = 
             raise ArtifactError(
                 f"Artifact already exists and cannot be overwritten: {path}"
             ) from exc
+        except (OSError, TypeError, ValueError) as exc:
+            raise ArtifactError(f"Unable to write JSON artifact {path}: {exc}") from exc
         return
 
-    descriptor, temporary_name = tempfile.mkstemp(dir=path.parent, prefix=path.name, suffix=".tmp")
+    temporary_name: str | None = None
     try:
+        descriptor, temporary_name = tempfile.mkstemp(
+            dir=path.parent, prefix=path.name, suffix=".tmp"
+        )
         with os.fdopen(descriptor, "w", encoding="utf-8") as file_handle:
-            json.dump(json_safe(payload), file_handle, indent=2, sort_keys=True)
+            json.dump(
+                json_safe(payload),
+                file_handle,
+                indent=2,
+                sort_keys=True,
+                allow_nan=False,
+            )
             file_handle.write("\n")
             file_handle.flush()
             os.fsync(file_handle.fileno())
         os.replace(temporary_name, path)
-    except Exception:
-        Path(temporary_name).unlink(missing_ok=True)
-        raise
+    except (OSError, TypeError, ValueError) as exc:
+        if temporary_name is not None:
+            try:
+                Path(temporary_name).unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise ArtifactError(f"Unable to write JSON artifact {path}: {exc}") from exc
 
 
 def git_metadata(project_dir: Path) -> dict[str, Any]:

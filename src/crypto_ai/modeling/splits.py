@@ -1,10 +1,7 @@
 """Chronological holdout isolation and purged walk-forward splits."""
 
-import json
 import logging
 import math
-import os
-import tempfile
 from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
 from typing import Any
@@ -12,6 +9,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from crypto_ai.artifacts.manifest import atomic_write_json
 from crypto_ai.config import settings
 from crypto_ai.exceptions import DatasetSplitError
 
@@ -340,25 +338,10 @@ def _json_value(value: Any) -> Any:
 
 def save_split_metadata(plan: SplitPlan, destination: Path) -> None:
     """Atomically save partition and fold metadata without holdout outcomes."""
-    destination.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "partitions": _json_value(plan.partition_metadata),
         "folds": _json_value(plan.fold_metadata),
         "test_size_rows": plan.test_size_rows,
         "gap_rows": plan.gap_rows,
     }
-    file_descriptor, temporary_name = tempfile.mkstemp(
-        dir=destination.parent,
-        prefix=f"{destination.name}.",
-        suffix=".tmp",
-    )
-    try:
-        with os.fdopen(file_descriptor, "w", encoding="utf-8") as file_handle:
-            json.dump(payload, file_handle, indent=2, sort_keys=True)
-            file_handle.write("\n")
-            file_handle.flush()
-            os.fsync(file_handle.fileno())
-        os.replace(temporary_name, destination)
-    except Exception:
-        Path(temporary_name).unlink(missing_ok=True)
-        raise
+    atomic_write_json(destination, payload)
