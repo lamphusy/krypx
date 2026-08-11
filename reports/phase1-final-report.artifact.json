@@ -1,0 +1,660 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "KrypX Phase 1 Final Research Report",
+    "description": "Technical close-out of the frozen BTC/USDT 1h Phase 1 baseline, including development validation, one-time final holdout evidence, integrity checks, and the production decision.",
+    "generatedAt": "2026-08-11T17:13:50Z",
+    "cards": [
+      {
+        "id": "holdout-return-card",
+        "description": "Official base-cost return over the one-time final holdout.",
+        "dataset": "headline_metrics",
+        "sourceId": "headline_metrics_sql",
+        "metrics": [
+          {
+            "label": "Holdout return",
+            "field": "holdout_return",
+            "format": "percent",
+            "signed": true
+          }
+        ]
+      },
+      {
+        "id": "drawdown-card",
+        "description": "Largest peak-to-trough equity decline in the base-cost holdout backtest.",
+        "dataset": "headline_metrics",
+        "sourceId": "headline_metrics_sql",
+        "metrics": [
+          {
+            "label": "Maximum drawdown",
+            "field": "maximum_drawdown",
+            "format": "percent",
+            "signed": true
+          }
+        ]
+      },
+      {
+        "id": "trades-card",
+        "description": "Completed non-overlapping trades in the holdout window.",
+        "dataset": "headline_metrics",
+        "sourceId": "headline_metrics_sql",
+        "metrics": [
+          {
+            "label": "Holdout trades",
+            "field": "trades",
+            "format": "number"
+          }
+        ]
+      },
+      {
+        "id": "random-percentile-card",
+        "description": "Share of matched-frequency random simulations that the model outperformed.",
+        "dataset": "headline_metrics",
+        "sourceId": "headline_metrics_sql",
+        "metrics": [
+          {
+            "label": "Random simulations beaten",
+            "field": "random_simulations_beaten",
+            "format": "percent"
+          }
+        ]
+      }
+    ],
+    "charts": [
+      {
+        "id": "holdout-return-comparison",
+        "title": "Final holdout return by strategy",
+        "subtitle": "BTC/USDT 1h frozen holdout, base execution costs; the random value is the median of 1,000 matched-frequency simulations.",
+        "type": "horizontalBar",
+        "dataset": "holdout_strategy_returns",
+        "sourceId": "holdout_strategy_returns_sql",
+        "valueFormat": "percent",
+        "encodings": {
+          "x": {
+            "field": "strategy",
+            "type": "nominal",
+            "label": "Strategy"
+          },
+          "y": {
+            "field": "total_return",
+            "type": "quantitative",
+            "label": "Total return"
+          },
+          "tooltip": [
+            {
+              "field": "sharpe_ratio",
+              "type": "quantitative",
+              "label": "Sharpe ratio",
+              "format": "number"
+            },
+            {
+              "field": "maximum_drawdown",
+              "type": "quantitative",
+              "label": "Maximum drawdown",
+              "format": "percent"
+            },
+            {
+              "field": "trades",
+              "type": "quantitative",
+              "label": "Trades",
+              "format": "number"
+            }
+          ]
+        }
+      }
+    ],
+    "tables": [
+      {
+        "id": "cost-sensitivity-table",
+        "title": "Frozen cost sensitivity",
+        "subtitle": "The model and signals are unchanged; only execution costs vary across the three pre-committed scenarios.",
+        "dataset": "cost_sensitivity",
+        "sourceId": "cost_sensitivity_sql",
+        "defaultSort": {
+          "field": "total_return",
+          "direction": "desc"
+        },
+        "columns": [
+          {
+            "field": "scenario",
+            "label": "Scenario",
+            "type": "text"
+          },
+          {
+            "field": "total_return",
+            "label": "Total return",
+            "format": "percent",
+            "semantic": "movement"
+          },
+          {
+            "field": "annualized_return",
+            "label": "Annualized return",
+            "format": "percent",
+            "semantic": "movement"
+          },
+          {
+            "field": "sharpe_ratio",
+            "label": "Sharpe",
+            "format": "number"
+          },
+          {
+            "field": "maximum_drawdown",
+            "label": "Maximum drawdown",
+            "format": "percent"
+          },
+          {
+            "field": "profit_factor",
+            "label": "Profit factor",
+            "format": "number"
+          },
+          {
+            "field": "estimated_costs",
+            "label": "Estimated costs",
+            "format": "currency"
+          }
+        ]
+      },
+      {
+        "id": "development-holdout-table",
+        "title": "Development and holdout strategy evidence",
+        "subtitle": "Official base-cost XGBoost OOF development result versus the one-time final holdout result.",
+        "dataset": "phase_comparison",
+        "sourceId": "phase_comparison_sql",
+        "defaultSort": {
+          "field": "total_return",
+          "direction": "desc"
+        },
+        "columns": [
+          {
+            "field": "period",
+            "label": "Period",
+            "type": "text"
+          },
+          {
+            "field": "total_return",
+            "label": "Total return",
+            "format": "percent",
+            "semantic": "movement"
+          },
+          {
+            "field": "sharpe_ratio",
+            "label": "Sharpe",
+            "format": "number"
+          },
+          {
+            "field": "maximum_drawdown",
+            "label": "Maximum drawdown",
+            "format": "percent"
+          },
+          {
+            "field": "market_exposure",
+            "label": "Exposure",
+            "format": "percent"
+          },
+          {
+            "field": "trades",
+            "label": "Trades",
+            "format": "number"
+          },
+          {
+            "field": "profit_factor",
+            "label": "Profit factor",
+            "format": "number"
+          }
+        ]
+      },
+      {
+        "id": "partition-table",
+        "title": "Frozen chronological partitions",
+        "subtitle": "Labeled decision rows, UTC; the five-row boundary purge covers the four-candle horizon plus next-open execution.",
+        "dataset": "partitions",
+        "sourceId": "partitions_sql",
+        "defaultSort": {
+          "field": "start",
+          "direction": "asc"
+        },
+        "columns": [
+          {
+            "field": "partition",
+            "label": "Partition",
+            "type": "text"
+          },
+          {
+            "field": "start",
+            "label": "Start (UTC)",
+            "type": "date"
+          },
+          {
+            "field": "end",
+            "label": "End (UTC)",
+            "type": "date"
+          },
+          {
+            "field": "rows",
+            "label": "Rows",
+            "format": "number"
+          }
+        ]
+      },
+      {
+        "id": "classification-table",
+        "title": "Development-only aggregate classification metrics",
+        "subtitle": "Continuous out-of-fold predictions over 10,490 validation rows; these are not final-holdout classification metrics.",
+        "dataset": "development_classification",
+        "sourceId": "development_classification_sql",
+        "defaultSort": {
+          "field": "pr_auc",
+          "direction": "desc"
+        },
+        "columns": [
+          {
+            "field": "model",
+            "label": "Model",
+            "type": "text"
+          },
+          {
+            "field": "balanced_accuracy",
+            "label": "Balanced accuracy",
+            "format": "percent"
+          },
+          {
+            "field": "roc_auc",
+            "label": "ROC-AUC",
+            "format": "number"
+          },
+          {
+            "field": "pr_auc",
+            "label": "PR-AUC",
+            "format": "number"
+          },
+          {
+            "field": "log_loss",
+            "label": "Log loss",
+            "format": "number"
+          },
+          {
+            "field": "positive_recall",
+            "label": "Positive recall",
+            "format": "percent"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "headline_metrics_sql",
+        "label": "Headline metric snapshot query",
+        "path": "reports/sql/headline_metrics.sql"
+      },
+      {
+        "id": "holdout_strategy_returns_sql",
+        "label": "Holdout strategy comparison query",
+        "path": "reports/sql/holdout_strategy_returns.sql"
+      },
+      {
+        "id": "cost_sensitivity_sql",
+        "label": "Frozen cost-sensitivity query",
+        "path": "reports/sql/cost_sensitivity.sql"
+      },
+      {
+        "id": "phase_comparison_sql",
+        "label": "Development and holdout comparison query",
+        "path": "reports/sql/phase_comparison.sql"
+      },
+      {
+        "id": "partitions_sql",
+        "label": "Frozen chronological partitions query",
+        "path": "reports/sql/partitions.sql"
+      },
+      {
+        "id": "development_classification_sql",
+        "label": "Development classification comparison query",
+        "path": "reports/sql/development_classification.sql"
+      },
+      {
+        "id": "evaluation_manifest",
+        "label": "Frozen Phase 1 evaluation manifest",
+        "path": "artifacts/evaluations/20260811T101311613823Z_btc_usdt_1h_8f2800e/evaluation_manifest.json"
+      },
+      {
+        "id": "holdout_claim",
+        "label": "Irreversible holdout evaluation claim",
+        "path": "artifacts/runs/20260811T101311613823Z_btc_usdt_1h_8f2800e/holdout_evaluation_claim.json"
+      },
+      {
+        "id": "prepared_manifest",
+        "label": "Prepared dataset provenance manifest",
+        "path": "data/processed/btc_usdt_1h_dataset_manifest.json"
+      }
+    ],
+    "blocks": [
+      {
+        "id": "title",
+        "type": "markdown",
+        "body": "# KrypX Phase 1 Final Research Report"
+      },
+      {
+        "id": "technical-summary",
+        "type": "markdown",
+        "sourceId": "evaluation_manifest",
+        "body": "## Technical summary\n\n**Phase 1 engineering and evaluation integrity passed, but the trading hypothesis failed the production-readiness test.** The frozen XGBoost strategy returned **-4.23%** on the one-time final holdout under official base costs, versus **0.00%** for cash and **-29.82%** for cost-aware Buy & Hold. Risk-adjusted performance remained negative (Sharpe **-0.396**), profit factor was **0.838**, and the strategy lost money under low, base, and high cost assumptions.\n\nThe model nevertheless showed relative defensive value in a falling market: it beat Buy & Hold by **25.59 percentage points** and outperformed **99.5%** of 1,000 matched-frequency random simulations. That result is descriptive rather than sufficient evidence of a durable tradable edge because exposure was only **2.89%** and the holdout contained just **38 trades**.\n\n**Final decision: NO-GO FOR PRODUCTION.** Do not train or activate a Phase 1 production model. Preserve this run as the frozen technical and research baseline for future work."
+      },
+      {
+        "id": "headline-metrics",
+        "type": "metric-strip",
+        "cardIds": [
+          "holdout-return-card",
+          "drawdown-card",
+          "trades-card",
+          "random-percentile-card"
+        ]
+      },
+      {
+        "id": "relative-defense-finding",
+        "type": "markdown",
+        "sourceId": "evaluation_manifest",
+        "body": "## The model reduced losses but did not beat cash\n\nThe holdout was a materially negative BTC regime: Buy & Hold lost **29.82%** and reached a **40.31%** maximum drawdown. XGBoost participated very selectively, with **1.98%** positive predictions and **2.89%** market exposure, limiting its loss to **4.23%** and drawdown to **17.41%**. This is evidence of relative timing or abstention value, not profitability: cash still dominated with zero return and zero drawdown."
+      },
+      {
+        "id": "holdout-return-chart",
+        "type": "chart",
+        "chartId": "holdout-return-comparison"
+      },
+      {
+        "id": "cost-finding",
+        "type": "markdown",
+        "sourceId": "evaluation_manifest",
+        "body": "## Execution costs worsen an already negative edge\n\nThe strategy remained negative even under the low-cost scenario (**-3.13%**). Base costs reduced return to **-4.23%**, and high costs to **-7.10%**. Because low-cost performance is also negative and every scenario has a profit factor below 1, transaction costs are not the sole cause of failure; the gross signal edge is insufficient under the frozen decision rule."
+      },
+      {
+        "id": "cost-table-block",
+        "type": "table",
+        "tableId": "cost-sensitivity-table"
+      },
+      {
+        "id": "generalization-finding",
+        "type": "markdown",
+        "sourceId": "phase_comparison_sql",
+        "body": "## Holdout performance was less negative, but the core weakness persisted\n\nDevelopment OOF performance was **-13.43%** across **148 trades**; the final holdout was **-4.23%** across **38 trades**. The improvement is not enough to reverse the decision because both periods have negative Sharpe ratios, profit factors below 1, and negative returns versus cash. The large exposure and trade-count shift also shows that the frozen model behaved differently across market regimes."
+      },
+      {
+        "id": "phase-comparison-block",
+        "type": "table",
+        "tableId": "development-holdout-table"
+      },
+      {
+        "id": "scope-definitions",
+        "type": "markdown",
+        "sourceId": "evaluation_manifest",
+        "body": "## Scope and metric definitions\n\nThe frozen baseline covers **BTC/USDT one-hour candles** from Binance. Feature-ready data spans **13 August 2023 through 11 August 2026 UTC**. The prepared bundle contains **26,247 feature rows** and **26,242 labeled decision rows**, with **24 deterministic trailing technical features**.\n\nA decision is made after candle `t` closes, enters at `open[t+1]`, and exits at `open[t+5]` for the four-candle horizon. A positive label requires the executable gross forward return to exceed the pre-committed threshold that covers fees, spread, slippage, and the minimum requested net edge. The official result uses base costs: a **0.10% taker fee per side**, **2 bps slippage per side**, and **1 bp half-spread per side**."
+      },
+      {
+        "id": "partition-table-block",
+        "type": "table",
+        "tableId": "partition-table"
+      },
+      {
+        "id": "methodology",
+        "type": "markdown",
+        "sourceId": "evaluation_manifest",
+        "body": "## The validation design protected chronology and provenance\n\nThe labeled data was split chronologically into development, a five-row boundary purge, and a frozen 20% final holdout. Five expanding-window development folds used contiguous validation blocks and a five-row purge gap. Each fold trained a fresh XGBoost model and a fold-local scaled logistic-regression baseline. Continuous XGBoost OOF predictions powered the development backtest; a separate evaluation model was then fitted only on the 20,988 development rows.\n\nThe one-time holdout command verified the frozen model, feature order, configuration, prepared-manifest copy, input snapshot, and SHA-256 inventory before creating an exclusive claim. It then recreated the exact feature/label/split geometry from the verified snapshot, evaluated 5,249 holdout decisions, ran the strategy and deterministic baselines on a common performance window, and persisted an immutable evaluation manifest."
+      },
+      {
+        "id": "classification-context",
+        "type": "markdown",
+        "sourceId": "evaluation_manifest",
+        "body": "## Development classification evidence was close to chance\n\nXGBoost achieved **51.60% balanced accuracy** and **0.3825 PR-AUC** on development OOF rows, with only **6.27% positive-class recall**. Logistic regression had slightly better ROC-AUC, log loss, and Brier score, while XGBoost had modestly better PR-AUC and positive recall. Neither model provided strong classification evidence before the holdout was opened."
+      },
+      {
+        "id": "classification-table-block",
+        "type": "table",
+        "tableId": "classification-table"
+      },
+      {
+        "id": "integrity-status",
+        "type": "markdown",
+        "sourceId": "holdout_claim",
+        "body": "## The final evaluation is complete and irreversible\n\nThe holdout claim was created at **16:47:55 UTC on 11 August 2026** and marked **completed** at **16:54:49 UTC**. The evaluated holdout for this run is now consumed and must not be reused as an independent optimization target."
+      },
+      {
+        "id": "provenance-status",
+        "type": "markdown",
+        "sourceId": "evaluation_manifest",
+        "body": "## Artifact integrity and reproducibility passed\n\nRun ID: `20260811T101311613823Z_btc_usdt_1h_8f2800e`. Git commit: `8f2800e50a161ac4b82dee3362152f1417b8778b`. Immutable input snapshot SHA-256: `a271933f39eeb453fefc356eb0dc645508ce6cd56b3d7a832b81259cd2a6cc78`. The evaluation manifest records a complete artifact inventory, and every recorded SHA-256 was reconciled against the corresponding file after evaluation. The source working tree remained clean."
+      },
+      {
+        "id": "limitations",
+        "type": "markdown",
+        "sourceId": "evaluation_manifest",
+        "body": "## Limitations prevent a stronger claim\n\n- **Only 38 holdout trades:** estimates of win rate, profit factor, and risk-adjusted return remain noisy.\n- **Very low exposure:** the relative advantage over Buy & Hold is partly a consequence of spending 97.11% of intervals in cash.\n- **One symbol and timeframe:** conclusions do not generalize beyond BTC/USDT 1h.\n- **Modeled execution:** fees are explicit, but spread and slippage are assumptions rather than order-book or live-fill observations.\n- **Historical OHLCV only:** no liquidity, funding, derivatives, on-chain, macro, or sentiment information is used.\n- **Consumed holdout:** this period can no longer serve as an untouched final test for later feature, threshold, or model selection.\n- **No causal interpretation:** feature importance and relative performance do not establish that any indicator causes returns."
+      },
+      {
+        "id": "verdict",
+        "type": "markdown",
+        "sourceId": "evaluation_manifest",
+        "body": "## Final Phase 1 verdict: NO-GO FOR PRODUCTION\n\nEngineering completion is **PASS**: the pipeline is executable, chronologically isolated, reproducible, provenance-bound, and protected against repeated holdout access and partial production publication. Research success is **FAIL for production readiness**: the model did not beat cash, produced negative risk-adjusted performance, had a profit factor below 1, and remained unprofitable under every frozen cost scenario.\n\nDo not run `train-production` for this evaluation and do not activate a Phase 1 model. The legitimate value of Phase 1 is the validated research infrastructure and a frozen negative baseline."
+      },
+      {
+        "id": "next-steps",
+        "type": "markdown",
+        "body": "## Recommended next steps\n\n1. Preserve the Phase 1 run, evaluation directory, claim, and manifests unchanged.\n2. Commit this close-out report without committing ignored market data or model artifacts.\n3. Start Phase 2 as a separately versioned research hypothesis; do not tune it against this consumed holdout.\n4. Pre-register Phase 2 features, model-selection rules, costs, success criteria, and evaluation protocol before inspecting a new final holdout.\n5. Use new future observations, or another defensible untouched temporal window, for Phase 2 final evaluation.\n6. Improve long-running command observability with progress logging, but do not mutate Phase 1 results."
+      },
+      {
+        "id": "further-questions",
+        "type": "markdown",
+        "body": "## Further questions for Phase 2\n\n- Can new information improve trade selection without merely increasing turnover and costs?\n- Does the low signal frequency reflect useful abstention, poor probability calibration, or threshold/model mismatch?\n- Which conclusions remain stable across additional symbols, timeframes, and market regimes?\n- What minimum development evidence should be required before consuming the next holdout?\n- How much new future data is needed to produce a sufficiently informative trade count?\n\nThese questions must be investigated using new development evidence, not by optimizing against the Phase 1 holdout."
+      }
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "generatedAt": "2026-08-11T17:13:50Z",
+    "status": "ready",
+    "datasets": {
+      "headline_metrics": [
+        {
+          "holdout_return": -0.042313656484754714,
+          "maximum_drawdown": -0.17409918412573955,
+          "trades": 38,
+          "random_simulations_beaten": 0.995
+        }
+      ],
+      "holdout_strategy_returns": [
+        {
+          "strategy": "XGBoost",
+          "total_return": -0.042313656484754714,
+          "sharpe_ratio": -0.3958849744422429,
+          "maximum_drawdown": -0.17409918412573955,
+          "trades": 38,
+          "market_exposure": 0.028941355674028942
+        },
+        {
+          "strategy": "Cash",
+          "total_return": 0.0,
+          "sharpe_ratio": null,
+          "maximum_drawdown": 0.0,
+          "trades": 0,
+          "market_exposure": 0.0
+        },
+        {
+          "strategy": "Buy & Hold",
+          "total_return": -0.2981995268110529,
+          "sharpe_ratio": -1.1078109887245602,
+          "maximum_drawdown": -0.40308700185868107,
+          "trades": 1,
+          "market_exposure": 1.0
+        },
+        {
+          "strategy": "EMA crossover",
+          "total_return": -0.7724395318619922,
+          "sharpe_ratio": -9.013699966559384,
+          "maximum_drawdown": -0.7775471733740509,
+          "trades": 563,
+          "market_exposure": 0.4287890327494288
+        },
+        {
+          "strategy": "Momentum-24",
+          "total_return": -0.8009987267754094,
+          "sharpe_ratio": -9.53831746615874,
+          "maximum_drawdown": -0.8054653512835731,
+          "trades": 606,
+          "market_exposure": 0.46153846153846156
+        },
+        {
+          "strategy": "Random median",
+          "total_return": -0.24118350884301765,
+          "sharpe_ratio": -3.7236222258953067,
+          "maximum_drawdown": -0.2514806163458938,
+          "trades": null,
+          "market_exposure": null
+        }
+      ],
+      "cost_sensitivity": [
+        {
+          "scenario": "Low",
+          "total_return": -0.031333563979097145,
+          "annualized_return": -0.05171356840582031,
+          "sharpe_ratio": -0.27206921984030424,
+          "maximum_drawdown": -0.16987633061967222,
+          "profit_factor": 0.8781724304540539,
+          "estimated_costs": 819.8924810683844
+        },
+        {
+          "scenario": "Base — official",
+          "total_return": -0.042313656484754714,
+          "annualized_return": -0.06957438874041999,
+          "sharpe_ratio": -0.3958849744422429,
+          "maximum_drawdown": -0.17409918412573955,
+          "profit_factor": 0.8379939716510009,
+          "estimated_costs": 921.6060147779052
+        },
+        {
+          "scenario": "High",
+          "total_return": -0.07098925146543045,
+          "annualized_return": -0.11557575782317175,
+          "sharpe_ratio": -0.7236028159711745,
+          "maximum_drawdown": -0.18525540391084572,
+          "profit_factor": 0.7396772137365086,
+          "estimated_costs": 1187.2465681210338
+        }
+      ],
+      "phase_comparison": [
+        {
+          "period": "Development OOF",
+          "total_return": -0.13425219783160158,
+          "sharpe_ratio": -0.5412917288544219,
+          "maximum_drawdown": -0.2093674013789274,
+          "market_exposure": 0.05641856475745735,
+          "trades": 148,
+          "profit_factor": 0.8604914981534763
+        },
+        {
+          "period": "Final holdout",
+          "total_return": -0.042313656484754714,
+          "sharpe_ratio": -0.3958849744422429,
+          "maximum_drawdown": -0.17409918412573955,
+          "market_exposure": 0.028941355674028942,
+          "trades": 38,
+          "profit_factor": 0.8379939716510009
+        }
+      ],
+      "partitions": [
+        {
+          "partition": "Development",
+          "start": "2023-08-13T19:00:00Z",
+          "end": "2026-01-04T06:00:00Z",
+          "rows": 20988
+        },
+        {
+          "partition": "Boundary purge",
+          "start": "2026-01-04T07:00:00Z",
+          "end": "2026-01-04T11:00:00Z",
+          "rows": 5
+        },
+        {
+          "partition": "Final holdout",
+          "start": "2026-01-04T12:00:00Z",
+          "end": "2026-08-11T04:00:00Z",
+          "rows": 5249
+        }
+      ],
+      "development_classification": [
+        {
+          "model": "XGBoost",
+          "balanced_accuracy": 0.515982573419676,
+          "roc_auc": 0.5795170091548306,
+          "pr_auc": 0.3825136527666246,
+          "log_loss": 0.618301232652846,
+          "positive_recall": 0.06265356265356266
+        },
+        {
+          "model": "Logistic regression",
+          "balanced_accuracy": 0.5101865491172928,
+          "roc_auc": 0.5871754423385609,
+          "pr_auc": 0.37787251225998625,
+          "log_loss": 0.6112678596905253,
+          "positive_recall": 0.04207616707616708
+        }
+      ]
+    },
+    "accessIssues": []
+  },
+  "sources": [
+    {
+      "id": "headline_metrics_sql",
+      "label": "Headline metric snapshot query",
+      "path": "reports/sql/headline_metrics.sql",
+      "description": "Produces the reviewed Phase 1 headline metrics from values reconciled to the frozen evaluation manifest."
+    },
+    {
+      "id": "holdout_strategy_returns_sql",
+      "label": "Holdout strategy comparison query",
+      "path": "reports/sql/holdout_strategy_returns.sql",
+      "description": "Produces the reviewed base-cost holdout strategy comparison."
+    },
+    {
+      "id": "cost_sensitivity_sql",
+      "label": "Frozen cost-sensitivity query",
+      "path": "reports/sql/cost_sensitivity.sql",
+      "description": "Produces the reviewed low, base, and high execution-cost scenarios."
+    },
+    {
+      "id": "phase_comparison_sql",
+      "label": "Development and holdout comparison query",
+      "path": "reports/sql/phase_comparison.sql",
+      "description": "Produces the reviewed XGBoost development OOF and final holdout comparison."
+    },
+    {
+      "id": "partitions_sql",
+      "label": "Frozen chronological partitions query",
+      "path": "reports/sql/partitions.sql",
+      "description": "Produces the reviewed development, boundary-purge, and final-holdout boundaries."
+    },
+    {
+      "id": "development_classification_sql",
+      "label": "Development classification comparison query",
+      "path": "reports/sql/development_classification.sql",
+      "description": "Produces the reviewed development-only aggregate XGBoost and logistic-regression metrics."
+    },
+    {
+      "id": "evaluation_manifest",
+      "label": "Frozen Phase 1 evaluation manifest",
+      "path": "artifacts/evaluations/20260811T101311613823Z_btc_usdt_1h_8f2800e/evaluation_manifest.json",
+      "description": "Frozen development, holdout, baseline, cost-sensitivity, provenance, and artifact-hash evidence for the reviewed run."
+    },
+    {
+      "id": "holdout_claim",
+      "label": "Irreversible holdout evaluation claim",
+      "path": "artifacts/runs/20260811T101311613823Z_btc_usdt_1h_8f2800e/holdout_evaluation_claim.json",
+      "description": "Exclusive one-time holdout claim and terminal completion status for the reviewed run."
+    },
+    {
+      "id": "prepared_manifest",
+      "label": "Prepared dataset provenance manifest",
+      "path": "data/processed/btc_usdt_1h_dataset_manifest.json",
+      "description": "Prepared dataset row counts, feature schema, label definition, cost assumptions, immutable snapshot identity, and member hashes."
+    }
+  ]
+}
