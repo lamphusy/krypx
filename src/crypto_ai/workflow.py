@@ -1,11 +1,17 @@
 """Phase 1 development, holdout evaluation, and production workflows."""
 
+import ctypes
+import errno
 import hashlib
 import json
 import logging
 import math
 import os
+import shutil
+import sys
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -167,6 +173,169 @@ def _write_verified_bytes(path: Path, content: bytes, expected_sha256: str) -> N
                 temporary_path.unlink(missing_ok=True)
             except OSError:
                 pass
+
+
+def _fsync_directory(path: Path, description: str) -> None:
+    """Flush directory metadata before an atomic artifact publication."""
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(path, os.O_RDONLY)
+        os.fsync(descriptor)
+    except OSError as exc:
+        raise ArtifactError(f"Unable to synchronize {description} {path}: {exc}") from exc
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
+def _create_production_staging_directory(versions_root: Path, version: str) -> Path:
+    """Create one hidden staging directory on the production-version filesystem."""
+    try:
+        versions_root.mkdir(parents=True, exist_ok=True)
+        staging_name = tempfile.mkdtemp(
+            dir=versions_root,
+            prefix=f".staging-{version}-",
+        )
+    except OSError as exc:
+        raise ArtifactError(
+            f"Unable to create production staging directory under {versions_root}: {exc}"
+        ) from exc
+    return Path(staging_name)
+
+
+@contextmanager
+def _production_publication_lock(versions_root: Path, version: str) -> Iterator[Path]:
+    """Serialize publishers for one version using an exclusive filesystem lock file."""
+    try:
+        versions_root.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise ArtifactError(
+            f"Unable to create production versions directory {versions_root}: {exc}"
+        ) from exc
+    lock_path = versions_root / f".publish-{version}.lock"
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(
+            lock_path,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            0o600,
+        )
+    except FileExistsError as exc:
+        raise ArtifactError(f"Production version publication is already locked: {version}") from exc
+    except OSError as exc:
+        raise ArtifactError(
+            f"Unable to lock production version publication {version}: {exc}"
+        ) from exc
+
+    try:
+        try:
+            os.write(descriptor, f"pid={os.getpid()}\n".encode("ascii"))
+            os.fsync(descriptor)
+        except OSError as exc:
+            raise ArtifactError(
+                f"Unable to persist production publication lock {lock_path}: {exc}"
+            ) from exc
+        yield lock_path
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError as exc:
+                logger.error("Unable to close production publication lock %s: %s", lock_path, exc)
+        try:
+            lock_path.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.error("Unable to remove production publication lock %s: %s", lock_path, exc)
+
+
+def _cleanup_production_staging_directory(staging_directory: Path, versions_root: Path) -> None:
+    """Remove only the exact hidden staging directory created by this operation."""
+    if not staging_directory.exists():
+        return
+    try:
+        resolved_root = versions_root.resolve(strict=False)
+        resolved_staging = staging_directory.resolve(strict=False)
+    except (OSError, RuntimeError, ValueError) as exc:
+        logger.error("Unable to resolve failed production staging directory: %s", exc)
+        return
+    if resolved_staging.parent != resolved_root or not staging_directory.name.startswith(
+        ".staging-"
+    ):
+        logger.error("Refusing to clean unexpected production staging path %s", staging_directory)
+        return
+    try:
+        shutil.rmtree(staging_directory)
+    except OSError as exc:
+        logger.error(
+            "Unable to clean failed production staging directory %s: %s",
+            staging_directory,
+            exc,
+        )
+
+
+def _atomic_rename_directory_no_replace(source: Path, destination: Path) -> None:
+    """Atomically rename a directory while refusing any existing destination."""
+    source_bytes = os.fsencode(source)
+    destination_bytes = os.fsencode(destination)
+    result: int
+    if sys.platform == "darwin":
+        libc = ctypes.CDLL(None, use_errno=True)
+        try:
+            rename_exclusive = libc.renamex_np
+        except AttributeError as exc:
+            raise ArtifactError(
+                "This platform does not expose an atomic no-replace directory rename"
+            ) from exc
+        rename_exclusive.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+        rename_exclusive.restype = ctypes.c_int
+        ctypes.set_errno(0)
+        result = rename_exclusive(source_bytes, destination_bytes, 0x00000004)
+    elif sys.platform.startswith("linux"):
+        libc = ctypes.CDLL(None, use_errno=True)
+        try:
+            rename_no_replace = libc.renameat2
+        except AttributeError as exc:
+            raise ArtifactError(
+                "This platform does not expose an atomic no-replace directory rename"
+            ) from exc
+        rename_no_replace.argtypes = [
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        ]
+        rename_no_replace.restype = ctypes.c_int
+        ctypes.set_errno(0)
+        result = rename_no_replace(-100, source_bytes, -100, destination_bytes, 0x00000001)
+    elif sys.platform == "win32":
+        try:
+            os.rename(source, destination)
+        except FileExistsError as exc:
+            raise ArtifactError(f"Production version already exists: {destination}") from exc
+        except OSError as exc:
+            raise ArtifactError(
+                f"Unable to publish production version {destination}: {exc}"
+            ) from exc
+        return
+    else:
+        raise ArtifactError(
+            f"Platform {sys.platform!r} lacks a supported atomic no-replace directory rename"
+        )
+
+    if result == 0:
+        return
+    error_number = ctypes.get_errno()
+    if error_number in {errno.EEXIST, errno.ENOTEMPTY}:
+        raise ArtifactError(f"Production version already exists: {destination}")
+    raise ArtifactError(
+        f"Unable to publish production version {destination}: {os.strerror(error_number)}"
+    )
+
+
+def _publish_production_version(staging_directory: Path, final_directory: Path) -> None:
+    """Atomically publish one complete staged production directory without replacement."""
+    _atomic_rename_directory_no_replace(staging_directory, final_directory)
 
 
 def _read_json_artifact(path: Path, description: str) -> dict[str, Any]:
@@ -1387,53 +1556,122 @@ def train_versioned_production_model(
     )
     git = git_metadata(settings.BASE_DIR)
     version = generate_run_id(symbol, timeframe, str(git["git_commit"]))
-    version_directory = create_run_directory(settings.PRODUCTION_DIR / "versions", version)
-    save_xgboost_model(model, version_directory / "model.json")
-    atomic_write_json(version_directory / "feature_columns.json", {"feature_columns": features})
+    versions_root = settings.PRODUCTION_DIR / "versions"
+    version_directory = resolve_artifact_subdirectory(versions_root, version)
     prepared_manifest_hash = bundle.manifest_sha256
-    prepared_manifest_copy = version_directory / "prepared_dataset_manifest.json"
-    _write_verified_bytes(
-        prepared_manifest_copy,
-        bundle.manifest_bytes,
-        prepared_manifest_hash,
-    )
-    _verified_hash(
-        bundle.manifest_path,
-        prepared_manifest_hash,
-        "prepared dataset manifest before production manifest commit",
-    )
-    atomic_write_json(
-        version_directory / "manifest.json",
-        {
-            "model_version": version,
-            "model_type": "XGBClassifier",
-            "training_start": labeled["timestamp"].iloc[0],
-            "training_end": labeled["timestamp"].iloc[-1],
-            "training_row_count": len(labeled),
-            "feature_columns": features,
-            "feature_schema_hash": feature_schema_hash(features),
-            "model_parameters": settings.XGBOOST_PARAMS,
-            "prediction_horizon": bundle.manifest["prediction_horizon"],
-            "label_threshold": bundle.manifest["minimum_required_return"],
-            "signal_threshold": settings.SIGNAL_THRESHOLD,
-            "data_hash": bundle.source_snapshot_sha256,
-            "immutable_snapshot_path": bundle.source_snapshot_path,
-            "prepared_dataset_manifest_path": bundle.manifest_path,
-            "prepared_dataset_manifest_copy": prepared_manifest_copy,
-            "prepared_dataset_manifest_sha256": prepared_manifest_hash,
-            "feature_file_path": bundle.feature_path,
-            "feature_file_sha256": bundle.feature_sha256,
-            "labeled_file_path": bundle.labeled_path,
-            "labeled_file_sha256": bundle.labeled_sha256,
-            "authorized_evaluation_run_id": evaluation_run_id,
-            "authorized_evaluation_manifest_path": (
-                authorization["evaluation_directory"] / "evaluation_manifest.json"
-            ),
-            "authorized_evaluation_manifest_sha256": authorization["evaluation_manifest_sha256"],
-            "authorized_evaluation_data_hash": authorization["run_manifest"]["data_hash"],
-            "code_commit": git["git_commit"],
-            "created_at_utc": utc_now_iso(),
-            **git,
-        },
-    )
+    with _production_publication_lock(versions_root, version):
+        if version_directory.exists() or version_directory.is_symlink():
+            raise ArtifactError(f"Production version already exists: {version_directory}")
+        staging_directory = _create_production_staging_directory(versions_root, version)
+        staged_artifacts = {
+            "model.json": staging_directory / "model.json",
+            "feature_columns.json": staging_directory / "feature_columns.json",
+            "prepared_dataset_manifest.json": staging_directory / "prepared_dataset_manifest.json",
+        }
+        try:
+            save_xgboost_model(model, staged_artifacts["model.json"])
+            atomic_write_json(
+                staged_artifacts["feature_columns.json"],
+                {"feature_columns": features},
+                exclusive=True,
+            )
+            _write_verified_bytes(
+                staged_artifacts["prepared_dataset_manifest.json"],
+                bundle.manifest_bytes,
+                prepared_manifest_hash,
+            )
+            _verified_hash(
+                bundle.manifest_path,
+                prepared_manifest_hash,
+                "prepared dataset manifest before production manifest commit",
+            )
+            production_artifact_hashes = {
+                name: _artifact_hash(path, f"staged production {name}")
+                for name, path in staged_artifacts.items()
+            }
+            atomic_write_json(
+                staging_directory / "manifest.json",
+                {
+                    "model_version": version,
+                    "model_type": "XGBClassifier",
+                    "training_start": labeled["timestamp"].iloc[0],
+                    "training_end": labeled["timestamp"].iloc[-1],
+                    "training_row_count": len(labeled),
+                    "feature_columns": features,
+                    "feature_schema_hash": feature_schema_hash(features),
+                    "model_parameters": settings.XGBOOST_PARAMS,
+                    "prediction_horizon": bundle.manifest["prediction_horizon"],
+                    "label_threshold": bundle.manifest["minimum_required_return"],
+                    "signal_threshold": settings.SIGNAL_THRESHOLD,
+                    "data_hash": bundle.source_snapshot_sha256,
+                    "immutable_snapshot_path": bundle.source_snapshot_path,
+                    "prepared_dataset_manifest_path": bundle.manifest_path,
+                    "prepared_dataset_manifest_copy": (
+                        version_directory / "prepared_dataset_manifest.json"
+                    ),
+                    "prepared_dataset_manifest_sha256": prepared_manifest_hash,
+                    "feature_file_path": bundle.feature_path,
+                    "feature_file_sha256": bundle.feature_sha256,
+                    "labeled_file_path": bundle.labeled_path,
+                    "labeled_file_sha256": bundle.labeled_sha256,
+                    "production_artifact_hashes": production_artifact_hashes,
+                    "authorized_evaluation_run_id": evaluation_run_id,
+                    "authorized_evaluation_manifest_path": (
+                        authorization["evaluation_directory"] / "evaluation_manifest.json"
+                    ),
+                    "authorized_evaluation_manifest_sha256": authorization[
+                        "evaluation_manifest_sha256"
+                    ],
+                    "authorized_evaluation_data_hash": authorization["run_manifest"]["data_hash"],
+                    "code_commit": git["git_commit"],
+                    "created_at_utc": utc_now_iso(),
+                    **git,
+                },
+                exclusive=True,
+            )
+            staged_manifest = _read_json_artifact(
+                staging_directory / "manifest.json",
+                "staged production manifest",
+            )
+            if staged_manifest.get("production_artifact_hashes") != production_artifact_hashes:
+                raise ArtifactError("Staged production manifest artifact inventory is inconsistent")
+            _require_artifacts(
+                {
+                    **{f"production {name}": path for name, path in staged_artifacts.items()},
+                    "production manifest.json": staging_directory / "manifest.json",
+                }
+            )
+            for name, path in staged_artifacts.items():
+                _verified_hash(path, production_artifact_hashes[name], f"staged production {name}")
+            _fsync_directory(staging_directory, "production staging directory")
+        except ArtifactError:
+            _cleanup_production_staging_directory(staging_directory, versions_root)
+            raise
+        except Exception as exc:
+            _cleanup_production_staging_directory(staging_directory, versions_root)
+            raise ArtifactError(f"Unable to stage production version {version}: {exc}") from exc
+        except BaseException:
+            _cleanup_production_staging_directory(staging_directory, versions_root)
+            raise
+
+        try:
+            _publish_production_version(staging_directory, version_directory)
+        except ArtifactError:
+            _cleanup_production_staging_directory(staging_directory, versions_root)
+            raise
+        except Exception as exc:
+            _cleanup_production_staging_directory(staging_directory, versions_root)
+            raise ArtifactError(f"Unable to publish production version {version}: {exc}") from exc
+        except BaseException:
+            _cleanup_production_staging_directory(staging_directory, versions_root)
+            raise
+
+        try:
+            _fsync_directory(versions_root, "production versions parent directory")
+        except ArtifactError as exc:
+            raise ArtifactError(
+                f"Production version {version_directory} was published completely, but "
+                "parent-directory durability confirmation failed; do not retry or remove "
+                f"the published version: {exc}"
+            ) from exc
     return version_directory

@@ -1,6 +1,7 @@
 """Incremental, atomic, and content-addressed OHLCV storage."""
 
 import hashlib
+import io
 import logging
 import os
 import re
@@ -75,14 +76,34 @@ def load_ohlcv_csv(
 ) -> pd.DataFrame:
     """Load and validate a canonical OHLCV CSV file."""
     try:
-        result = pd.read_csv(path)
-    except (OSError, UnicodeError, pd.errors.ParserError) as exc:
+        content = path.read_bytes()
+    except OSError as exc:
         raise MarketDataValidationError(f"Unable to load OHLCV file {path}: {exc}") from exc
+    return load_ohlcv_csv_bytes(
+        content,
+        timeframe=timeframe,
+        current_utc_time=current_utc_time,
+        description=f"OHLCV file {path}",
+    )
+
+
+def load_ohlcv_csv_bytes(
+    content: bytes,
+    timeframe: str,
+    current_utc_time: datetime | pd.Timestamp | None = None,
+    *,
+    description: str = "captured OHLCV bytes",
+) -> pd.DataFrame:
+    """Parse and validate one already captured canonical OHLCV byte sequence."""
+    try:
+        result = pd.read_csv(io.BytesIO(content))
+    except (OSError, UnicodeError, pd.errors.ParserError) as exc:
+        raise MarketDataValidationError(f"Unable to load {description}: {exc}") from exc
 
     missing_columns = [column for column in settings.RAW_COLUMNS if column not in result.columns]
     if missing_columns:
         raise MarketDataValidationError(
-            f"OHLCV file {path} is missing required columns: {missing_columns}"
+            f"{description} is missing required columns: {missing_columns}"
         )
 
     try:
@@ -91,9 +112,7 @@ def load_ohlcv_csv(
         for column in settings.RAW_COLUMNS[1:]:
             result[column] = pd.to_numeric(result[column], errors="raise").astype("float64")
     except (TypeError, ValueError, OverflowError) as exc:
-        raise MarketDataValidationError(
-            f"OHLCV file {path} contains invalid values: {exc}"
-        ) from exc
+        raise MarketDataValidationError(f"{description} contains invalid values: {exc}") from exc
 
     validate_ohlcv(result, timeframe=timeframe, current_utc_time=current_utc_time)
     return result

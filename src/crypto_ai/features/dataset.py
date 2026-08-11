@@ -1,6 +1,7 @@
 """Preparation, provenance, and verified loading of prepared dataset bundles."""
 
 import hashlib
+import io
 import json
 import logging
 import math
@@ -18,7 +19,7 @@ from crypto_ai.config import settings
 from crypto_ai.costs import minimum_gross_return_for_net_edge
 from crypto_ai.data.storage import (
     get_raw_data_path,
-    load_ohlcv_csv,
+    load_ohlcv_csv_bytes,
     sha256_file,
     symbol_to_slug,
 )
@@ -106,12 +107,14 @@ def get_prepared_dataset_manifest_path(
     return root / f"{symbol_to_slug(symbol)}_{timeframe}_dataset_manifest.json"
 
 
-def load_feature_dataset(path: Path) -> pd.DataFrame:
-    """Load the exact persisted inference-ready feature schema."""
+def _load_feature_dataset_bytes(content: bytes, description: str) -> pd.DataFrame:
+    """Parse and validate one already captured inference-ready CSV byte sequence."""
     try:
-        result = pd.read_csv(path)
+        result = pd.read_csv(io.BytesIO(content))
     except (OSError, UnicodeError, pd.errors.ParserError) as exc:
-        raise FeatureEngineeringError(f"Unable to load feature dataset {path}: {exc}") from exc
+        raise FeatureEngineeringError(
+            f"Unable to load feature dataset {description}: {exc}"
+        ) from exc
     feature_columns = get_expected_feature_columns()
     expected = [*settings.RAW_COLUMNS, *feature_columns]
     if result.columns.tolist() != expected:
@@ -133,12 +136,23 @@ def load_feature_dataset(path: Path) -> pd.DataFrame:
     return result
 
 
-def load_labeled_dataset(path: Path) -> pd.DataFrame:
-    """Load and validate the exact persisted labeled-dataset schema."""
+def load_feature_dataset(path: Path) -> pd.DataFrame:
+    """Load the exact persisted inference-ready feature schema."""
     try:
-        result = pd.read_csv(path)
+        content = path.read_bytes()
+    except OSError as exc:
+        raise FeatureEngineeringError(f"Unable to load feature dataset {path}: {exc}") from exc
+    return _load_feature_dataset_bytes(content, str(path))
+
+
+def _load_labeled_dataset_bytes(content: bytes, description: str) -> pd.DataFrame:
+    """Parse and validate one already captured labeled CSV byte sequence."""
+    try:
+        result = pd.read_csv(io.BytesIO(content))
     except (OSError, UnicodeError, pd.errors.ParserError) as exc:
-        raise FeatureEngineeringError(f"Unable to load labeled dataset {path}: {exc}") from exc
+        raise FeatureEngineeringError(
+            f"Unable to load labeled dataset {description}: {exc}"
+        ) from exc
 
     feature_columns = get_expected_feature_columns()
     expected_columns = [*settings.RAW_COLUMNS, *feature_columns, *settings.LABEL_COLUMNS]
@@ -162,11 +176,11 @@ def load_labeled_dataset(path: Path) -> pd.DataFrame:
         labels = pd.to_numeric(result["label"], errors="raise")
     except (TypeError, ValueError, OverflowError) as exc:
         raise FeatureEngineeringError(
-            f"Persisted labeled dataset {path} contains invalid values: {exc}"
+            f"Persisted labeled dataset {description} contains invalid values: {exc}"
         ) from exc
 
     if result.empty:
-        raise FeatureEngineeringError(f"Persisted labeled dataset {path} is empty")
+        raise FeatureEngineeringError(f"Persisted labeled dataset {description} is empty")
     if not labels.isin([0, 1]).all():
         raise FeatureEngineeringError("Persisted labels must contain only 0 and 1")
     result["label"] = labels.astype("int8")
@@ -183,6 +197,15 @@ def load_labeled_dataset(path: Path) -> pd.DataFrame:
     if (result["exit_timestamp"] <= result["entry_timestamp"]).any():
         raise FeatureEngineeringError("Every exit_timestamp must follow its entry_timestamp")
     return result
+
+
+def load_labeled_dataset(path: Path) -> pd.DataFrame:
+    """Load and validate the exact persisted labeled-dataset schema."""
+    try:
+        content = path.read_bytes()
+    except OSError as exc:
+        raise FeatureEngineeringError(f"Unable to load labeled dataset {path}: {exc}") from exc
+    return _load_labeled_dataset_bytes(content, str(path))
 
 
 def _feature_configuration() -> dict[str, Any]:
@@ -301,7 +324,8 @@ def _resolved_requested_path(path: Path, description: str) -> Path:
         ) from exc
 
 
-def _verify_file_hash(path: Path, expected_sha256: object, description: str) -> str:
+def _read_verified_bytes(path: Path, expected_sha256: object, description: str) -> bytes:
+    """Read, hash, and return one exact bundle-member byte sequence."""
     if (
         not isinstance(expected_sha256, str)
         or len(expected_sha256) != 64
@@ -313,17 +337,18 @@ def _verify_file_hash(path: Path, expected_sha256: object, description: str) -> 
     if not path.is_file():
         raise FeatureEngineeringError(f"Prepared dataset {description} is missing: {path}")
     try:
-        actual_sha256 = sha256_file(path)
+        content = path.read_bytes()
     except OSError as exc:
         raise FeatureEngineeringError(
-            f"Unable to hash prepared dataset {description} {path}: {exc}"
+            f"Unable to read prepared dataset {description} {path}: {exc}"
         ) from exc
+    actual_sha256 = hashlib.sha256(content).hexdigest()
     if actual_sha256 != expected_sha256:
         raise FeatureEngineeringError(
             f"Prepared dataset {description} hash mismatch at {path}: "
             f"expected {expected_sha256}, found {actual_sha256}"
         )
-    return actual_sha256
+    return content
 
 
 def _validate_manifest_configuration(
@@ -592,34 +617,41 @@ def load_prepared_dataset_bundle(
         feature_path,
         labeled_path,
     )
-    source_sha256 = _verify_file_hash(
+    source_bytes = _read_verified_bytes(
         source_snapshot_path,
         manifest["source_snapshot_sha256"],
         "source snapshot",
     )
+    source_sha256 = hashlib.sha256(source_bytes).hexdigest()
     if source_snapshot_path.stem != source_sha256:
         raise FeatureEngineeringError(
             "Prepared dataset source snapshot path is not content-addressed by its SHA-256"
         )
-    feature_sha256 = _verify_file_hash(
+    feature_bytes = _read_verified_bytes(
         manifest_feature_path,
         manifest["feature_file_sha256"],
         "feature file",
     )
-    labeled_sha256 = _verify_file_hash(
+    feature_sha256 = hashlib.sha256(feature_bytes).hexdigest()
+    labeled_bytes = _read_verified_bytes(
         manifest_labeled_path,
         manifest["labeled_file_sha256"],
         "labeled file",
     )
+    labeled_sha256 = hashlib.sha256(labeled_bytes).hexdigest()
 
     try:
-        raw_data = load_ohlcv_csv(source_snapshot_path, timeframe=timeframe)
+        raw_data = load_ohlcv_csv_bytes(
+            source_bytes,
+            timeframe=timeframe,
+            description=f"prepared dataset source snapshot {source_snapshot_path}",
+        )
     except MarketDataValidationError as exc:
         raise FeatureEngineeringError(
             f"Prepared dataset source snapshot is invalid: {exc}"
         ) from exc
-    features = load_feature_dataset(manifest_feature_path)
-    labeled = load_labeled_dataset(manifest_labeled_path)
+    features = _load_feature_dataset_bytes(feature_bytes, str(manifest_feature_path))
+    labeled = _load_labeled_dataset_bytes(labeled_bytes, str(manifest_labeled_path))
     _validate_logical_bundle(raw_data, features, labeled, manifest)
     return PreparedDatasetBundle(
         features=features,
@@ -707,21 +739,16 @@ def prepare_datasets(
         raise FeatureEngineeringError(
             f"Immutable raw snapshot for latest data is missing: {source_snapshot_path}"
         )
-    try:
-        snapshot_sha256 = sha256_file(source_snapshot_path)
-    except OSError as exc:
-        raise FeatureEngineeringError(
-            f"Unable to hash immutable raw snapshot {source_snapshot_path}: {exc}"
-        ) from exc
-    if snapshot_sha256 != source_sha256:
-        raise FeatureEngineeringError(
-            f"Raw snapshot hash mismatch at {source_snapshot_path}: {snapshot_sha256}"
-        )
-
-    raw_data = load_ohlcv_csv(
+    source_bytes = _read_verified_bytes(
         source_snapshot_path,
+        source_sha256,
+        "immutable raw snapshot",
+    )
+    raw_data = load_ohlcv_csv_bytes(
+        source_bytes,
         timeframe=timeframe,
         current_utc_time=current_utc_time,
+        description=f"immutable raw snapshot {source_snapshot_path}",
     )
     features = compute_features(raw_data)
     minimum_required_return = minimum_gross_return_for_net_edge(
@@ -796,19 +823,19 @@ def prepare_datasets(
         feature_path=bundle.feature_path,
         labeled_path=bundle.labeled_path,
         source_snapshot_path=bundle.source_snapshot_path,
-        source_sha256=source_sha256,
-        feature_columns=feature_columns,
-        warmup_rows_removed=len(raw_data) - len(features),
-        unlabeled_rows_removed=len(features) - len(labeled),
-        minimum_required_return=minimum_required_return,
+        source_sha256=bundle.source_snapshot_sha256,
+        feature_columns=bundle.feature_columns,
+        warmup_rows_removed=int(bundle.manifest["warmup_rows_removed"]),
+        unlabeled_rows_removed=int(bundle.manifest["unlabeled_rows_removed"]),
+        minimum_required_return=float(bundle.manifest["minimum_required_return"]),
         manifest_path=bundle.manifest_path,
         feature_sha256=bundle.feature_sha256,
         labeled_sha256=bundle.labeled_sha256,
     )
     logger.info(
         "Prepared %s inference rows and %s labeled rows from raw snapshot %s",
-        len(features),
-        len(labeled),
-        source_sha256,
+        len(bundle.features),
+        len(bundle.labeled),
+        bundle.source_snapshot_sha256,
     )
     return result

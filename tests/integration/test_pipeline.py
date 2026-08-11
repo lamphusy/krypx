@@ -218,6 +218,13 @@ def test_phase1_pipeline_runs_end_to_end_on_synthetic_data(
     assert (production / "prepared_dataset_manifest.json").read_bytes() == prepared_manifest_a
     assert (production / "manifest.json").exists()
     production_manifest = json.loads((production / "manifest.json").read_text(encoding="utf-8"))
+    assert set(production_manifest["production_artifact_hashes"]) == {
+        "model.json",
+        "feature_columns.json",
+        "prepared_dataset_manifest.json",
+    }
+    for filename, expected_hash in production_manifest["production_artifact_hashes"].items():
+        assert hashlib.sha256((production / filename).read_bytes()).hexdigest() == expected_hash
     assert production_manifest["authorized_evaluation_run_id"] == development.run_id
     assert production_manifest["data_hash"] == prepared.source_sha256
     assert not (settings.PRODUCTION_DIR / "active_model.json").exists()

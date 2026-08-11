@@ -74,8 +74,11 @@ data/raw/snapshots/{symbol_slug}_{timeframe}/{sha256}.csv
 
 Each prepared feature/label bundle has a completion manifest containing file hashes,
 feature schema, frozen feature/label settings, and the exact immutable raw snapshot that
-produced it. Development and production workflows reject incomplete or mismatched bundles
-instead of silently following a newer latest-data file.
+produced it. Each manifest, snapshot, feature CSV, and labeled CSV is read once into bytes;
+the captured bytes are hashed and those same bytes are parsed and validated. Development
+and production workflows therefore reject incomplete or mismatched bundles instead of
+silently following a newer latest-data file or parsing bytes different from the recorded
+identity.
 
 Development runs under `artifacts/runs/{run_id}/` contain the frozen configuration,
 manifest, split metadata, feature schema, fold metrics, classification comparison,
@@ -89,7 +92,18 @@ baseline metrics, cost sensitivity, and an immutable evaluation manifest.
 
 Production versions are stored separately under
 `artifacts/production/versions/{model_version}/`, each with its own model, authoritative
-feature order, schema hash, and training manifest.
+feature order, prepared-manifest provenance copy, schema hash, and training manifest. All
+files are first written and hash-verified in a hidden staging directory on the same
+filesystem. A version-scoped exclusive filesystem lock serializes competing publishers.
+`manifest.json` is written last as the completion marker, the completed staging directory
+is fsynced, and an atomic no-replace rename publishes it without replacing even an empty
+destination directory. The versions parent directory is then fsynced to make the rename
+crash-durable. Handled pre-publication failures attempt to remove only their exact hidden
+staging directory; cleanup failures are logged and leave that hidden directory invalid and
+undiscoverable. If the parent fsync fails after rename, the complete final version may
+already exist and must not be retried, removed, or treated as an ordinary staging failure.
+An abrupt process or host failure can leave a hidden staging directory or stale lock file;
+operators must inspect those hidden paths before manually removing them.
 
 ## Execution and comparison contract
 

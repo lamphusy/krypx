@@ -181,6 +181,63 @@ def test_bundle_captures_manifest_identity_from_the_same_validated_read(
     assert bundle.manifest["symbol"] == "BTC/USDT"
 
 
+@pytest.mark.parametrize(
+    ("path_attribute", "hash_attribute"),
+    [
+        ("source_snapshot_path", "source_snapshot_sha256"),
+        ("feature_path", "feature_sha256"),
+        ("labeled_path", "labeled_sha256"),
+    ],
+)
+def test_bundle_member_parsing_uses_the_exact_verified_bytes(
+    path_attribute: str,
+    hash_attribute: str,
+    tmp_path: Path,
+    synthetic_ohlcv: pd.DataFrame,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Replacing a member after its one read cannot change the parsed bundle identity."""
+    raw_dir, snapshots_dir, now = _create_raw_snapshot(tmp_path, synthetic_ohlcv)
+    prepared = prepare_datasets(
+        "BTC/USDT",
+        "1h",
+        current_utc_time=now,
+        raw_dir=raw_dir,
+        snapshots_dir=snapshots_dir,
+        interim_dir=tmp_path / "interim",
+        processed_dir=tmp_path / "processed",
+    )
+    target_path = getattr(prepared, path_attribute)
+    original_read_bytes = Path.read_bytes
+    captured_bytes = original_read_bytes(target_path)
+    replacement_bytes = b"replacement bytes that must never be parsed\n"
+    target_reads = 0
+
+    def replace_target_after_read(path: Path) -> bytes:
+        nonlocal target_reads
+        content = original_read_bytes(path)
+        if path == target_path:
+            target_reads += 1
+            if target_reads == 1:
+                path.write_bytes(replacement_bytes)
+        return content
+
+    monkeypatch.setattr(Path, "read_bytes", replace_target_after_read)
+    bundle = load_prepared_dataset_bundle(
+        "BTC/USDT",
+        "1h",
+        interim_dir=tmp_path / "interim",
+        processed_dir=tmp_path / "processed",
+    )
+
+    assert target_reads == 1
+    assert original_read_bytes(target_path) == replacement_bytes
+    assert getattr(bundle, hash_attribute) == hashlib.sha256(captured_bytes).hexdigest()
+    assert hashlib.sha256(replacement_bytes).hexdigest() != getattr(bundle, hash_attribute)
+    pd.testing.assert_frame_equal(bundle.features, prepared.features)
+    pd.testing.assert_frame_equal(bundle.labeled, prepared.labeled)
+
+
 def test_prepared_feature_matrix_is_complete_and_retains_inference_tail(
     tmp_path: Path,
     synthetic_ohlcv: pd.DataFrame,
@@ -248,7 +305,7 @@ def test_prepare_normalizes_latest_raw_hash_failure(
         )
 
 
-def test_prepare_normalizes_snapshot_hash_failure(
+def test_prepare_normalizes_snapshot_read_failure(
     tmp_path: Path,
     synthetic_ohlcv: pd.DataFrame,
     monkeypatch: pytest.MonkeyPatch,
@@ -259,14 +316,16 @@ def test_prepare_normalizes_snapshot_hash_failure(
     source_digest = sha256_file(latest_path)
     snapshot_path = snapshots_dir / "btc_usdt_1h" / f"{source_digest}.csv"
 
-    def selective_hash(path: Path) -> str:
-        if Path(path) == snapshot_path:
-            raise OSError("simulated snapshot hash failure")
-        return sha256_file(Path(path))
+    original_read_bytes = Path.read_bytes
 
-    monkeypatch.setattr("crypto_ai.features.dataset.sha256_file", selective_hash)
+    def selective_read(path: Path) -> bytes:
+        if path == snapshot_path:
+            raise OSError("simulated snapshot read failure")
+        return original_read_bytes(path)
 
-    with pytest.raises(FeatureEngineeringError, match="Unable to hash immutable raw snapshot"):
+    monkeypatch.setattr(Path, "read_bytes", selective_read)
+
+    with pytest.raises(FeatureEngineeringError, match="simulated snapshot read failure"):
         prepare_datasets(
             "BTC/USDT",
             "1h",

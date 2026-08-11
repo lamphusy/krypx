@@ -1,6 +1,9 @@
 """Irreversible holdout and production-authorization workflow safety tests."""
 
+import hashlib
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -243,6 +246,50 @@ def _forbid_production_data_or_fit(monkeypatch: pytest.MonkeyPatch) -> dict[str,
     monkeypatch.setattr(workflow, "load_prepared_dataset_bundle", reject_bundle)
     monkeypatch.setattr(workflow, "train_production_model", reject_fit)
     return calls
+
+
+def _configure_synthetic_production(
+    paths: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    version: str = "synthetic-production-version",
+) -> tuple[SimpleNamespace, Path]:
+    """Provide compatible synthetic production inputs without real training."""
+    prepared_manifest_path = paths["prepared_manifest"]
+    manifest_bytes = prepared_manifest_path.read_bytes()
+    prepared = json.loads(manifest_bytes)
+    feature_columns = tuple(prepared["feature_columns"])
+    labeled = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2026-01-01", periods=3, freq="h", tz="UTC"),
+            feature_columns[0]: [0.1, 0.2, 0.3],
+            feature_columns[1]: [0.4, 0.5, 0.6],
+            "label": [0, 1, 0],
+        }
+    )
+    bundle = SimpleNamespace(
+        manifest=prepared,
+        manifest_path=prepared_manifest_path,
+        manifest_bytes=manifest_bytes,
+        manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
+        source_snapshot_path=paths["snapshot"],
+        source_snapshot_sha256=sha256_file(paths["snapshot"]),
+        feature_path=paths["run_directory"] / "synthetic_features.csv",
+        feature_sha256="a" * 64,
+        labeled_path=paths["run_directory"] / "synthetic_labeled.csv",
+        labeled_sha256="b" * 64,
+        feature_columns=feature_columns,
+        labeled=labeled,
+    )
+
+    class SyntheticModel:
+        def save_model(self, destination: Path) -> None:
+            Path(destination).write_bytes(b"synthetic production model\n")
+
+    monkeypatch.setattr(workflow, "load_prepared_dataset_bundle", lambda *args: bundle)
+    monkeypatch.setattr(workflow, "train_production_model", lambda *args: SyntheticModel())
+    monkeypatch.setattr(workflow, "generate_run_id", lambda *args: version)
+    return bundle, settings.PRODUCTION_DIR / "versions" / version
 
 
 @pytest.mark.parametrize("identifier_kind", ["traversal", "absolute"])
@@ -608,3 +655,364 @@ def test_production_rejects_incompatible_prepared_bundle_before_fit(
         workflow.train_versioned_production_model(paths["run_id"])
 
     assert calls == {"fit": 0}
+
+
+@pytest.mark.parametrize(
+    "failure_step",
+    [
+        "model_save",
+        "feature_schema_write",
+        "prepared_manifest_copy",
+        "prepared_manifest_reverification",
+        "production_manifest_write",
+        "final_publication",
+    ],
+)
+def test_production_publication_failure_never_exposes_partial_version(
+    failure_step: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = _frozen_evaluation_run(tmp_path, monkeypatch, completed=True)
+    _, final_directory = _configure_synthetic_production(paths, monkeypatch)
+    versions_root = final_directory.parent
+    existing_version = versions_root / "existing-version"
+    existing_version.mkdir(parents=True)
+    existing_sentinel = existing_version / "manifest.json"
+    existing_sentinel.write_bytes(b"existing immutable version\n")
+    active_model = settings.PRODUCTION_DIR / "active_model.json"
+    active_model.parent.mkdir(parents=True, exist_ok=True)
+    active_model.write_bytes(b"existing active model pointer\n")
+
+    original_atomic_write_json = workflow.atomic_write_json
+    original_verified_hash = workflow._verified_hash
+
+    if failure_step == "model_save":
+        monkeypatch.setattr(
+            workflow,
+            "save_xgboost_model",
+            lambda *args: (_ for _ in ()).throw(OSError("synthetic model-save failure")),
+        )
+    elif failure_step == "feature_schema_write":
+
+        def fail_feature_schema(
+            path: Path,
+            payload: dict[str, Any],
+            *,
+            exclusive: bool = False,
+        ) -> None:
+            if path.name == "feature_columns.json" and path.parent.name.startswith(".staging-"):
+                raise OSError("synthetic feature-schema failure")
+            original_atomic_write_json(path, payload, exclusive=exclusive)
+
+        monkeypatch.setattr(workflow, "atomic_write_json", fail_feature_schema)
+    elif failure_step == "prepared_manifest_copy":
+        monkeypatch.setattr(
+            workflow,
+            "_write_verified_bytes",
+            lambda *args: (_ for _ in ()).throw(OSError("synthetic prepared-copy failure")),
+        )
+    elif failure_step == "prepared_manifest_reverification":
+
+        def fail_reverification(path: Path, expected: str, description: str) -> None:
+            if description == "prepared dataset manifest before production manifest commit":
+                raise ArtifactError("synthetic prepared-manifest reverification failure")
+            original_verified_hash(path, expected, description)
+
+        monkeypatch.setattr(workflow, "_verified_hash", fail_reverification)
+    elif failure_step == "production_manifest_write":
+
+        def fail_production_manifest(
+            path: Path,
+            payload: dict[str, Any],
+            *,
+            exclusive: bool = False,
+        ) -> None:
+            if path.name == "manifest.json" and path.parent.name.startswith(".staging-"):
+                raise OSError("synthetic production-manifest failure")
+            original_atomic_write_json(path, payload, exclusive=exclusive)
+
+        monkeypatch.setattr(workflow, "atomic_write_json", fail_production_manifest)
+    else:
+        monkeypatch.setattr(
+            workflow,
+            "_publish_production_version",
+            lambda *args: (_ for _ in ()).throw(OSError("synthetic publication failure")),
+        )
+
+    with pytest.raises(ArtifactError, match="synthetic"):
+        workflow.train_versioned_production_model(paths["run_id"])
+
+    assert not final_directory.exists()
+    assert existing_sentinel.read_bytes() == b"existing immutable version\n"
+    assert active_model.read_bytes() == b"existing active model pointer\n"
+    assert {path.name for path in versions_root.iterdir()} == {"existing-version"}
+
+
+def test_successful_production_publication_is_complete_and_hash_verified(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = _frozen_evaluation_run(tmp_path, monkeypatch, completed=True)
+    bundle, expected_directory = _configure_synthetic_production(paths, monkeypatch)
+
+    published = workflow.train_versioned_production_model(paths["run_id"])
+
+    assert published == expected_directory
+    assert {path.name for path in published.iterdir()} == {
+        "model.json",
+        "feature_columns.json",
+        "prepared_dataset_manifest.json",
+        "manifest.json",
+    }
+    manifest = json.loads((published / "manifest.json").read_text(encoding="utf-8"))
+    assert set(manifest["production_artifact_hashes"]) == {
+        "model.json",
+        "feature_columns.json",
+        "prepared_dataset_manifest.json",
+    }
+    for filename, expected_hash in manifest["production_artifact_hashes"].items():
+        assert sha256_file(published / filename) == expected_hash
+    assert (published / "prepared_dataset_manifest.json").read_bytes() == bundle.manifest_bytes
+    assert manifest["prepared_dataset_manifest_copy"] == str(
+        published / "prepared_dataset_manifest.json"
+    )
+    assert not (settings.PRODUCTION_DIR / "active_model.json").exists()
+    assert not any(path.name.startswith(".staging-") for path in published.parent.iterdir())
+
+
+def test_existing_production_version_id_is_never_overwritten(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = _frozen_evaluation_run(tmp_path, monkeypatch, completed=True)
+    _, final_directory = _configure_synthetic_production(paths, monkeypatch)
+    final_directory.mkdir(parents=True)
+    sentinel = final_directory / "manifest.json"
+    sentinel.write_bytes(b"existing production evidence\n")
+
+    with pytest.raises(ArtifactError, match="already exists"):
+        workflow.train_versioned_production_model(paths["run_id"])
+
+    assert sentinel.read_bytes() == b"existing production evidence\n"
+    assert not any(path.name.startswith(".staging-") for path in final_directory.parent.iterdir())
+
+
+def test_existing_empty_production_version_directory_is_never_replaced(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = _frozen_evaluation_run(tmp_path, monkeypatch, completed=True)
+    _, final_directory = _configure_synthetic_production(paths, monkeypatch)
+    final_directory.mkdir(parents=True)
+    original_inode = final_directory.stat().st_ino
+    active_model = settings.PRODUCTION_DIR / "active_model.json"
+    active_model.write_bytes(b"existing active model pointer\n")
+
+    with pytest.raises(ArtifactError, match="already exists"):
+        workflow.train_versioned_production_model(paths["run_id"])
+
+    assert final_directory.is_dir()
+    assert final_directory.stat().st_ino == original_inode
+    assert list(final_directory.iterdir()) == []
+    assert active_model.read_bytes() == b"existing active model pointer\n"
+    assert not any(
+        path.name.startswith((".staging-", ".publish-"))
+        for path in final_directory.parent.iterdir()
+    )
+
+
+def test_destination_appearing_at_atomic_publish_is_not_replaced(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = _frozen_evaluation_run(tmp_path, monkeypatch, completed=True)
+    _, final_directory = _configure_synthetic_production(paths, monkeypatch)
+    versions_root = final_directory.parent
+    existing_version = versions_root / "existing-version"
+    existing_version.mkdir(parents=True)
+    existing_sentinel = existing_version / "manifest.json"
+    existing_sentinel.write_bytes(b"existing immutable version\n")
+    active_model = settings.PRODUCTION_DIR / "active_model.json"
+    active_model.write_bytes(b"existing active model pointer\n")
+    original_atomic_rename = workflow._atomic_rename_directory_no_replace
+    injected_inode: list[int] = []
+
+    def create_empty_destination_then_publish(source: Path, destination: Path) -> None:
+        destination.mkdir()
+        injected_inode.append(destination.stat().st_ino)
+        original_atomic_rename(source, destination)
+
+    monkeypatch.setattr(
+        workflow,
+        "_atomic_rename_directory_no_replace",
+        create_empty_destination_then_publish,
+    )
+
+    with pytest.raises(ArtifactError, match="already exists"):
+        workflow.train_versioned_production_model(paths["run_id"])
+
+    assert injected_inode
+    assert final_directory.is_dir()
+    assert final_directory.stat().st_ino == injected_inode[0]
+    assert list(final_directory.iterdir()) == []
+    assert existing_sentinel.read_bytes() == b"existing immutable version\n"
+    assert active_model.read_bytes() == b"existing active model pointer\n"
+    assert not any(path.name.startswith(".staging-") for path in versions_root.iterdir())
+    assert not any(path.name.startswith(".publish-") for path in versions_root.iterdir())
+
+
+def test_competing_production_publisher_is_rejected_by_version_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = _frozen_evaluation_run(tmp_path, monkeypatch, completed=True)
+    _, final_directory = _configure_synthetic_production(paths, monkeypatch)
+    versions_root = final_directory.parent
+    existing_version = versions_root / "existing-version"
+    existing_version.mkdir(parents=True)
+    existing_sentinel = existing_version / "manifest.json"
+    existing_sentinel.write_bytes(b"existing immutable version\n")
+    active_model = settings.PRODUCTION_DIR / "active_model.json"
+    active_model.write_bytes(b"existing active model pointer\n")
+    first_publisher_has_lock = threading.Event()
+    release_first_publisher = threading.Event()
+    original_save_xgboost_model = workflow.save_xgboost_model
+
+    def block_first_publisher(model: object, path: Path) -> None:
+        first_publisher_has_lock.set()
+        if not release_first_publisher.wait(timeout=5):
+            raise AssertionError("Timed out waiting to release the first publisher")
+        original_save_xgboost_model(model, path)
+
+    monkeypatch.setattr(workflow, "save_xgboost_model", block_first_publisher)
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        first_result = executor.submit(
+            workflow.train_versioned_production_model,
+            paths["run_id"],
+        )
+        assert first_publisher_has_lock.wait(timeout=5)
+        with pytest.raises(ArtifactError, match="publication is already locked"):
+            workflow.train_versioned_production_model(paths["run_id"])
+        assert (versions_root / f".publish-{final_directory.name}.lock").exists()
+        release_first_publisher.set()
+        assert first_result.result(timeout=5) == final_directory
+
+    assert existing_sentinel.read_bytes() == b"existing immutable version\n"
+    assert active_model.read_bytes() == b"existing active model pointer\n"
+    assert {path.name for path in versions_root.iterdir()} == {
+        "existing-version",
+        final_directory.name,
+    }
+
+
+def test_successful_publication_fsyncs_parent_after_atomic_rename(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = _frozen_evaluation_run(tmp_path, monkeypatch, completed=True)
+    _, final_directory = _configure_synthetic_production(paths, monkeypatch)
+    original_fsync_directory = workflow._fsync_directory
+    observations: list[tuple[str, bool, bool]] = []
+
+    def observe_fsync(path: Path, description: str) -> None:
+        lock_path = final_directory.parent / f".publish-{final_directory.name}.lock"
+        observations.append((description, final_directory.exists(), lock_path.exists()))
+        original_fsync_directory(path, description)
+
+    monkeypatch.setattr(workflow, "_fsync_directory", observe_fsync)
+
+    published = workflow.train_versioned_production_model(paths["run_id"])
+
+    assert published == final_directory
+    assert observations == [
+        ("production staging directory", False, True),
+        ("production versions parent directory", True, True),
+    ]
+    assert not (final_directory.parent / f".publish-{final_directory.name}.lock").exists()
+
+
+def test_parent_fsync_failure_after_rename_preserves_published_and_existing_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = _frozen_evaluation_run(tmp_path, monkeypatch, completed=True)
+    _, final_directory = _configure_synthetic_production(paths, monkeypatch)
+    versions_root = final_directory.parent
+    existing_version = versions_root / "existing-version"
+    existing_version.mkdir(parents=True)
+    existing_sentinel = existing_version / "manifest.json"
+    existing_sentinel.write_bytes(b"existing immutable version\n")
+    active_model = settings.PRODUCTION_DIR / "active_model.json"
+    active_model.write_bytes(b"existing active model pointer\n")
+    original_fsync_directory = workflow._fsync_directory
+
+    def fail_parent_fsync(path: Path, description: str) -> None:
+        if description == "production versions parent directory":
+            assert path == versions_root
+            assert final_directory.is_dir()
+            assert (final_directory / "manifest.json").is_file()
+            raise ArtifactError("synthetic parent fsync failure")
+        original_fsync_directory(path, description)
+
+    monkeypatch.setattr(workflow, "_fsync_directory", fail_parent_fsync)
+
+    with pytest.raises(
+        ArtifactError,
+        match="published completely, but parent-directory durability confirmation failed",
+    ):
+        workflow.train_versioned_production_model(paths["run_id"])
+
+    assert {path.name for path in final_directory.iterdir()} == {
+        "model.json",
+        "feature_columns.json",
+        "prepared_dataset_manifest.json",
+        "manifest.json",
+    }
+    manifest = json.loads((final_directory / "manifest.json").read_text(encoding="utf-8"))
+    for filename, expected_hash in manifest["production_artifact_hashes"].items():
+        assert sha256_file(final_directory / filename) == expected_hash
+    assert existing_sentinel.read_bytes() == b"existing immutable version\n"
+    assert active_model.read_bytes() == b"existing active model pointer\n"
+    assert not any(path.name.startswith(".staging-") for path in versions_root.iterdir())
+    assert not any(path.name.startswith(".publish-") for path in versions_root.iterdir())
+
+
+def test_failed_staging_cleanup_is_logged_and_remains_hidden(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    paths = _frozen_evaluation_run(tmp_path, monkeypatch, completed=True)
+    _, final_directory = _configure_synthetic_production(paths, monkeypatch)
+    versions_root = final_directory.parent
+    original_atomic_write_json = workflow.atomic_write_json
+
+    def fail_feature_schema(
+        path: Path,
+        payload: dict[str, Any],
+        *,
+        exclusive: bool = False,
+    ) -> None:
+        if path.name == "feature_columns.json":
+            raise OSError("synthetic staging failure")
+        original_atomic_write_json(path, payload, exclusive=exclusive)
+
+    monkeypatch.setattr(workflow, "atomic_write_json", fail_feature_schema)
+    monkeypatch.setattr(
+        workflow.shutil,
+        "rmtree",
+        lambda *args: (_ for _ in ()).throw(OSError("synthetic cleanup failure")),
+    )
+
+    with caplog.at_level("ERROR"), pytest.raises(ArtifactError, match="synthetic staging failure"):
+        workflow.train_versioned_production_model(paths["run_id"])
+
+    hidden_staging = [path for path in versions_root.iterdir() if path.name.startswith(".staging-")]
+    assert len(hidden_staging) == 1
+    assert not (hidden_staging[0] / "manifest.json").exists()
+    assert not final_directory.exists()
+    assert "Unable to clean failed production staging directory" in caplog.text
+    assert "synthetic cleanup failure" in caplog.text
+    assert not any(path.name.startswith(".publish-") for path in versions_root.iterdir())

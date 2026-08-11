@@ -2,8 +2,8 @@
 
 ## Implementation Plan and Technical Specification
 
-**Version:** 2.3.0
-**Last updated:** 2026-08-08
+**Version:** 2.4.0
+**Last updated:** 2026-08-11
 **Current implementation scope:** Phase 1 — Pipeline implementation; real research evaluation pending
 **Primary implementation assistant:** Codex
 **Author:** Sy Lam
@@ -18,6 +18,12 @@ content-addressed data snapshots.
 the acceptance checks in this document pass. That engineering status is not a completed
 real research evaluation. No real final-holdout result, production decision, or
 profitability conclusion is asserted by this document.
+
+**Version 2.4 durability corrections:** Prepared-bundle members are hashed and parsed from
+the same single captured byte sequence. Production artifacts are assembled and verified
+inside a hidden same-filesystem staging directory, with `manifest.json` written last as the
+completion marker. Version-scoped locking, atomic no-replace rename, and directory fsyncs
+make publication race-safe and crash-durable without replacing any existing destination.
 
 ---
 
@@ -1148,6 +1154,11 @@ A failed write must not corrupt the previous valid dataset.
 Hash the finalized temporary file, persist its immutable snapshot, and only then
 replace the latest-data convenience file. Tests must verify that an earlier snapshot
 remains byte-for-byte unchanged after an incremental update.
+
+Prepared-bundle loading has a stronger identity rule: capture each manifest, raw snapshot,
+feature CSV, and labeled CSV as one exact byte sequence; calculate its SHA-256 from those
+bytes; and parse and validate those same bytes without reopening the path. A loader must
+never return parsed rows identified by a digest calculated from a different read.
 
 ---
 
@@ -2503,10 +2514,30 @@ artifacts/production/
 │   └── {model_version}/
 │       ├── model.json
 │       ├── feature_columns.json
+│       ├── prepared_dataset_manifest.json
 │       └── manifest.json
 │
 └── active_model.json
 ```
+
+A production version is built under a hidden `.staging-{model_version}-{random}` directory
+inside `versions/`. The model, ordered feature schema, and prepared-manifest provenance copy
+must be written and hash-verified there before `manifest.json` is written last. The manifest
+is the completion marker and contains `production_artifact_hashes` for every other required
+file. Publication for a model version is serialized by an exclusive filesystem lock. The
+completed staging directory must be fsynced before an atomic no-replace rename to
+`{model_version}`, and the `versions/` parent directory must be fsynced after that rename.
+An existing destination, including an empty directory, must never be replaced.
+
+Handled failures before publication attempt to remove only the exact staging directory
+created by that operation. A cleanup failure must be logged; the remaining hidden staging
+directory stays invalid and undiscoverable as a production version. A failure to fsync the
+parent after a successful rename is a distinct post-publication durability-confirmation
+failure: the final directory may already be complete, so it must not be removed or reported
+as an ordinary staging failure, and the same version must not be blindly retried.
+An abrupt process or host failure can leave a hidden staging directory or stale publication
+lock. These are never discoverable production versions and require operator inspection
+before manual removal.
 
 ---
 
@@ -2727,9 +2758,12 @@ Behavior:
    artifacts, feature schema, and relevant frozen configuration.
 4. Load the verified prepared dataset without using holdout metrics as fit inputs.
 5. Train a production model on all currently labeled rows.
-6. Save it under a new immutable version with the evaluation reference recorded.
-7. Do not overwrite previous versions.
-8. Do not automatically activate it unless explicitly requested.
+6. Stage and hash-verify every required artifact on the production-version filesystem.
+7. Write `manifest.json` last and fsync the complete staging directory.
+8. Under a version-scoped exclusive lock, atomically publish with no-replace semantics,
+   record the evaluation reference, and fsync the versions parent directory.
+9. Do not overwrite previous versions, including empty destination directories.
+10. Do not automatically activate it unless explicitly requested.
 
 ---
 
@@ -3588,8 +3622,9 @@ scenario is the official Phase 1 result; low and high costs are sensitivity chec
 
 **Pipeline implementation status:** Implemented as a separate, evaluation-gated command
 that requires an explicitly accepted completed evaluation, then trains on all labeled
-history and writes a new immutable version containing the model, authoritative feature
-schema, evaluation provenance, and full model metadata without automatic activation.
+history and atomically publishes a new immutable version containing the model,
+authoritative feature schema, verified prepared-manifest copy, artifact hash inventory,
+evaluation provenance, and full model metadata without automatic activation.
 
 **Operational status:** Production training is not authorized merely because the code is
 complete. It follows review and acceptance of a real final evaluation, and the new model
@@ -3609,6 +3644,8 @@ still requires a separate activation decision.
 * Production model is not used to calculate historical holdout metrics.
 * Previous production versions remain available.
 * Inference uses the exact saved feature order.
+* `manifest.json` is the completion marker for an atomically published version.
+* Incomplete hidden staging directories are never treated as production versions.
 
 ---
 
@@ -3629,6 +3666,7 @@ profitability conclusion.
 * Incremental updates work.
 * Timestamps align to the configured exchange timeframe grid.
 * Every research run references an immutable, content-addressed raw snapshot.
+* Prepared members are hashed and parsed from the same captured bytes.
 
 ## Feature Integrity
 
@@ -3681,6 +3719,7 @@ profitability conclusion.
 * Git commit information is stored.
 * Run manifests are complete.
 * Artifacts are versioned.
+* Production versions become visible only after complete atomic publication.
 * Tests pass on a clean machine.
 
 ---
