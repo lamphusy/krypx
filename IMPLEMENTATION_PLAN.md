@@ -2,9 +2,9 @@
 
 ## Implementation Plan and Technical Specification
 
-**Version:** 2.4.0
-**Last updated:** 2026-08-11
-**Current implementation scope:** Phase 1 — Pipeline implementation; real research evaluation pending
+**Version:** 3.0.0
+**Last updated:** 2026-08-12
+**Current implementation scope:** Phase 1 frozen; Phase 2 research planning
 **Primary implementation assistant:** Codex
 **Author:** Sy Lam
 
@@ -24,6 +24,10 @@ the same single captured byte sequence. Production artifacts are assembled and v
 inside a hidden same-filesystem staging directory, with `manifest.json` written last as the
 completion marker. Version-scoped locking, atomic no-replace rename, and directory fsyncs
 make publication race-safe and crash-durable without replacing any existing destination.
+
+**Version 3.0 Phase 2 plan:** Recorded the frozen Phase 1 engineering and research verdicts
+and added the complete Phase 2 point-in-time news-sentiment research protocol as Part II.
+Phase 2 requires a genuinely future holdout because the Phase 1 holdout has been consumed.
 
 ---
 
@@ -3832,7 +3836,8 @@ article["first_seen_at"] <= decision_timestamp
 
 Caching sentiment only by coin and calendar date is prohibited for hourly modeling.
 
-This section is informational only. No sentiment code belongs in Phase 1.
+This section records the original Phase 1 boundary. The complete executable Phase 2
+specification is maintained in Part II of this same document.
 
 ---
 
@@ -3971,3 +3976,909 @@ Requirements:
 
 Do not add libraries or architecture not defined in IMPLEMENTATION_PLAN.md.
 ```
+
+---
+
+# Part II — KrypX Phase 2 Implementation Plan
+
+**Document version:** 1.0 draft for review
+
+**Prepared:** 2026-08-12
+
+**Implementation status:** Not started
+
+**Primary experiment:** Point-in-time news sentiment added to the frozen Phase 1
+technical baseline
+
+**Default market:** BTC/USDT, 1-hour candles
+
+This Part II is the implementation and research contract for Phase 2. Part I remains the
+frozen Phase 1 design and audit record. Nothing in this plan authorizes a production model,
+live trading, a public API, unrestricted network access, or use of a future holdout.
+
+---
+
+## 1. Executive Decision
+
+Phase 1 is complete as an engineering baseline and failed its research promotion gate. The
+pipeline is reproducible and leakage-aware, but its official holdout XGBoost strategy lost
+money after costs. Phase 2 must therefore test one narrow hypothesis:
+
+> Does point-in-time-correct news sentiment add stable, incremental out-of-sample value to
+> the frozen technical-only baseline after realistic execution costs?
+
+Phase 2 is an **ablation study**, not a search for any profitable combination. Technical-only
+and technical-plus-sentiment models must be evaluated on identical rows, folds, labels,
+execution assumptions, and costs. The first valid comparison changes only the sentiment
+inputs.
+
+The implementation order is data correctness first, then deterministic sentiment scoring,
+then point-in-time aggregation, and only then modeling. A model result is invalid if the
+historical availability of an article cannot be proven.
+
+---
+
+## 2. Frozen Phase 1 Reference
+
+The following Phase 1 facts are immutable references for Phase 2:
+
+| Item | Frozen value |
+| --- | --- |
+| Phase 1 code commit | `8f2800e50a161ac4b82dee3362152f1417b8778b` |
+| Development/evaluation run | `20260811T101311613823Z_btc_usdt_1h_8f2800e` |
+| Market snapshot SHA-256 | `a271933f39eeb453fefc356eb0dc645508ce6cd56b3d7a832b81259cd2a6cc78` |
+| Official model | XGBoost, technical features only |
+| Official cost scenario | Base |
+| Holdout total return | `-4.231365648%` |
+| Holdout annualized return | `-6.9574%` |
+| Holdout Sharpe ratio | `-0.395885` |
+| Holdout maximum drawdown | `-17.4099%` |
+| Holdout profit factor | `0.837994` |
+| Holdout trades | `38` |
+| Holdout market exposure | `2.894%` |
+| Cash return | `0.0%` |
+| Buy-and-hold return | `-29.81995%` |
+| Cost sensitivity | Low `-3.133%`; base `-4.231%`; high `-7.099%` |
+| Phase 1 engineering verdict | PASS |
+| Phase 1 research verdict | FAIL |
+| Production decision | NO-GO |
+
+The Phase 1 holdout has been consumed. Its prices, labels, and results are now known. It may
+be included in Phase 2 **development** history, but it must never again be described as an
+untouched final holdout. Phase 2 requires a newly accumulated future holdout.
+
+Do not mutate, overwrite, regenerate, or reinterpret the Phase 1 run or evaluation artifacts.
+Phase 2 artifacts must live in separate namespaces and refer to Phase 1 by hash and run ID.
+
+---
+
+## 3. Scope
+
+### 3.1 In scope
+
+Phase 2 will implement:
+
+1. A versioned news-source adapter and immutable raw-response storage.
+2. A canonical, deduplicated, point-in-time article dataset.
+3. A deterministic, versioned sentiment-scoring contract.
+4. Hourly sentiment aggregation using only information available by each decision time.
+5. A prepared dataset manifest that binds market, article, score, and feature identities.
+6. Purged walk-forward ablations for technical-only versus technical-plus-sentiment models.
+7. Cost-aware development backtests and a reproducible Phase 2 research report.
+8. A separately authorized, one-time evaluation on a genuinely future holdout, after enough
+   future data exists.
+
+### 3.2 Explicitly out of scope
+
+Phase 2 will not implement:
+
+* Live trading or exchange order placement.
+* A signal-serving API, dashboard, mobile application, or alerting service.
+* Automatic model activation or automatic production retraining.
+* On-chain, funding-rate, open-interest, liquidation, social-media, or cross-asset features.
+* A broad search over sentiment providers, prompts, models, thresholds, windows, and model
+  hyperparameters.
+* Reinforcement learning, large sequence models, portfolio optimization, leverage, or shorts.
+* Repeated access to a final holdout.
+* A profitability claim based only on development results.
+
+Any expansion requires a written plan amendment before its data or result is inspected.
+
+---
+
+## 4. Research Governance and Holdout Policy
+
+### 4.1 Data states
+
+Every timestamped observation belongs to one of these states:
+
+| State | Permitted use |
+| --- | --- |
+| Phase 1 consumed holdout and all earlier history | Phase 2 development only |
+| Phase 2 development data | Feature design, debugging, folds, and ablation analysis |
+| Phase 2 boundary purge | Neither fitting nor scoring |
+| Phase 2 future holdout | One authorized final evaluation only |
+
+### 4.2 Future holdout creation
+
+Before the Phase 2 final protocol is considered frozen, the project must record:
+
+* the last permissible development timestamp;
+* the first future-holdout timestamp;
+* the label look-ahead and boundary-purge width;
+* the minimum time span and minimum number of executable trades required before evaluation;
+* the exact feature allowlist, scorer version, models, thresholds, execution rules, and costs;
+* the commit and manifest hashes that define the experiment.
+
+The future holdout must consist of market and article observations that were not available
+when the Phase 2 protocol was selected. It must accumulate without routine inspection of its
+labels, strategy returns, or comparative metrics. Operational checks may verify file presence,
+schema, hashes, timestamp coverage, and article ingestion health without calculating outcomes.
+
+The existing exclusive-claim behavior should be reused: claim first, then read holdout values.
+A completed, failed, or interrupted claim blocks routine repeat evaluation.
+
+### 4.3 No holdout optimization
+
+After final evaluation begins, do not change any of the following in response to the result:
+
+* sentiment model, prompt, score transformation, or aggregation windows;
+* feature allowlist or missing-value policy;
+* classifier parameters, probability threshold, or holding period;
+* transaction costs or baseline definitions;
+* article filters, source weights, deduplication rules, or relevance threshold.
+
+A change creates a new research generation and requires a new future holdout.
+
+---
+
+## 5. Critical Feasibility Gate: Historical Availability
+
+`published_at` answers when a publisher says an article was published. `first_seen_at`
+answers when the research system or a verifiable historical provider first had access to that
+specific article version. They are not interchangeable.
+
+For a historical article to participate in an hourly backtest, at least one of these must exist:
+
+1. A provider-supplied, immutable historical ingestion/crawl timestamp.
+2. A trusted archive record proving availability at that time.
+3. KrypX's own append-only ingestion record created in real time.
+
+The following are prohibited:
+
+* Setting `first_seen_at = published_at` merely because no crawl timestamp exists.
+* Setting a backfilled article's `first_seen_at` to the time KrypX downloaded it and then using
+  it as though it had been available historically.
+* Using the current content of a revised article at a time before that revision existed.
+* Using search rank, query results, engagement, or classifications computed with future data.
+
+Backfilled articles without historical availability proof may be stored for exploration, but
+must have `point_in_time_eligible = false` and must never enter a historical model dataset.
+
+**Stop condition:** if no source can provide sufficient point-in-time history with acceptable
+licensing and coverage, do not implement historical sentiment backtests. Begin forward-only
+collection and postpone model evaluation until enough data accumulates.
+
+---
+
+## 6. Experiment Contract
+
+### 6.1 Fixed Phase 1 mechanics
+
+The initial Phase 2 ablation must preserve these Phase 1 mechanics:
+
+* BTC/USDT, 1-hour closed candles.
+* Decision after candle `t` closes.
+* Entry at open `t+1`.
+* Exit at open `t+H+1`, where the frozen horizon is four candles.
+* Long-or-cash, all current equity, no leverage, no overlapping positions.
+* Exit processing before a new entry decision.
+* Fees, adverse spread, and adverse slippage on both sides.
+* Signal threshold `0.50` for the initial comparison.
+* Five purged walk-forward folds and the existing label-aware purge rules.
+* The frozen XGBoost and logistic-regression parameters.
+* Cash, buy-and-hold, EMA, momentum, and deterministic random-exposure baselines.
+* Low, base, and high cost scenarios; base remains official.
+
+Changing these mechanics at the same time as adding sentiment would prevent attribution.
+
+### 6.2 Required model matrix
+
+Each development run must produce predictions for all four cells:
+
+| ID | Model | Inputs | Purpose |
+| --- | --- | --- | --- |
+| A | Logistic regression | Technical only | Simple frozen control |
+| B | XGBoost | Technical only | Phase 1 control reproduced on Phase 2 rows |
+| C | Logistic regression | Technical + sentiment | Linear incremental-value test |
+| D | XGBoost | Technical + sentiment | Nonlinear incremental-value test |
+
+All cells must use identical decision rows and identical folds. If any sentiment row is missing,
+the documented missingness policy must fill it; rows must not silently disappear from C or D.
+
+### 6.3 Two-stage research sequence
+
+1. **Locked ablation:** use the frozen mechanics, proposed feature allowlist, and one scorer.
+   Determine whether sentiment adds incremental value without tuning.
+2. **Development-only refinement, if justified:** a small, declared set of changes may be
+   compared using development folds only. Every candidate and result must be recorded. The
+   chosen final specification is frozen before future-holdout access.
+
+No unrecorded trial may influence the final selection.
+
+---
+
+## 7. Canonical Article Contract
+
+### 7.1 Required fields
+
+Every normalized article version must contain:
+
+```text
+article_id
+article_version_id
+provider
+provider_article_id
+source
+canonical_url
+title
+content
+language
+published_at
+first_seen_at
+ingested_at
+provider_updated_at
+asset
+content_hash
+raw_snapshot_sha256
+point_in_time_eligible
+exclusion_reason
+```
+
+Every scored article version must additionally contain:
+
+```text
+sentiment_model_id
+sentiment_model_version
+prompt_version
+scoring_config_hash
+sentiment_score
+relevance_score
+scored_at
+raw_score_response_hash
+```
+
+### 7.2 Field invariants
+
+* All timestamps are timezone-aware UTC in one canonical format.
+* `article_id` is the stable logical article identity.
+* `article_version_id` identifies one immutable version of its text.
+* `first_seen_at` is immutable after first persistence.
+* `ingested_at >= first_seen_at` unless a provider's verified historical crawl timestamp is
+  used; the provenance rule must state why.
+* `content_hash` is SHA-256 of canonical scoring input bytes, not a mutable URL.
+* `raw_snapshot_sha256` resolves to immutable source evidence.
+* `sentiment_score` is finite and in `[-1.0, 1.0]`.
+* `relevance_score` is finite and in `[0.0, 1.0]`.
+* Empty title and content together are invalid.
+* An ineligible record may be stored but cannot be aggregated into model features.
+
+### 7.3 Deduplication and revisions
+
+Normalize URLs by a documented, versioned rule. Use provider identity, canonical URL, and
+content hash to identify duplicates. Cross-source syndication must not be silently counted as
+independent evidence; store a `duplicate_group_id` or equivalent mapping.
+
+Never overwrite an article when title or content changes. Save a new immutable version with a
+new content hash and its own first-seen timestamp. A historical decision can use only the latest
+version whose `first_seen_at` is not later than that decision.
+
+---
+
+## 8. News Ingestion
+
+### 8.1 Source selection checklist
+
+Before writing an adapter, document and approve:
+
+* historical depth and BTC coverage;
+* presence and meaning of crawl/availability timestamps;
+* revision behavior and stable identifiers;
+* rate limits, pagination, retry behavior, and outage semantics;
+* licensing for storage, model training, and derived artifacts;
+* retention and redistribution restrictions;
+* expected language mix and full-text availability;
+* monetary cost and a bounded development budget.
+
+No provider is selected by this plan. Selecting and accessing one is a separate explicit action.
+
+### 8.2 Adapter behavior
+
+The adapter must:
+
+1. Fetch bounded timestamp pages with a stable cursor when available.
+2. Preserve every exact raw response before normalization.
+3. Record request parameters, response timestamp, provider cursor, status, and retry metadata.
+4. Retry only documented transient failures with bounded exponential backoff.
+5. Fail closed on missing pages, cursor loops, unexplained gaps, or invalid timestamps.
+6. Be idempotent for an identical raw response.
+7. Never log API keys, authorization headers, full secret-bearing URLs, or sensitive payloads.
+
+Provider API keys must come from environment variables and must never be committed.
+
+### 8.3 Storage proposal
+
+```text
+data/sentiment/raw/{provider}/{yyyy}/{mm}/{dd}/{response_sha256}.json
+data/sentiment/manifests/{provider}/{collection_id}.json
+data/sentiment/normalized/{article_snapshot_sha256}.jsonl
+data/sentiment/scored/{score_snapshot_sha256}.jsonl
+data/sentiment/features/{symbol_slug}_{timeframe}_{feature_sha256}.csv
+```
+
+Raw responses, normalized snapshots, and scored snapshots are immutable and
+content-addressed. Human-readable latest pointers may exist, but no research run may depend on
+a mutable latest pointer.
+
+---
+
+## 9. Deterministic Sentiment Scoring
+
+### 9.1 Scoring input and output
+
+The canonical scoring input is a versioned serialization of:
+
+```text
+asset
+source
+title
+content
+language
+```
+
+The scorer must return a schema-validated object, not free-form prose:
+
+```json
+{
+  "sentiment_score": 0.0,
+  "relevance_score": 0.0
+}
+```
+
+Scores describe the article's directional relevance to the named asset, not general emotional
+tone. Irrelevant or ambiguous articles should have low relevance rather than invented polarity.
+
+### 9.2 Version identity
+
+The scoring identity must bind:
+
+* model provider, model ID, and immutable version when available;
+* system and user prompt templates;
+* prompt version;
+* decoding parameters, with temperature `0` when supported;
+* output schema and parser version;
+* text normalization and truncation rules;
+* scorer code commit and dependency lock hash.
+
+The cache key is at least:
+
+```text
+(content_hash, asset, sentiment_model_id, sentiment_model_version,
+ prompt_version, scoring_config_hash)
+```
+
+Caching by asset and calendar date is prohibited for hourly research.
+
+### 9.3 Failure behavior
+
+Invalid schema, non-finite scores, provider refusal, truncation outside policy, and transient
+errors must be explicit states. Do not replace scoring failures with neutral sentiment without a
+separate missingness flag. Repeated scoring must either reproduce the same result or create a new
+versioned score snapshot; it must never silently alter an existing snapshot.
+
+If a remote model is not reproducibly versioned, preserve response hashes and treat scorer drift
+as a known limitation. A deterministic local benchmark scorer should be considered so pipeline
+correctness does not depend entirely on a changing external service.
+
+---
+
+## 10. Point-in-Time Candle Aggregation
+
+### 10.1 Eligibility
+
+For decision time `t`, an article version is eligible only when:
+
+```python
+article.point_in_time_eligible
+and article.first_seen_at <= t
+and article.asset == requested_asset
+```
+
+For a trailing window of `W`, the initial interval definition is:
+
+```text
+(t - W, t]
+```
+
+The implementation must not use publication date alone and must not group first by calendar day.
+
+### 10.2 Initial sentiment feature allowlist
+
+The first locked ablation should use this bounded candidate set:
+
+| Feature | Definition |
+| --- | --- |
+| `news_count_1h` | Eligible nonduplicate article groups in `(t-1h, t]` |
+| `news_count_6h` | Eligible nonduplicate article groups in `(t-6h, t]` |
+| `news_count_24h` | Eligible nonduplicate article groups in `(t-24h, t]` |
+| `sentiment_mean_6h` | Relevance-weighted mean sentiment over 6 hours |
+| `sentiment_mean_24h` | Relevance-weighted mean sentiment over 24 hours |
+| `sentiment_recency_6h` | Relevance- and recency-weighted mean, 6-hour half-life |
+| `sentiment_recency_24h` | Same rule over 24 hours |
+| `positive_share_24h` | Weighted share with score greater than `0.20` |
+| `negative_share_24h` | Weighted share with score less than `-0.20` |
+| `sentiment_dispersion_24h` | Weighted standard deviation over 24 hours |
+| `source_count_24h` | Distinct eligible sources over 24 hours |
+| `hours_since_latest_article` | Age of most recent eligible article, capped at 24 |
+| `news_missing_24h` | `1` when no eligible article exists in the window |
+
+Exact formulas, minimum relevance, duplicate weighting, decay function, thresholds, and cap must
+be frozen in configuration before the first model comparison. Proposed values above are defaults,
+not permission to tune them after seeing results.
+
+### 10.3 Missingness policy
+
+When a window has no eligible articles:
+
+* counts and source count are `0`;
+* mean, recency, share, and dispersion fields are `0.0`;
+* `hours_since_latest_article` is the configured cap;
+* `news_missing_24h` is `1`.
+
+This zero-plus-indicator encoding must be applied within every fold consistently. Coverage and
+missingness by hour, day, source, and fold must be reported. Silent forward fill is prohibited.
+
+---
+
+## 11. Dataset and Manifest Contract
+
+Phase 2 extends, rather than weakens, Phase 1 exact-byte verification. Every prepared bundle must
+be built from captured bytes that are hashed and parsed from that exact captured sequence.
+
+The Phase 2 prepared manifest must bind at least:
+
+```text
+manifest_version
+created_at
+symbol
+timeframe
+market_snapshot_path
+market_snapshot_sha256
+article_snapshot_path
+article_snapshot_sha256
+score_snapshot_path
+score_snapshot_sha256
+sentiment_feature_path
+sentiment_feature_sha256
+combined_feature_path
+combined_feature_sha256
+labeled_dataset_path
+labeled_dataset_sha256
+technical_feature_columns
+sentiment_feature_columns
+label_columns
+article_contract_version
+deduplication_config
+scoring_config
+aggregation_config
+phase1_reference_commit
+phase1_reference_run_id
+code_commit
+dependency_lock_sha256
+```
+
+Construction must fail when a file is missing, a hash differs, columns are reordered, timestamps
+are not monotonic, duplicates exist, features are non-finite, or snapshot/config identities are
+incompatible.
+
+Production-style publication rules from Phase 1 must be reused for completed run bundles:
+same-filesystem hidden staging, hash verification before publication, `manifest.json` written
+last, atomic no-replace rename, and cleanup limited to the exact staging directory.
+
+---
+
+## 12. Proposed Code Structure
+
+Add focused modules rather than placing sentiment logic in `workflow.py`:
+
+```text
+src/crypto_ai/sentiment/
+├── __init__.py
+├── contracts.py          # normalized article and score validation
+├── providers.py          # provider protocol and adapters
+├── ingestion.py          # pagination, snapshots, collection manifests
+├── normalization.py      # timestamps, URLs, text, article versions
+├── deduplication.py      # exact and syndication grouping
+├── scoring.py            # scorer protocol, cache, output validation
+├── aggregation.py        # point-in-time hourly features
+└── storage.py            # exact-byte, immutable persistence
+
+src/crypto_ai/phase2/
+├── __init__.py
+├── dataset.py            # market/sentiment join and manifest
+├── experiments.py        # four-cell ablation
+├── artifacts.py          # Phase 2 run/evaluation publication
+└── workflow.py           # Phase 2 orchestration only
+```
+
+Corresponding tests should mirror source layout under `tests/sentiment/` and `tests/phase2/`.
+Shared Phase 1 primitives may be generalized only with regression tests proving unchanged Phase 1
+behavior.
+
+---
+
+## 13. CLI Contract
+
+Proposed commands are intentionally separate so expensive or irreversible actions are visible:
+
+```bash
+# Networked; explicit authorization and provider credentials required.
+krypx phase2 fetch-news --provider <provider> --start <utc> --end <utc>
+
+# May call a paid/local scorer; explicit configuration required.
+krypx phase2 score-sentiment --article-snapshot <sha256>
+
+# Offline once all source snapshots exist.
+krypx phase2 prepare --article-snapshot <sha256> --score-snapshot <sha256>
+
+# Offline development-only four-cell walk-forward experiment.
+krypx phase2 validate
+
+# Optional composition; must never evaluate a holdout.
+krypx phase2 run-development
+
+# Future, one-time, separately authorized action only.
+krypx phase2 evaluate-holdout --run-id <phase2-development-run-id>
+```
+
+Every command must return nonzero on project-specific validation, integrity, provider, scoring,
+or publication errors. Console output must show snapshot hashes, coverage, exclusions, run ID, and
+artifact paths without leaking credentials.
+
+---
+
+## 14. Artifact Layout
+
+```text
+artifacts/phase2/runs/{run_id}/
+├── manifest.json
+├── config.json
+├── prepared_dataset_manifest.json
+├── split_metadata.json
+├── coverage_report.json
+├── fold_metrics.json
+├── classification_report.json
+├── oof_predictions.csv
+├── strategy_metrics.json
+├── cost_sensitivity.json
+├── feature_importance.csv
+├── ablation_report.json
+├── development_report.md
+└── holdout_evaluation_claim.json
+
+artifacts/phase2/evaluations/{run_id}/
+├── manifest.json
+├── input_market_snapshot.csv
+├── input_article_snapshot.jsonl
+├── input_score_snapshot.jsonl
+├── evaluation_models/
+├── holdout_predictions.csv
+├── trade_ledgers/
+├── equity_curves/
+├── metrics.json
+├── baseline_metrics.json
+└── cost_sensitivity.json
+```
+
+The run ID must be unique and include a UTC creation component, symbol, timeframe, abbreviated
+commit, and random suffix. It identifies one immutable experiment, not merely a model file.
+
+---
+
+## 15. Milestones and Acceptance Criteria
+
+### Milestone 0 — Protocol and source feasibility
+
+**Implement:** no production code. Select a candidate provider, document timestamp semantics,
+licensing, coverage, and cost; freeze article/scoring/aggregation contracts and proposed research
+gates.
+
+**Accept when:** a reviewer can verify historical availability, legal use, expected coverage,
+budget, and exact experiment choices. If point-in-time history is unavailable, approve a
+forward-only collection plan instead.
+
+### Milestone 1 — Schemas and immutable storage
+
+**Implement:** article/score contracts, validators, canonical serialization, exact-byte hashes,
+content-addressed storage, manifests, and project-specific exceptions.
+
+**Accept when:** unit tests cover malformed timestamps, non-finite scores, hash mismatch, duplicate
+identities, immutable first-seen time, replacement races, incomplete writes, and no-overwrite
+publication.
+
+### Milestone 2 — Provider ingestion and normalization
+
+**Implement:** one approved adapter, bounded pagination, retry policy, raw response snapshots,
+normalization, revision preservation, deduplication, and coverage report.
+
+**Accept when:** fixture-based tests prove pagination completeness, idempotence, gap detection,
+credential redaction, revision behavior, and exclusion of unverified historical records. A real
+network collection requires separate authorization.
+
+### Milestone 3 — Sentiment scorer
+
+**Implement:** scorer protocol, one frozen scorer, structured output validation, deterministic
+cache, score manifests, and failure states.
+
+**Accept when:** fixtures prove cache identity, model/prompt invalidation, score bounds, stable
+serialization, retry behavior, and no silent neutral substitution. Paid or remote scoring requires
+separate authorization and an explicit budget.
+
+### Milestone 4 — Point-in-time aggregation
+
+**Implement:** eligibility selection, duplicate-group handling, trailing windows, missingness
+policy, and approved feature allowlist.
+
+**Accept when:** changing an article strictly after decision `t` cannot change any feature at or
+before `t`; boundary timestamps are correct; revisions become visible only at their own first-seen
+time; and a slow reference implementation matches the optimized implementation.
+
+### Milestone 5 — Dataset integration
+
+**Implement:** market/sentiment alignment, combined features, labels, Phase 2 manifest, and offline
+preflight verification.
+
+**Accept when:** technical-only and augmented cells have identical indexes, labels, folds, and
+performance windows; exact source hashes reconcile; missingness is explicit; and Phase 1 dataset
+tests still pass unchanged.
+
+### Milestone 6 — Development ablation
+
+**Implement:** the four-cell model matrix with fold-local preprocessing and continuous OOF
+predictions. Preserve fold models/metrics and count every attempted specification.
+
+**Accept when:** no validation row influences fit, scaling, selection, aggregation, or threshold;
+all cells use identical folds; reruns with the same inputs are deterministic; and global feature
+importance is clearly labeled as non-causal descriptive evidence.
+
+### Milestone 7 — Development backtest and report
+
+**Implement:** identical-window cost-aware backtests, baselines, cost sensitivity, fold/regime and
+coverage diagnostics, ablation tables, machine-readable artifacts, and a readable report.
+
+**Accept when:** accounting invariants reconcile, all strategies share the same performance
+window, base cost remains official, low/high are sensitivities, results are reproducible from
+manifests, and the report clearly separates engineering status from research status.
+
+### Milestone 8 — Freeze and accumulate a future holdout
+
+**Implement:** freeze the selected protocol and development cutoff, create the exclusive claim
+mechanism, and collect future market/news data without outcome inspection.
+
+**Accept when:** enough elapsed time, hourly coverage, label outcomes, and expected executable
+trades meet preapproved minimums. Merely reaching a calendar date is insufficient if coverage or
+trade count is inadequate.
+
+### Milestone 9 — One-time future evaluation
+
+**Implement:** only after explicit human authorization, preflight the frozen run, create the claim,
+load the verified future bundle, score all frozen models/baselines, and atomically publish results.
+
+**Accept when:** all hashes reconcile, the claim is complete, results are reproduced from the
+evaluation manifest, and no post-result tuning is presented as final evidence.
+
+### Milestone 10 — Decision, not automatic production
+
+Review engineering integrity, incremental value, stability, costs, drawdown, trade count, coverage,
+and limitations. A production build remains a separate authorized action. Failure is a valid Phase
+2 result and should stop progression to Phase 3 unless a new hypothesis is approved.
+
+---
+
+## 16. Test Matrix
+
+At minimum, add tests for:
+
+### Article time and identity
+
+* `published_at` never substitutes for missing `first_seen_at`.
+* Future articles and future revisions cannot change past candle features.
+* Exact duplicates are stable across page order and retries.
+* Syndicated copies follow the frozen duplicate-group policy.
+* Mixed timezones normalize to UTC or fail explicitly.
+* Article versions are append-only and first-seen timestamps are immutable.
+
+### Scoring
+
+* Cache keys include content, asset, model, prompt, and scoring configuration.
+* Prompt/model changes invalidate the prior cache entry.
+* Invalid JSON, out-of-range values, NaN, and infinity fail closed.
+* Scoring failure is not silently converted to a neutral article.
+* Exact captured response bytes reconcile to their hashes.
+
+### Aggregation
+
+* Window edges obey `(t-W, t]` exactly.
+* Only `first_seen_at <= t` records are eligible.
+* Duplicate groups do not inflate counts.
+* Missing windows follow the zero-plus-indicator contract.
+* Optimized features equal a simple reference implementation.
+* Random future-data perturbation leaves all earlier rows byte-identical.
+
+### Modeling and evaluation
+
+* All four ablation cells use identical indexes, labels, folds, and windows.
+* Fold-local preprocessing never fits validation rows.
+* Boundary purges cover the full label look-ahead.
+* No future-holdout row enters training, scoring selection, or threshold selection.
+* Consumed Phase 1 holdout is labeled development, never untouched evidence.
+* Exclusive claims prevent second access after success, failure, or interruption.
+* Base, low, and high cost semantics match Phase 1 exactly.
+* Same seed, bytes, configuration, and commit reproduce predictions and metrics.
+
+### Filesystem and artifacts
+
+* Hashing and parsing use the same captured bytes under replacement races.
+* Manifests are completion markers written last.
+* Failed publication exposes no partial final directory.
+* Existing versions are never replaced.
+* Cleanup affects only the exact staging directory.
+* Artifact hashes reconcile transitively to market, article, and score snapshots.
+
+The complete Phase 1 suite must remain green throughout Phase 2.
+
+---
+
+## 17. Proposed Research Gates
+
+These are **draft gates** and must be explicitly reviewed and frozen during Milestone 0, before
+the first comparative model result is inspected. They are not to be adjusted afterward to make a
+result pass.
+
+### 17.1 Engineering gate
+
+All are mandatory:
+
+* Point-in-time availability is proven for every modeled article.
+* No leakage or fold-isolation test fails.
+* All snapshot and artifact hashes reconcile.
+* All four cells use identical observations and execution rules.
+* Data coverage and exclusions are complete and reported.
+* The full automated suite, formatter, linter, and compile checks pass.
+* An independent rerun from frozen manifests reproduces the result.
+
+Failure of any item invalidates research conclusions.
+
+### 17.2 Development evidence gate
+
+Suggested minimum evidence for selecting a sentiment model to freeze:
+
+* Augmented base-cost return exceeds its same-model technical control.
+* Augmented base-cost Sharpe and profit factor exceed the technical control.
+* Base-cost Sharpe is greater than `0` and profit factor is greater than `1`.
+* Median fold-level return delta versus the technical control is positive.
+* Improvement is not produced entirely by one fold, source, day, or article.
+* Maximum drawdown is not worse than the same-model technical control.
+* Performance does not depend on the low-cost scenario.
+* The preapproved minimum OOF trade count and coverage thresholds are met.
+
+Development passing only authorizes protocol freezing and future-data accumulation. It is not a
+production or profitability claim.
+
+### 17.3 Final evidence gate
+
+Suggested minimum evidence on the one-time future holdout:
+
+* The selected augmented model beats cash and its technical-only control after base costs.
+* Total return is positive, Sharpe is positive, and profit factor exceeds `1`.
+* Drawdown remains within the preapproved limit.
+* The preapproved minimum trade count is met.
+* The conclusion remains directionally credible under the high-cost sensitivity.
+* No integrity, availability, or evaluation claim is unresolved.
+
+If final evidence fails, report Phase 2 as research FAIL. Do not tune against that holdout.
+
+---
+
+## 18. Security, Cost, and Legal Controls
+
+* Store credentials only in environment variables or an approved secret manager.
+* Maintain `.env` exclusion and add secret-scanning fixtures without real secrets.
+* Redact headers, keys, paid content, and sensitive query parameters from logs and reports.
+* Use bounded date ranges, page counts, retries, concurrency, and scoring budgets.
+* Provide a dry-run estimate before any paid historical fetch or model-scoring batch.
+* Record provider/model request counts and estimated/actual cost in collection manifests.
+* Confirm terms for retention, derived features, internal model training, and artifact sharing.
+* Do not commit raw licensed article content unless its license explicitly permits it.
+* Pin new dependencies in `requirements-lock.txt` and record its SHA-256 in manifests.
+
+---
+
+## 19. Codex Execution Rules
+
+When this plan is handed to Codex, it must follow these rules:
+
+1. Implement one milestone at a time and stop at its acceptance boundary.
+2. Read this entire document and the relevant Phase 1 contracts before editing code.
+3. Preserve unrelated user changes and frozen Phase 1 artifacts.
+4. Do not select a provider, spend money, fetch real data, call a remote scorer, inspect a future
+   holdout, train production, activate a model, or push code without the required authorization.
+5. Use fixtures and synthetic data until a real-data action is explicitly approved.
+6. Do not add features, tune values, or expand scope beyond the current milestone.
+7. Reuse verified Phase 1 storage, split, backtest, and publication primitives where their
+   contracts remain identical; add regression tests before generalizing them.
+8. Keep provider-specific code behind a protocol and keep core research logic offline-testable.
+9. Fail closed with project-specific exceptions on ambiguity, integrity errors, or gaps.
+10. Report files changed, tests added, commands run, results, limitations, real network/data/model
+    access, artifact mutations, and exact next authorization required.
+11. Do not commit or push unless explicitly requested for that batch of changes.
+12. Never state that engineering completion proves a profitable or production-ready strategy.
+
+---
+
+## 20. Required Verification Commands
+
+Every code milestone should finish with:
+
+```bash
+git diff --check
+.venv/bin/black --check .
+.venv/bin/ruff check .
+.venv/bin/python -m compileall -q src tests
+.venv/bin/pytest
+```
+
+Run focused suites for changed modules before the full suite. Any skipped test, expected warning,
+network stub, or platform limitation must be named in the handoff. Real network tests must not be
+part of the default deterministic suite.
+
+For data-bearing milestones, also run a manifest reconciliation command that independently hashes
+every referenced file and confirms the recorded row counts, timestamp bounds, and schemas.
+
+---
+
+## 21. Phase 2 Definition of Done
+
+Phase 2 engineering is complete only when:
+
+* one approved source is ingested with auditable point-in-time history or sufficient forward-only
+  history has accumulated;
+* article, revision, duplicate, scoring, aggregation, and missingness contracts are implemented;
+* all datasets and artifacts are immutable, versioned, hash-verified, and reproducible;
+* technical-only and augmented ablations run on identical purged folds;
+* development and cost-aware backtest reports are complete;
+* the research protocol is frozen before future-holdout access;
+* a separately authorized one-time future evaluation is complete, or the project explicitly
+  records that insufficient future evidence remains;
+* engineering and research verdicts are reported separately;
+* all required checks pass and frozen Phase 1 tests still pass.
+
+Phase 2 research succeeds only if the preapproved final evidence gate passes on a genuinely future
+holdout. Until then, the correct status is **research in progress**, regardless of development
+performance.
+
+---
+
+## 22. Immediate Next Action
+
+Execute **Milestone 0 only**:
+
+1. Compare candidate news providers using the source selection checklist.
+2. Obtain documentary proof of historical availability timestamp semantics.
+3. Estimate licensed historical coverage and cost for BTC news at hourly resolution.
+4. Decide between verified historical backfill and forward-only collection.
+5. Review and freeze the article contract, initial feature allowlist, missingness rules, minimum
+   coverage/trade requirements, and proposed research gates.
+6. Record the approved provider and decisions in a versioned Phase 2 protocol document.
+
+Do not begin ingestion code or purchase/fetch real data until that decision is approved.
