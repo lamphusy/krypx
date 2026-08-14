@@ -67,3 +67,7 @@ class SentimentStorageError(SentimentError):
 
 class PublicationCollisionError(SentimentStorageError):
     """An immutable publication identifier already exists."""
+
+
+class ProviderIngestionError(SentimentError):
+    """A provider fixture or ingestion envelope violates the frozen adapter contract."""

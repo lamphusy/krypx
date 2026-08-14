@@ -22,7 +22,45 @@ Acceptance evidence:
 - Lint: passed for all `src` and `tests` Python files.
 - Tests are protected by the repository-wide real-network connection guard.
 
-## Milestone 2 — in progress
+## Milestone 2 — accepted
 
-Only synthetic and repository-captured test fixtures are permitted. Real GDELT access
-and all other external activity remain unapproved.
+Milestone 2 provides one offline GDELT GSG adapter. It creates bounded one-minute
+retrieval schedules and pure retry decisions but contains no HTTP client. Caller-supplied
+gzip bytes are stored exactly, receipt locators and headers are redacted, and normalization
+cannot cross a watermark until every expected interval is terminally complete or recorded
+as a provider gap. Historical-backfill observations are reported and excluded rather than
+assigned a model-eligible availability time.
+
+The adapter preserves first observations, repeated observations, immutable article
+versions, later title revisions, exact causal duplicate groups, expected-interval gaps,
+zero-line valid files, coverage hashes, and deterministic normalized publications.
+
+Acceptance evidence:
+
+- Focused Phase 2 suite: 35 passed.
+- Full Phase 1 plus Phase 2 suite: 288 passed with 12 expected single-class metric
+  warnings from the existing synthetic Phase 1 integration test.
+- Formatting, lint, bytecode compilation, and installed-package consistency: passed.
+- No test or implementation path opened a network connection; the adapter has no network
+  execution method.
+
+## Remaining authorization boundary
+
+Real GDELT retrieval, GDELT title-only/right-use acceptance, prospective collection,
+scorer/model selection, model downloads, scoring, feature construction, numerical research
+gates, training, backtests, and any future-holdout activity remain unapproved. Milestone 3
+and later milestones are not complete.
+
+The next possible Batch B is a bounded prospective GSG collection pilot. It requires a new
+authorization that explicitly:
+
+1. approves GDELT GSG title-only use and the documented-use interpretation;
+2. permits network access only to the frozen GSG archive endpoint, prospectively from the
+   authorization time, with exact interval/request, download-byte, retained-storage, elapsed-
+   time, and retry caps;
+3. permits durable storage of those exact raw bytes and receipt metadata;
+4. confirms that historical retrieval, publisher pages, credentials, paid services, scoring,
+   features, model activity, research gates, and holdout activity remain forbidden unless
+   separately authorized.
+
+Until that authorization is supplied, the repository must remain fixture-only and offline.
