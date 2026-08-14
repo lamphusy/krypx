@@ -43,3 +43,27 @@ class BacktestError(CryptoAIError):
 
 class ArtifactError(CryptoAIError):
     """Artifact loading or saving failed."""
+
+
+class SentimentError(CryptoAIError):
+    """Base error for the offline Phase 2 sentiment foundation."""
+
+
+class CanonicalizationError(SentimentError):
+    """A value cannot be represented by the frozen canonical JSON contract."""
+
+
+class ArticleValidationError(SentimentError):
+    """An article envelope violates the frozen Phase 2 contract."""
+
+
+class ScoreValidationError(SentimentError):
+    """A score envelope violates the frozen Phase 2 contract."""
+
+
+class SentimentStorageError(SentimentError):
+    """Immutable sentiment storage failed an integrity check or write."""
+
+
+class PublicationCollisionError(SentimentStorageError):
+    """An immutable publication identifier already exists."""
