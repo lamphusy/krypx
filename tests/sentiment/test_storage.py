@@ -31,6 +31,73 @@ def test_content_object_hash_mismatch_is_detected(tmp_path: Path) -> None:
         store.get_bytes(digest)
 
 
+def test_get_bytes_returns_the_verified_open_file_during_path_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = ContentAddressedStore(tmp_path)
+    original = b"verified original"
+    digest = store.put_bytes(original)
+    object_path = store.objects_root / digest[:2] / digest
+    replacement_path = object_path.with_name("replacement")
+    replacement_path.write_bytes(b"unverified replacement")
+    real_open = os.open
+    replaced = False
+
+    def racing_open(path: str | os.PathLike[str], flags: int, *args: object) -> int:
+        nonlocal replaced
+        descriptor = real_open(path, flags, *args)
+        if Path(path) == object_path and not replaced:
+            replaced = True
+            os.replace(replacement_path, object_path)
+        return descriptor
+
+    monkeypatch.setattr(storage_module.os, "open", racing_open)
+
+    assert store.get_bytes(digest) == original
+    assert object_path.read_bytes() == b"unverified replacement"
+
+
+def test_get_bytes_never_performs_a_second_path_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = ContentAddressedStore(tmp_path)
+    original = b"single captured buffer"
+    digest = store.put_bytes(original)
+
+    def reject_second_read(path: Path) -> bytes:
+        raise AssertionError("an unverified second path read was attempted")
+
+    monkeypatch.setattr(Path, "read_bytes", reject_second_read)
+    assert store.get_bytes(digest) == original
+
+
+def test_get_bytes_rejects_symlink_disappearance_and_read_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = ContentAddressedStore(tmp_path)
+    digest = store.put_bytes(b"protected")
+    object_path = store.objects_root / digest[:2] / digest
+    target = tmp_path / "target"
+    target.write_bytes(b"protected")
+    object_path.unlink()
+    object_path.symlink_to(target)
+    with pytest.raises(SentimentStorageError):
+        store.get_bytes(digest)
+
+    object_path.unlink()
+    with pytest.raises(SentimentStorageError, match="missing"):
+        store.get_bytes(digest)
+
+    object_path.write_bytes(b"protected")
+
+    def fail_fdopen(*args: object, **kwargs: object) -> object:
+        raise OSError("simulated read failure")
+
+    monkeypatch.setattr(storage_module.os, "fdopen", fail_fdopen)
+    with pytest.raises(SentimentStorageError, match="simulated read failure"):
+        store.get_bytes(digest)
+
+
 def test_replacement_race_accepts_identical_winner(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

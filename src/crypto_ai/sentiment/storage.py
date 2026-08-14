@@ -11,6 +11,7 @@ import stat
 import sys
 import uuid
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -18,6 +19,14 @@ from crypto_ai.exceptions import PublicationCollisionError, SentimentStorageErro
 from crypto_ai.sentiment.canonical import canonicalize, sha256_bytes
 
 SHA256_LENGTH = 64
+
+
+@dataclass(frozen=True, slots=True)
+class VerifiedPublication:
+    """One manifest and its exact, single-read, hash-verified file buffers."""
+
+    manifest: dict[str, Any]
+    files: dict[str, bytes]
 
 
 class ContentAddressedStore:
@@ -66,11 +75,7 @@ class ContentAddressedStore:
 
     def get_bytes(self, digest: str) -> bytes:
         path = self._object_path(digest)
-        self._verify_object(path, digest)
-        try:
-            return path.read_bytes()
-        except OSError as exc:
-            raise SentimentStorageError(f"unable to read object {digest}: {exc}") from exc
+        return self._read_verified_object(path, digest)
 
     def publish_bundle(
         self,
@@ -134,13 +139,17 @@ class ContentAddressedStore:
 
     def verify_publication(self, publication_id: str) -> dict[str, Any]:
         """Load and verify every byte referenced by a publication manifest."""
+        return self.read_publication(publication_id).manifest
+
+    def read_publication(self, publication_id: str) -> VerifiedPublication:
+        """Capture each publication file once and return those exact verified buffers."""
         _validate_publication_id(publication_id)
         directory = self.publications_root / publication_id
         manifest_path = directory / "manifest.json"
         try:
-            if manifest_path.is_symlink() or not manifest_path.is_file():
-                raise SentimentStorageError(f"publication manifest is missing: {publication_id}")
-            raw_manifest = manifest_path.read_bytes()
+            raw_manifest = _read_regular_file_once(
+                manifest_path, description=f"publication manifest {publication_id}"
+            )
             manifest = json.loads(
                 raw_manifest.decode("utf-8"),
                 parse_constant=lambda value: (_ for _ in ()).throw(
@@ -159,25 +168,19 @@ class ContentAddressedStore:
         if not isinstance(files, dict) or not files:
             raise SentimentStorageError("publication manifest has no file inventory")
         expected_paths = {"manifest.json"}
+        verified_files: dict[str, bytes] = {}
         for raw_name, descriptor in files.items():
             name = _validate_relative_path(raw_name)
             expected_paths.add(name)
             if not isinstance(descriptor, dict) or set(descriptor) != {"sha256", "size_bytes"}:
                 raise SentimentStorageError(f"invalid manifest entry for {name}")
             path = directory / PurePosixPath(name)
-            try:
-                file_stat = path.lstat()
-                if stat.S_ISLNK(file_stat.st_mode) or not stat.S_ISREG(file_stat.st_mode):
-                    raise SentimentStorageError(f"publication member is not a regular file: {name}")
-                data = path.read_bytes()
-            except FileNotFoundError as exc:
-                raise SentimentStorageError(f"publication member is missing: {name}") from exc
-            except OSError as exc:
-                raise SentimentStorageError(f"unable to read publication member: {name}") from exc
+            data = _read_regular_file_once(path, description=f"publication member {name}")
             if descriptor.get("size_bytes") != len(data) or descriptor.get(
                 "sha256"
             ) != sha256_bytes(data):
                 raise SentimentStorageError(f"publication member hash mismatch: {name}")
+            verified_files[name] = data
         actual_paths = {
             path.relative_to(directory).as_posix()
             for path in directory.rglob("*")
@@ -185,25 +188,22 @@ class ContentAddressedStore:
         }
         if actual_paths != expected_paths:
             raise SentimentStorageError("publication contains unmanifested or missing files")
-        return manifest
+        return VerifiedPublication(manifest=manifest, files=verified_files)
 
     def _object_path(self, digest: str) -> Path:
         _validate_digest(digest)
         return self.objects_root / digest[:2] / digest
 
     @staticmethod
-    def _verify_object(path: Path, digest: str) -> None:
-        try:
-            file_stat = path.lstat()
-            if stat.S_ISLNK(file_stat.st_mode) or not stat.S_ISREG(file_stat.st_mode):
-                raise SentimentStorageError(f"content object is not a regular file: {digest}")
-            data = path.read_bytes()
-        except FileNotFoundError as exc:
-            raise SentimentStorageError(f"content object is missing: {digest}") from exc
-        except OSError as exc:
-            raise SentimentStorageError(f"unable to read content object {digest}: {exc}") from exc
+    def _read_verified_object(path: Path, digest: str) -> bytes:
+        data = _read_regular_file_once(path, description=f"content object {digest}")
         if sha256_bytes(data) != digest:
             raise SentimentStorageError(f"content object hash mismatch: {digest}")
+        return data
+
+    @staticmethod
+    def _verify_object(path: Path, digest: str) -> None:
+        ContentAddressedStore._read_verified_object(path, digest)
 
 
 def _validate_digest(digest: str) -> None:
@@ -237,6 +237,47 @@ def _validate_relative_path(value: str) -> str:
     if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
         raise SentimentStorageError(f"unsafe publication path: {value}")
     return path.as_posix()
+
+
+def _read_regular_file_once(path: Path, *, description: str) -> bytes:
+    """Open without following symlinks, read once, and return that captured buffer."""
+    descriptor: int | None = None
+    flags = os.O_RDONLY
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    nofollow_available = hasattr(os, "O_NOFOLLOW")
+    if nofollow_available:
+        flags |= os.O_NOFOLLOW
+    pre_open_stat: os.stat_result | None = None
+    try:
+        if not nofollow_available:
+            pre_open_stat = path.lstat()
+            if stat.S_ISLNK(pre_open_stat.st_mode):
+                raise SentimentStorageError(f"{description} must not be a symlink")
+        descriptor = os.open(path, flags)
+        opened_stat = os.fstat(descriptor)
+        if not stat.S_ISREG(opened_stat.st_mode):
+            raise SentimentStorageError(f"{description} is not a regular file")
+        if pre_open_stat is not None and (
+            pre_open_stat.st_dev,
+            pre_open_stat.st_ino,
+        ) != (opened_stat.st_dev, opened_stat.st_ino):
+            raise SentimentStorageError(f"{description} changed while it was opened")
+        with os.fdopen(descriptor, "rb") as handle:
+            descriptor = None
+            data = handle.read()
+    except FileNotFoundError as exc:
+        raise SentimentStorageError(f"{description} is missing") from exc
+    except SentimentStorageError:
+        raise
+    except OSError as exc:
+        raise SentimentStorageError(f"unable to read {description}: {exc}") from exc
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+    if not isinstance(data, bytes):  # pragma: no cover - binary file contract
+        raise SentimentStorageError(f"{description} did not yield bytes")
+    return data
 
 
 def _write_fsynced(path: Path, data: bytes) -> None:

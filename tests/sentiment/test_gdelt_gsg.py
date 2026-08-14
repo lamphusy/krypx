@@ -15,6 +15,7 @@ from crypto_ai.sentiment.providers.gdelt_gsg import (
     GSGAdapter,
     GSGNormalizer,
     GSGRetryPolicy,
+    RightsApproval,
     build_coverage_report,
     canonicalize_url,
     decisions_intersecting_gaps,
@@ -25,6 +26,8 @@ from crypto_ai.sentiment.providers.gdelt_gsg import (
 from crypto_ai.sentiment.storage import ContentAddressedStore
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "gdelt_gsg"
+PROTOCOL_CONFIG = Path(__file__).parents[2] / "config" / "phase2_protocol.json"
+PROTOCOL_CONFIG_SHA256 = sha256_bytes(PROTOCOL_CONFIG.read_bytes())
 
 
 def gzip_fixture(name: str) -> bytes:
@@ -42,6 +45,7 @@ def ingest(
     minute: int,
     *,
     mode: str = "prospective",
+    input_class: str = "synthetic_fixture",
     locator: str = "https://data.gdeltproject.org/gdeltv3/gsg/fixture.gz",
 ):
     return adapter.ingest_snapshot(
@@ -50,6 +54,18 @@ def ingest(
         ingested_at=f"2026-08-14T01:{minute:02d}:30Z",
         source_locator=locator,
         collection_mode=mode,
+        input_class=input_class,
+    )
+
+
+def approved_normalizer(*snapshots) -> GSGNormalizer:
+    approval = RightsApproval.synthetic_fixture_only(
+        protocol_config_sha256=PROTOCOL_CONFIG_SHA256,
+        raw_snapshot_sha256={snapshot.receipt.raw_snapshot_sha256 for snapshot in snapshots},
+    )
+    return GSGNormalizer(
+        protocol_config_sha256=PROTOCOL_CONFIG_SHA256,
+        rights_approval=approval,
     )
 
 
@@ -130,7 +146,7 @@ def test_normalization_preserves_revisions_reuses_repeat_and_deduplicates(
     )
     first = ingest(adapter, gzip_fixture("base.jsonl"), 0)
     revision = ingest(adapter, gzip_fixture("revision.jsonl"), 1)
-    normalizer = GSGNormalizer()
+    normalizer = approved_normalizer(first, revision)
 
     first_result = normalize_terminal(
         normalizer,
@@ -167,7 +183,7 @@ def test_historical_records_are_reported_but_never_normalized_as_eligible(tmp_pa
     historical = ingest(adapter, gzip_fixture("base.jsonl"), 0, mode="historical_backfill")
 
     result = normalize_terminal(
-        GSGNormalizer(),
+        approved_normalizer(historical),
         [historical],
         start="2026-08-14T01:00:00Z",
         end="2026-08-14T01:01:00Z",
@@ -218,7 +234,7 @@ def test_deterministic_rerun_produces_identical_semantic_bytes(tmp_path: Path) -
         adapter = adapter_at(tmp_path / name, datetime(2026, 8, 14, 1, 0, 31, tzinfo=UTC))
         snapshot = ingest(adapter, raw, 0)
         plan = plan_retrieval("2026-08-14T01:00:00Z", "2026-08-14T01:01:00Z")
-        normalized = GSGNormalizer().normalize(
+        normalized = approved_normalizer(snapshot).normalize(
             [snapshot], retrieval_plan=plan, terminal_as_of="2026-08-14T01:30:00Z"
         )
         coverage = build_coverage_report(plan, [snapshot], as_of="2026-08-14T01:30:00Z")
@@ -239,7 +255,7 @@ def test_normalized_batch_publication_is_exact_and_idempotent(tmp_path: Path) ->
     snapshot = ingest(adapter, gzip_fixture("base.jsonl"), 0)
     plan = plan_retrieval("2026-08-14T01:00:00Z", "2026-08-14T01:01:00Z")
     coverage = build_coverage_report(plan, [snapshot], as_of="2026-08-14T01:30:00Z")
-    result = GSGNormalizer().normalize(
+    result = approved_normalizer(snapshot).normalize(
         [snapshot], retrieval_plan=plan, terminal_as_of="2026-08-14T01:30:00Z"
     )
 
@@ -259,7 +275,7 @@ def test_normalizer_refuses_a_nonterminal_expected_interval(tmp_path: Path) -> N
     plan = plan_retrieval("2026-08-14T01:00:00Z", "2026-08-14T01:02:00Z")
 
     with pytest.raises(ProviderIngestionError, match="remain pending"):
-        GSGNormalizer().normalize(
+        approved_normalizer(snapshot).normalize(
             [snapshot], retrieval_plan=plan, terminal_as_of="2026-08-14T01:30:00Z"
         )
 

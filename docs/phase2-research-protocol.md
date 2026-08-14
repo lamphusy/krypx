@@ -1,6 +1,6 @@
 # KrypX Phase 2 — Milestone 0 Research Protocol and News-Source Feasibility
 
-**Protocol status:** approved on 2026-08-14 only as the engineering specification for offline Phase 2 Milestones 1 and 2
+**Protocol status:** Batch A corrected and verified offline; Milestones 1 and 2 are pending independent review
 
 **Research decision:** `PROCEED_WITH_FORWARD_ONLY_COLLECTION`
 
@@ -11,7 +11,7 @@
 **Prepared:** 2026-08-12
 **Companion machine-readable draft:** `config/phase2_protocol.json`
 
-**Approval boundary:** Batch A authorizes synthetic-fixture implementation, local verification, and separate Milestone 0/1/2 commits on `codex/phase2-foundation`. It does not approve GDELT network collection, provider/API access, scorer selection, model downloads, research gates, real feature generation, training/backtesting, forward collection, or holdout access/evaluation.
+**Approval boundary:** Batch A authorizes synthetic-fixture implementation, corrective hardening, and local verification on `codex/phase2-foundation`. It does not approve real GDELT title-use rights, Batch B, GDELT network collection, provider/API access, scorer selection, model downloads, research gates, real feature generation, training/backtesting, forward collection, or holdout access/evaluation.
 
 ## Executive decision
 
@@ -22,7 +22,7 @@ This recommendation is deliberately title-only. It does not authorize fetching p
 | Decision item | Milestone 0 result |
 |---|---|
 | Exact verdict | `PROCEED_WITH_FORWARD_ONLY_COLLECTION` |
-| Engineering-specification approval | Approved for offline Milestones 1 and 2 only; all research and external-access approvals remain false |
+| Engineering-specification approval | Approved for offline Milestones 1 and 2 only; corrected implementations are pending independent review and all research/external-access approvals remain false |
 | Recommended provider | GDELT GSG, title-only, with KrypX receipt time and exact raw-byte hashes; human approval still required |
 | Historical feasibility | `REJECTED`: no retrospective news scoring/backtest for the Phase 1 period |
 | Main blocker to outcomes | A newly collected development corpus does not yet exist; scorer, gates, budget, and later holdout are unapproved |
@@ -182,6 +182,14 @@ For each **prospectively received** GSG gzip and each decompressed `from`/`to` e
 7. Otherwise, use that first observation's recorded `raw_published_at` as the new version's `first_seen_at`. Never use the GSG filename or `fromDate`/`toDate` for eligibility.
 8. Set `provider_first_seen_at` from `fromDate`/`toDate` for audit only, then derive `article_version_id` from article ID, content hash, language, and the KrypX `first_seen_at`.
 9. Exclude any record whose raw file/hash is missing, whose title is blank, or whose collector receipt/provenance cannot be reconciled. A later recurrence of identical bytes after an undocumented disappearance remains the same version because GSG supplies no revision epoch; report that ambiguity as a limitation.
+
+The corrected Batch A implementation adds these mandatory integrity rules:
+
+- A GSG record is never eligible from prospective receipt alone. Eligibility requires an immutable approval input bound to provider `gdelt_gsg`, scope `gdelt_gsg_english_btc_titles`, and the exact protocol-config SHA-256. No approval defaults to `license_restricted`. Batch A records no real-provider approval. Synthetic tests use an exact-raw-hash allowlist whose `synthetic_fixture_only` approval cannot authorize bytes labeled as a provider response and never grants network authority.
+- Normalizer state is exported as canonical RFC 8785 files plus a canonical state index. The index transitively hashes the article versions, observation links, exclusions/conflicts, permanent group anchors, approval, and protocol hash. The complete bundle is published atomically, manifest-last, and without replacement. Hydration constructs state only from single-read buffers verified against both the publication manifest and state index, then verifies every referenced raw object before accepting the state.
+- Each terminal batch is parsed and validated without mutating state. Repeats and candidate logical versions are resolved first. New logical articles are then sorted exactly by `(initial_first_seen_at, article_id)` before permanent causal group anchors are assigned. Raw snapshot order, JSONL line order, raw hash, and `from`/`to` endpoint order cannot select the anchor. The state changes only after the complete candidate state passes validation.
+- If multiple fingerprints for one `article_id` share one model-availability timestamp in the incoming batch, every involved observation receives primary exclusion `revision_time_unknown`, and no conflicting version is created. If a new observation conflicts with an already-published immutable state, normalization raises a project-specific integrity error, leaves that state unchanged, and publishes no replacement. This fail-closed generation must not be modeled.
+- Primary exclusions are selected from the frozen precedence table, not from validation call order. Multiple failures retain deterministic secondary diagnostics but exactly one stable primary reason.
 
 This mapping is forward-safe but may sacrifice recall. GSG is a similarity graph and may omit isolated stories; title changes may appear incompletely; deleted articles are not a documented feed. Those are coverage limitations, not reasons to backdate availability.
 
@@ -688,13 +696,17 @@ Batch A approval is deliberately narrower than research approval. The article/sc
 | Start future-holdout collection | Not authorized; requires approved frozen protocol/generation |
 | Claim or evaluate the future holdout | Separate explicit authorization required after readiness |
 
-### Authorized Batch A implementation
+### Batch A corrected implementation — pending independent review
 
 The user authorized the following offline work on 2026-08-14:
 
 > Implement and verify Phase 2 Milestone 1, then continue directly into Milestone 2's GDELT GSG adapter using synthetic and captured test fixtures only. Preserve Phase 1 semantics and remain completely offline. Commit the approved Milestone 0 specification and each accepted implementation milestone separately.
 
 Any real GSG retrieval or prospective pilot remains outside Batch A and requires separate Batch B network/storage authorization. Historical GSG samples remain ineligible and can never seed the forward corpus.
+
+The original Batch A commits remain intact. One later corrective commit hardens normalizer-state persistence/hydration, causal deduplication order, same-time conflict handling, provider-rights gating, exact-byte reads, and exclusion precedence. Milestones 1 and 2 are implementation- and verification-complete but are not finally accepted until independent review finishes.
+
+The exact next action is independent review of that corrective commit. This is not authorization for Batch B. Before any Batch B pilot, a later user instruction must separately approve the GDELT GSG English-BTC-title rights interpretation and provide explicit network endpoint, prospective start, request/interval, retry, byte, retained-storage, elapsed-time, and cost caps. Scoring, models, research gates, features, training, backtests, forward research collection, and holdout work remain separately unauthorized.
 
 ## Official source register
 

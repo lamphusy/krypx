@@ -24,11 +24,12 @@ import idna
 
 from crypto_ai.exceptions import (
     ArticleValidationError,
+    NormalizationIntegrityError,
     ProviderIngestionError,
     PublicationCollisionError,
     SentimentStorageError,
 )
-from crypto_ai.sentiment.canonical import canonical_sha256, canonicalize
+from crypto_ai.sentiment.canonical import canonical_sha256, canonicalize, sha256_bytes
 from crypto_ai.sentiment.contracts import (
     ArticleRecord,
     derive_article_id,
@@ -45,6 +46,7 @@ from crypto_ai.sentiment.storage import ContentAddressedStore
 PROVIDER_ID = "gdelt_gsg"
 PARSER_VERSION = "gdelt-gsg-jsonl-v1"
 NORMALIZER_VERSION = "gdelt-gsg-normalizer-v1"
+NORMALIZER_STATE_VERSION = "gdelt-gsg-normalizer-state-v1"
 URL_NORMALIZER_VERSION = "url-canonicalization-v1"
 TEXT_NORMALIZER_VERSION = "text-normalization-v1"
 LANGUAGE_MAP_VERSION = "language-map-v1"
@@ -54,6 +56,34 @@ MAX_PLAN_INTERVALS = 10_080
 MAX_COMPRESSED_BYTES = 64 * 1024 * 1024
 MAX_DECOMPRESSED_BYTES = 256 * 1024 * 1024
 MAX_JSON_LINES = 1_000_000
+RIGHTS_SCOPE = "gdelt_gsg_english_btc_titles"
+RIGHTS_APPROVAL_VERSION = "provider-rights-approval-v1"
+
+PRIMARY_EXCLUSION_PRECEDENCE = (
+    "hash_mismatch",
+    "malformed_record",
+    "invalid_timestamp",
+    "historical_backfill_without_availability",
+    "undocumented_first_seen_semantics",
+    "missing_first_seen",
+    "revision_time_unknown",
+    "missing_identity",
+    "invalid_url_or_identifier",
+    "missing_title_and_content",
+    "unsupported_language",
+    "asset_mismatch",
+    "license_restricted",
+    "provider_gap",
+    "duplicate_unresolved",
+)
+_EXCLUSION_RANK = {reason: index for index, reason in enumerate(PRIMARY_EXCLUSION_PRECEDENCE)}
+_STATE_DATA_FILES = (
+    "approval.json",
+    "articles.json",
+    "exclusions.json",
+    "groups.json",
+    "observation-links.json",
+)
 
 _CONTROL_PATTERN = re.compile(r"[\x00-\x1f\x7f]")
 _INVALID_PERCENT_PATTERN = re.compile(r"%(?![0-9A-Fa-f]{2})")
@@ -117,6 +147,93 @@ class RetryDecision:
 
 
 @dataclass(frozen=True, slots=True)
+class RightsApproval:
+    """Immutable provider/scope/config-specific rights input; never network authority."""
+
+    approval_id: str
+    approval_kind: str
+    approved: bool
+    provider: str
+    scope: str
+    protocol_config_sha256: str
+    authorized_fixture_sha256: tuple[str, ...]
+    network_access_authorized: bool
+    version: str = RIGHTS_APPROVAL_VERSION
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        approval_kind: str,
+        approved: bool,
+        provider: str,
+        scope: str,
+        protocol_config_sha256: str,
+        authorized_fixture_sha256: Iterable[str] = (),
+        network_access_authorized: bool = False,
+    ) -> RightsApproval:
+        fixture_hashes = tuple(sorted(set(authorized_fixture_sha256)))
+        payload = {
+            "approval_kind": approval_kind,
+            "approved": approved,
+            "authorized_fixture_sha256": list(fixture_hashes),
+            "network_access_authorized": network_access_authorized,
+            "protocol_config_sha256": protocol_config_sha256,
+            "provider": provider,
+            "scope": scope,
+            "version": RIGHTS_APPROVAL_VERSION,
+        }
+        return cls(
+            approval_id=canonical_sha256(payload),
+            approval_kind=approval_kind,
+            approved=approved,
+            provider=provider,
+            scope=scope,
+            protocol_config_sha256=protocol_config_sha256,
+            authorized_fixture_sha256=fixture_hashes,
+            network_access_authorized=network_access_authorized,
+        )
+
+    @classmethod
+    def synthetic_fixture_only(
+        cls, *, protocol_config_sha256: str, raw_snapshot_sha256: Iterable[str]
+    ) -> RightsApproval:
+        """Authorize only explicitly hashed synthetic fixtures, never provider responses."""
+        return cls.create(
+            approval_kind="synthetic_fixture_only",
+            approved=True,
+            provider=PROVIDER_ID,
+            scope=RIGHTS_SCOPE,
+            protocol_config_sha256=protocol_config_sha256,
+            authorized_fixture_sha256=raw_snapshot_sha256,
+            network_access_authorized=False,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        value = asdict(self)
+        value["authorized_fixture_sha256"] = list(self.authorized_fixture_sha256)
+        return value
+
+    def identity_payload(self) -> dict[str, Any]:
+        value = self.to_dict()
+        value.pop("approval_id")
+        return value
+
+    def is_structurally_valid(self) -> bool:
+        return (
+            self.version == RIGHTS_APPROVAL_VERSION
+            and _is_sha256(self.approval_id)
+            and _is_sha256(self.protocol_config_sha256)
+            and all(_is_sha256(item) for item in self.authorized_fixture_sha256)
+            and tuple(sorted(set(self.authorized_fixture_sha256))) == self.authorized_fixture_sha256
+            and self.approval_id == canonical_sha256(self.identity_payload())
+            and self.approval_kind in {"provider_rights", "synthetic_fixture_only"}
+            and isinstance(self.approved, bool)
+            and isinstance(self.network_access_authorized, bool)
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class RawSnapshotReceipt:
     """Immutable audit receipt for exact compressed bytes."""
 
@@ -128,6 +245,7 @@ class RawSnapshotReceipt:
     compressed_size_bytes: int
     source_locator: str
     collection_mode: str
+    input_class: str
     parser_version: str = PARSER_VERSION
 
     def to_dict(self) -> dict[str, Any]:
@@ -148,6 +266,7 @@ class GSGObservation:
     ingested_at: str
     raw_published_at: str
     collection_mode: str
+    input_class: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,6 +292,8 @@ class ObservationLink:
     provider_observation_id: str
     article_version_id: str
     reused_existing_version: bool
+    raw_snapshot_sha256: str
+    input_class: str
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -183,6 +304,8 @@ class ExcludedObservation:
     provider_observation_id: str
     reason: str
     diagnostic: str
+    raw_snapshot_sha256: str
+    input_class: str
 
     def to_dict(self) -> dict[str, str]:
         return asdict(self)
@@ -193,6 +316,8 @@ class NormalizationResult:
     articles: tuple[ArticleRecord, ...]
     observation_links: tuple[ObservationLink, ...]
     exclusions: tuple[ExcludedObservation, ...]
+    protocol_config_sha256: str
+    rights_approval_sha256: str
     semantic_sha256: str
 
     def to_dict(self, *, include_hash: bool = True) -> dict[str, Any]:
@@ -201,10 +326,40 @@ class NormalizationResult:
             "exclusions": [exclusion.to_dict() for exclusion in self.exclusions],
             "normalizer_version": NORMALIZER_VERSION,
             "observation_links": [link.to_dict() for link in self.observation_links],
+            "protocol_config_sha256": self.protocol_config_sha256,
+            "rights_approval_sha256": self.rights_approval_sha256,
         }
         if include_hash:
             value["semantic_sha256"] = self.semantic_sha256
         return value
+
+
+@dataclass(frozen=True, slots=True)
+class GroupAnchor:
+    duplicate_group_id: str
+    anchor_article_id: str
+    initial_first_seen_at: str
+    dedup_fingerprint: str
+    canonical_url: str
+    source: str
+
+    def to_dict(self) -> dict[str, str]:
+        return asdict(self)
+
+
+@dataclass(frozen=True, slots=True)
+class _CandidateVersion:
+    observation: GSGObservation
+    article_id: str
+    version_fingerprint: str
+    canonical_url: str
+    source: str
+    title: str
+    language: str
+    provider_first_seen_at: str | None
+    first_seen_at: str
+    content_hash: str
+    failures: tuple[tuple[str, str], ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -320,6 +475,7 @@ class GSGAdapter:
         ingested_at: str,
         source_locator: str,
         collection_mode: str,
+        input_class: str = "provider_response",
     ) -> SnapshotResult:
         """Snapshot exact bytes, preserve the first receipt, and parse deterministically."""
         if not isinstance(raw_response_bytes, bytes):
@@ -332,12 +488,17 @@ class GSGAdapter:
             raise ProviderIngestionError(
                 "collection_mode must be prospective or historical_backfill"
             )
+        if input_class not in {"provider_response", "synthetic_fixture"}:
+            raise ProviderIngestionError(
+                "input_class must be provider_response or synthetic_fixture"
+            )
 
         digest = self.store.put_bytes(raw_response_bytes)
         snapshot_id = canonical_sha256(
             {
                 "collection_mode": collection_mode,
                 "filename_timestamp": format_utc_timestamp(filename_time),
+                "input_class": input_class,
                 "raw_snapshot_sha256": digest,
                 "version": "gdelt-gsg-snapshot-v1",
             }
@@ -360,6 +521,7 @@ class GSGAdapter:
                 compressed_size_bytes=len(raw_response_bytes),
                 source_locator=redact_url(source_locator),
                 collection_mode=collection_mode,
+                input_class=input_class,
             )
             try:
                 self.store.publish_bundle(
@@ -384,6 +546,7 @@ class GSGAdapter:
             receipt.raw_snapshot_sha256 != digest
             or receipt.filename_timestamp != format_utc_timestamp(filename_time)
             or receipt.collection_mode != collection_mode
+            or receipt.input_class != input_class
         ):
             raise ProviderIngestionError("snapshot receipt identity collision")
         return self._parse_snapshot(receipt, raw_response_bytes)
@@ -393,8 +556,10 @@ class GSGAdapter:
         if not publication.exists():
             return None
         try:
-            self.store.verify_publication(publication_id)
-            raw = (publication / "receipt.json").read_bytes()
+            verified = self.store.read_publication(publication_id)
+            if set(verified.files) != {"receipt.json"}:
+                raise ProviderIngestionError("snapshot publication has unexpected files")
+            raw = verified.files["receipt.json"]
             payload = json.loads(raw.decode("utf-8"), parse_constant=_reject_json_constant)
             if not isinstance(payload, dict) or canonicalize(payload) != raw:
                 raise ProviderIngestionError("stored snapshot receipt is not canonical")
@@ -453,14 +618,31 @@ class GSGAdapter:
 
 
 class GSGNormalizer:
-    """Deterministic version, revision, observation-link, and exact-dedup state."""
+    """Transactional causal normalizer with immutable export and verified hydration."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        protocol_config_sha256: str,
+        rights_approval: RightsApproval | None = None,
+    ) -> None:
+        if not _is_sha256(protocol_config_sha256):
+            raise ProviderIngestionError("protocol_config_sha256 must be lowercase SHA-256")
+        if rights_approval is not None and not isinstance(rights_approval, RightsApproval):
+            raise ProviderIngestionError("rights_approval must be an immutable RightsApproval")
+        self.protocol_config_sha256 = protocol_config_sha256
+        self.rights_approval = rights_approval
         self._versions_by_fingerprint: dict[tuple[str, str], ArticleRecord] = {}
         self._versions_by_id: dict[str, ArticleRecord] = {}
         self._links: dict[str, ObservationLink] = {}
+        self._exclusions: dict[str, ExcludedObservation] = {}
+        self._groups_by_id: dict[str, GroupAnchor] = {}
         self._article_groups: dict[str, str] = {}
-        self._dedup_anchors: dict[str, list[tuple[datetime, str, str, str]]] = {}
+
+    @property
+    def rights_approval_sha256(self) -> str:
+        payload = self.rights_approval.to_dict() if self.rights_approval is not None else None
+        return canonical_sha256(payload)
 
     def normalize(
         self,
@@ -469,7 +651,7 @@ class GSGNormalizer:
         retrieval_plan: RetrievalPlan,
         terminal_as_of: str,
     ) -> NormalizationResult:
-        """Normalize only after every planned interval is terminally complete or a gap."""
+        """Validate a whole terminal batch, then commit one order-independent state change."""
         materialized_snapshots = tuple(snapshots)
         coverage = build_coverage_report(
             retrieval_plan, materialized_snapshots, as_of=terminal_as_of
@@ -478,41 +660,672 @@ class GSGNormalizer:
             raise ProviderIngestionError(
                 "normalization watermark is not terminal; planned intervals remain pending"
             )
-        observations = [
-            observation
-            for snapshot in materialized_snapshots
-            if snapshot.state == "complete"
-            for observation in snapshot.observations
-        ]
-        observations.sort(key=_observation_sort_key)
+        observations = sorted(
+            (
+                observation
+                for snapshot in materialized_snapshots
+                if snapshot.state == "complete"
+                for observation in snapshot.observations
+            ),
+            key=lambda item: item.provider_observation_id,
+        )
+
+        next_versions = dict(self._versions_by_id)
+        next_fingerprints = dict(self._versions_by_fingerprint)
+        next_links = dict(self._links)
+        next_exclusions = dict(self._exclusions)
+        next_groups = dict(self._groups_by_id)
+        next_article_groups = dict(self._article_groups)
+        batch_links: dict[str, ObservationLink] = {}
+        batch_exclusions: dict[str, ExcludedObservation] = {}
         touched_versions: dict[str, ArticleRecord] = {}
-        links: dict[str, ObservationLink] = {}
-        exclusions: dict[str, ExcludedObservation] = {}
+        candidates: list[_CandidateVersion] = []
+
         for observation in observations:
-            existing_link = self._links.get(observation.provider_observation_id)
+            observation_id = observation.provider_observation_id
+            existing_link = self._links.get(observation_id)
             if existing_link is not None:
-                links[existing_link.provider_observation_id] = existing_link
+                if (
+                    existing_link.raw_snapshot_sha256 != observation.raw_snapshot_sha256
+                    or existing_link.input_class != observation.input_class
+                ):
+                    raise NormalizationIntegrityError(
+                        "repeated observation identity has conflicting provenance class"
+                    )
+                batch_links[observation_id] = existing_link
                 touched_versions[existing_link.article_version_id] = self._versions_by_id[
                     existing_link.article_version_id
                 ]
                 continue
-            try:
-                normalized = self._normalize_observation(observation)
-            except _ObservationExcluded as exc:
-                exclusions[observation.provider_observation_id] = ExcludedObservation(
-                    observation.provider_observation_id, exc.reason, exc.diagnostic
-                )
+            existing_exclusion = self._exclusions.get(observation_id)
+            if existing_exclusion is not None:
+                if (
+                    existing_exclusion.raw_snapshot_sha256 != observation.raw_snapshot_sha256
+                    or existing_exclusion.input_class != observation.input_class
+                ):
+                    raise NormalizationIntegrityError(
+                        "excluded observation identity has conflicting provenance class"
+                    )
+                batch_exclusions[observation_id] = existing_exclusion
                 continue
-            record, reused = normalized
-            link = ObservationLink(
-                provider_observation_id=observation.provider_observation_id,
-                article_version_id=record.article_version_id,
-                reused_existing_version=reused,
-            )
-            self._links[link.provider_observation_id] = link
-            links[link.provider_observation_id] = link
-            touched_versions[record.article_version_id] = record
+            try:
+                candidates.append(self._materialize_candidate(observation))
+            except _ObservationExcluded as exc:
+                exclusion = ExcludedObservation(
+                    observation_id,
+                    exc.reason,
+                    exc.diagnostic,
+                    observation.raw_snapshot_sha256,
+                    observation.input_class,
+                )
+                batch_exclusions[observation_id] = exclusion
+                next_exclusions[observation_id] = exclusion
 
+        existing_by_article_time: dict[tuple[str, str], set[str]] = {}
+        for (article_id, fingerprint), record in self._versions_by_fingerprint.items():
+            if record.first_seen_at is None:  # pragma: no cover - validated articles
+                raise NormalizationIntegrityError("stored article is missing first_seen_at")
+            existing_by_article_time.setdefault((article_id, record.first_seen_at), set()).add(
+                fingerprint
+            )
+        for candidate in candidates:
+            existing_fingerprints = existing_by_article_time.get(
+                (candidate.article_id, candidate.first_seen_at), set()
+            )
+            if existing_fingerprints and candidate.version_fingerprint not in existing_fingerprints:
+                raise NormalizationIntegrityError(
+                    "same-time revision conflicts with immutable prior state; no state was changed"
+                )
+
+        incoming_by_article_time: dict[tuple[str, str], list[_CandidateVersion]] = {}
+        for candidate in candidates:
+            incoming_by_article_time.setdefault(
+                (candidate.article_id, candidate.first_seen_at), []
+            ).append(candidate)
+        conflicted_observations: set[str] = set()
+        for same_time_candidates in incoming_by_article_time.values():
+            fingerprints = {item.version_fingerprint for item in same_time_candidates}
+            if len(fingerprints) <= 1:
+                continue
+            for candidate in same_time_candidates:
+                observation_id = candidate.observation.provider_observation_id
+                conflicted_observations.add(observation_id)
+                reason, diagnostic = _primary_exclusion(
+                    (
+                        *candidate.failures,
+                        (
+                            "revision_time_unknown",
+                            "all same-time conflicting fingerprints are excluded "
+                            "before state mutation",
+                        ),
+                    )
+                )
+                exclusion = ExcludedObservation(
+                    observation_id,
+                    reason,
+                    diagnostic,
+                    candidate.observation.raw_snapshot_sha256,
+                    candidate.observation.input_class,
+                )
+                batch_exclusions[observation_id] = exclusion
+                next_exclusions[observation_id] = exclusion
+        candidates = [
+            candidate
+            for candidate in candidates
+            if candidate.observation.provider_observation_id not in conflicted_observations
+        ]
+        eligible_candidates: list[_CandidateVersion] = []
+        for candidate in candidates:
+            if candidate.failures:
+                reason, diagnostic = _primary_exclusion(candidate.failures)
+                observation_id = candidate.observation.provider_observation_id
+                exclusion = ExcludedObservation(
+                    observation_id,
+                    reason,
+                    diagnostic,
+                    candidate.observation.raw_snapshot_sha256,
+                    candidate.observation.input_class,
+                )
+                batch_exclusions[observation_id] = exclusion
+                next_exclusions[observation_id] = exclusion
+            else:
+                eligible_candidates.append(candidate)
+        candidates = eligible_candidates
+
+        candidates_by_version: dict[tuple[str, str], list[_CandidateVersion]] = {}
+        for candidate in candidates:
+            candidates_by_version.setdefault(
+                (candidate.article_id, candidate.version_fingerprint), []
+            ).append(candidate)
+
+        new_version_candidates: dict[tuple[str, str], list[_CandidateVersion]] = {}
+        for key, version_candidates in candidates_by_version.items():
+            version_candidates.sort(
+                key=lambda item: (
+                    item.first_seen_at,
+                    item.article_id,
+                    item.observation.provider_observation_id,
+                )
+            )
+            existing = self._versions_by_fingerprint.get(key)
+            if existing is not None:
+                if existing.first_seen_at is None:  # pragma: no cover - validated articles
+                    raise NormalizationIntegrityError("stored article is missing first_seen_at")
+                if version_candidates[0].first_seen_at < existing.first_seen_at:
+                    raise NormalizationIntegrityError(
+                        "an earlier repeat would change immutable first_seen_at; batch rejected"
+                    )
+                for candidate in version_candidates:
+                    link = ObservationLink(
+                        candidate.observation.provider_observation_id,
+                        existing.article_version_id,
+                        True,
+                        candidate.observation.raw_snapshot_sha256,
+                        candidate.observation.input_class,
+                    )
+                    batch_links[link.provider_observation_id] = link
+                    next_links[link.provider_observation_id] = link
+                touched_versions[existing.article_version_id] = existing
+            else:
+                new_version_candidates[key] = version_candidates
+
+        new_article_initial: dict[str, _CandidateVersion] = {}
+        for version_candidates in new_version_candidates.values():
+            candidate = version_candidates[0]
+            if candidate.article_id in next_article_groups:
+                continue
+            prior = new_article_initial.get(candidate.article_id)
+            if prior is None or (
+                candidate.first_seen_at,
+                candidate.article_id,
+                candidate.version_fingerprint,
+            ) < (prior.first_seen_at, prior.article_id, prior.version_fingerprint):
+                new_article_initial[candidate.article_id] = candidate
+
+        for candidate in sorted(
+            new_article_initial.values(), key=lambda item: (item.first_seen_at, item.article_id)
+        ):
+            group_id = self._causal_group_for_candidate(candidate, next_groups)
+            if group_id is None:
+                group_id = derive_duplicate_group_id(candidate.article_id)
+                next_groups[group_id] = GroupAnchor(
+                    duplicate_group_id=group_id,
+                    anchor_article_id=candidate.article_id,
+                    initial_first_seen_at=candidate.first_seen_at,
+                    dedup_fingerprint=_dedup_fingerprint(candidate.title, candidate.language),
+                    canonical_url=candidate.canonical_url,
+                    source=candidate.source,
+                )
+            next_article_groups[candidate.article_id] = group_id
+
+        for key, version_candidates in sorted(
+            new_version_candidates.items(),
+            key=lambda item: (
+                item[1][0].first_seen_at,
+                item[1][0].article_id,
+                item[0][1],
+            ),
+        ):
+            representative = version_candidates[0]
+            group_id = next_article_groups.get(representative.article_id)
+            if group_id is None:
+                raise NormalizationIntegrityError("new logical article has no causal group")
+            record = self._article_from_candidate(representative, group_id)
+            next_versions[record.article_version_id] = record
+            next_fingerprints[key] = record
+            touched_versions[record.article_version_id] = record
+            representative_id = representative.observation.provider_observation_id
+            for candidate in version_candidates:
+                link = ObservationLink(
+                    provider_observation_id=candidate.observation.provider_observation_id,
+                    article_version_id=record.article_version_id,
+                    reused_existing_version=(
+                        candidate.observation.provider_observation_id != representative_id
+                    ),
+                    raw_snapshot_sha256=candidate.observation.raw_snapshot_sha256,
+                    input_class=candidate.observation.input_class,
+                )
+                batch_links[link.provider_observation_id] = link
+                next_links[link.provider_observation_id] = link
+
+        self._validate_state_components(
+            next_versions,
+            next_fingerprints,
+            next_links,
+            next_exclusions,
+            next_groups,
+            next_article_groups,
+        )
+        self._validate_rights_bound_state(next_versions, next_links)
+        self._versions_by_id = next_versions
+        self._versions_by_fingerprint = next_fingerprints
+        self._links = next_links
+        self._exclusions = next_exclusions
+        self._groups_by_id = next_groups
+        self._article_groups = next_article_groups
+        return self._result(touched_versions, batch_links, batch_exclusions)
+
+    def export_state_files(self) -> dict[str, bytes]:
+        """Return the complete deterministic state as canonical, transitively hashed files."""
+        if self.rights_approval is not None and not self.rights_approval.is_structurally_valid():
+            raise NormalizationIntegrityError("cannot persist a structurally invalid approval")
+        self._validate_state_components(
+            self._versions_by_id,
+            self._versions_by_fingerprint,
+            self._links,
+            self._exclusions,
+            self._groups_by_id,
+            self._article_groups,
+        )
+        self._validate_rights_bound_state(self._versions_by_id, self._links)
+        data_files = {
+            "approval.json": canonicalize(
+                self.rights_approval.to_dict() if self.rights_approval is not None else None
+            ),
+            "articles.json": canonicalize(
+                [
+                    item.to_dict()
+                    for item in sorted(
+                        self._versions_by_id.values(),
+                        key=lambda value: value.article_version_id,
+                    )
+                ]
+            ),
+            "exclusions.json": canonicalize(
+                [
+                    item.to_dict()
+                    for item in sorted(
+                        self._exclusions.values(),
+                        key=lambda value: value.provider_observation_id,
+                    )
+                ]
+            ),
+            "groups.json": canonicalize(
+                [
+                    item.to_dict()
+                    for item in sorted(
+                        self._groups_by_id.values(),
+                        key=lambda value: value.duplicate_group_id,
+                    )
+                ]
+            ),
+            "observation-links.json": canonicalize(
+                [
+                    item.to_dict()
+                    for item in sorted(
+                        self._links.values(),
+                        key=lambda value: value.provider_observation_id,
+                    )
+                ]
+            ),
+        }
+        descriptors = {
+            name: {"sha256": sha256_bytes(data), "size_bytes": len(data)}
+            for name, data in sorted(data_files.items())
+        }
+        state_identity = {
+            "files": descriptors,
+            "normalizer_version": NORMALIZER_VERSION,
+            "protocol_config_sha256": self.protocol_config_sha256,
+            "provider": PROVIDER_ID,
+            "rights_approval_sha256": self.rights_approval_sha256,
+            "schema_version": NORMALIZER_STATE_VERSION,
+        }
+        state_index = {**state_identity, "state_sha256": canonical_sha256(state_identity)}
+        return {**data_files, "state.json": canonicalize(state_index)}
+
+    def publish_state(self, store: ContentAddressedStore, state_name: str) -> Path:
+        """Publish one complete immutable state; collisions are never overwritten."""
+        files = self.export_state_files()
+        state_index = _parse_canonical_json_buffer(files["state.json"], "state index")
+        if not isinstance(state_index, dict):  # pragma: no cover - constructed above
+            raise NormalizationIntegrityError("state index must be an object")
+        return store.publish_bundle(
+            f"gsg-normalizer-state-{state_name}",
+            files,
+            metadata={
+                "protocol_config_sha256": self.protocol_config_sha256,
+                "provider": PROVIDER_ID,
+                "rights_approval_sha256": self.rights_approval_sha256,
+                "state_sha256": state_index["state_sha256"],
+            },
+        )
+
+    @classmethod
+    def hydrate(cls, store: ContentAddressedStore, publication_id: str) -> GSGNormalizer:
+        """Construct state only from one-read buffers verified by the publication manifest."""
+        try:
+            verified = store.read_publication(publication_id)
+        except SentimentStorageError as exc:
+            raise NormalizationIntegrityError(
+                f"normalizer state publication failed verification: {publication_id}"
+            ) from exc
+        expected_files = set(_STATE_DATA_FILES) | {"state.json"}
+        if set(verified.files) != expected_files:
+            raise NormalizationIntegrityError("normalizer state file inventory is incomplete")
+        state_index = _parse_canonical_json_buffer(verified.files["state.json"], "state index")
+        if not isinstance(state_index, dict):
+            raise NormalizationIntegrityError("state index must be an object")
+        required_index_fields = {
+            "files",
+            "normalizer_version",
+            "protocol_config_sha256",
+            "provider",
+            "rights_approval_sha256",
+            "schema_version",
+            "state_sha256",
+        }
+        if set(state_index) != required_index_fields:
+            raise NormalizationIntegrityError("state index fields do not match the contract")
+        state_identity = dict(state_index)
+        state_sha256 = state_identity.pop("state_sha256")
+        if state_sha256 != canonical_sha256(state_identity):
+            raise NormalizationIntegrityError("normalizer state identity hash mismatch")
+        if (
+            state_index["schema_version"] != NORMALIZER_STATE_VERSION
+            or state_index["normalizer_version"] != NORMALIZER_VERSION
+            or state_index["provider"] != PROVIDER_ID
+        ):
+            raise NormalizationIntegrityError("normalizer state version or provider mismatch")
+        descriptors = state_index["files"]
+        if not isinstance(descriptors, dict) or set(descriptors) != set(_STATE_DATA_FILES):
+            raise NormalizationIntegrityError("state referenced-file inventory is invalid")
+        for name in _STATE_DATA_FILES:
+            descriptor = descriptors.get(name)
+            data = verified.files[name]
+            if (
+                not isinstance(descriptor, dict)
+                or set(descriptor) != {"sha256", "size_bytes"}
+                or descriptor["sha256"] != sha256_bytes(data)
+                or descriptor["size_bytes"] != len(data)
+            ):
+                raise NormalizationIntegrityError(f"state transitive hash mismatch: {name}")
+
+        approval_payload = _parse_canonical_json_buffer(
+            verified.files["approval.json"], "rights approval"
+        )
+        approval = _rights_approval_from_payload(approval_payload)
+        protocol_hash = state_index["protocol_config_sha256"]
+        normalizer = cls(
+            protocol_config_sha256=protocol_hash,
+            rights_approval=approval,
+        )
+        if normalizer.rights_approval_sha256 != state_index["rights_approval_sha256"]:
+            raise NormalizationIntegrityError("state rights-approval hash mismatch")
+
+        articles_payload = _require_json_array(verified.files["articles.json"], "state articles")
+        exclusions_payload = _require_json_array(
+            verified.files["exclusions.json"], "state exclusions"
+        )
+        groups_payload = _require_json_array(verified.files["groups.json"], "state groups")
+        links_payload = _require_json_array(
+            verified.files["observation-links.json"], "state observation links"
+        )
+        try:
+            articles = [validate_article_record(item) for item in articles_payload]
+            exclusions = [
+                _dataclass_from_exact_mapping(ExcludedObservation, item, "state exclusion")
+                for item in exclusions_payload
+            ]
+            groups = [
+                _dataclass_from_exact_mapping(GroupAnchor, item, "state group")
+                for item in groups_payload
+            ]
+            links = [
+                _dataclass_from_exact_mapping(ObservationLink, item, "state observation link")
+                for item in links_payload
+            ]
+        except (ArticleValidationError, TypeError, ValueError) as exc:
+            raise NormalizationIntegrityError("normalizer state payload validation failed") from exc
+
+        for article in articles:
+            normalizer._versions_by_id[article.article_version_id] = article
+            fingerprint = _fingerprint_for_article(article)
+            normalizer._versions_by_fingerprint[(article.article_id, fingerprint)] = article
+            if article.duplicate_group_id is None:  # pragma: no cover - eligible contract
+                raise NormalizationIntegrityError("persisted article has no duplicate group")
+            prior_group = normalizer._article_groups.setdefault(
+                article.article_id, article.duplicate_group_id
+            )
+            if prior_group != article.duplicate_group_id:
+                raise NormalizationIntegrityError("one article belongs to conflicting groups")
+        normalizer._links = _unique_by_field(
+            links, "provider_observation_id", "state observation link"
+        )
+        normalizer._exclusions = _unique_by_field(
+            exclusions, "provider_observation_id", "state exclusion"
+        )
+        normalizer._groups_by_id = _unique_by_field(groups, "duplicate_group_id", "state group")
+
+        referenced_raw_hashes = {article.raw_snapshot_sha256 for article in articles}
+        for observation_id in set(normalizer._links) | set(normalizer._exclusions):
+            referenced_raw_hashes.add(_raw_hash_from_observation_id(observation_id))
+        for digest in sorted(referenced_raw_hashes):
+            try:
+                store.get_bytes(digest)
+            except SentimentStorageError as exc:
+                raise NormalizationIntegrityError(
+                    f"state transitive raw object failed verification: {digest}"
+                ) from exc
+
+        normalizer._validate_state_components(
+            normalizer._versions_by_id,
+            normalizer._versions_by_fingerprint,
+            normalizer._links,
+            normalizer._exclusions,
+            normalizer._groups_by_id,
+            normalizer._article_groups,
+        )
+        normalizer._validate_rights_bound_state(normalizer._versions_by_id, normalizer._links)
+        if normalizer.export_state_files() != verified.files:
+            raise NormalizationIntegrityError(
+                "hydrated state does not reproduce the exact canonical state files"
+            )
+        return normalizer
+
+    def _materialize_candidate(self, observation: GSGObservation) -> _CandidateVersion:
+        failures: list[tuple[str, str]] = []
+        if observation.collection_mode == "historical_backfill":
+            failures.append(
+                (
+                    "historical_backfill_without_availability",
+                    "historical GSG observations are audit-only",
+                )
+            )
+        try:
+            first_seen = format_utc_timestamp(
+                _parse_required_timestamp(observation.raw_published_at, "raw_published_at")
+            )
+            ingested = _parse_required_timestamp(observation.ingested_at, "ingested_at")
+            if _parse_required_timestamp(first_seen, "first_seen_at") < ingested:
+                raise ValueError("first_seen_at precedes ingested_at")
+        except (ProviderIngestionError, ValueError) as exc:
+            failures.append(("invalid_timestamp", str(exc)))
+            first_seen = observation.raw_published_at
+
+        canonical_url: str | None = None
+        if not isinstance(observation.raw_url, str) or not observation.raw_url.strip():
+            failures.append(("invalid_url_or_identifier", "endpoint URL is missing"))
+        else:
+            try:
+                canonical_url = canonicalize_url(observation.raw_url)
+            except _ObservationExcluded as exc:
+                failures.append((exc.reason, exc.diagnostic))
+
+        title: str | None = None
+        if not isinstance(observation.raw_title, str):
+            failures.append(("missing_title_and_content", "endpoint title is missing"))
+        else:
+            title = normalize_title(observation.raw_title)
+            if not title:
+                failures.append(("missing_title_and_content", "normalized title is blank"))
+
+        language: str | None = None
+        if not isinstance(observation.raw_language, str):
+            failures.append(("unsupported_language", "endpoint language is missing"))
+        else:
+            try:
+                language = normalize_gsg_language(observation.raw_language)
+            except _ObservationExcluded as exc:
+                failures.append((exc.reason, exc.diagnostic))
+
+        provider_first_seen_at: str | None = None
+        try:
+            provider_first_seen_at = normalize_provider_timestamp(
+                observation.raw_provider_first_seen_at
+            )
+        except _ObservationExcluded as exc:
+            failures.append((exc.reason, exc.diagnostic))
+
+        if title is not None and title and not selects_direct_btc(title):
+            failures.append(("asset_mismatch", "title does not match direct BTC selector"))
+        if not self._rights_apply(observation):
+            failures.append(
+                (
+                    "license_restricted",
+                    "no valid provider/scope/config-specific rights approval applies",
+                )
+            )
+        blocking_reasons = {
+            "hash_mismatch",
+            "malformed_record",
+            "invalid_timestamp",
+            "missing_first_seen",
+            "missing_identity",
+            "invalid_url_or_identifier",
+            "missing_title_and_content",
+            "unsupported_language",
+        }
+        if any(reason in blocking_reasons for reason, _ in failures):
+            reason, diagnostic = _primary_exclusion(failures)
+            raise _ObservationExcluded(reason, diagnostic)
+        if canonical_url is None or title is None or language is None:
+            raise _ObservationExcluded("malformed_record", "validated candidate is incomplete")
+        source = urlsplit(canonical_url).hostname
+        if source is None:
+            raise _ObservationExcluded("invalid_url_or_identifier", "canonical URL has no host")
+        try:
+            article_id = derive_article_id(PROVIDER_ID, None, canonical_url)
+            content_hash = derive_content_hash(
+                asset="BTC", content=None, language=language, source=source, title=title
+            )
+            fingerprint = derive_version_fingerprint(
+                article_id=article_id,
+                content_hash=content_hash,
+                content=None,
+                language=language,
+                provider=PROVIDER_ID,
+                source=source,
+                title=title,
+            )
+        except (ArticleValidationError, TypeError, ValueError) as exc:
+            raise _ObservationExcluded("missing_identity", str(exc)) from exc
+        return _CandidateVersion(
+            observation=observation,
+            article_id=article_id,
+            version_fingerprint=fingerprint,
+            canonical_url=canonical_url,
+            source=source,
+            title=title,
+            language=language,
+            provider_first_seen_at=provider_first_seen_at,
+            first_seen_at=first_seen,
+            content_hash=content_hash,
+            failures=tuple(failures),
+        )
+
+    def _rights_apply(self, observation: GSGObservation) -> bool:
+        approval = self.rights_approval
+        if approval is None or not approval.is_structurally_valid():
+            return False
+        if (
+            not approval.approved
+            or approval.network_access_authorized
+            or approval.provider != PROVIDER_ID
+            or approval.scope != RIGHTS_SCOPE
+            or approval.protocol_config_sha256 != self.protocol_config_sha256
+        ):
+            return False
+        if approval.approval_kind == "synthetic_fixture_only":
+            return (
+                observation.input_class == "synthetic_fixture"
+                and observation.raw_snapshot_sha256 in approval.authorized_fixture_sha256
+            )
+        if approval.approval_kind == "provider_rights":
+            return (
+                observation.input_class == "provider_response"
+                and not approval.authorized_fixture_sha256
+            )
+        return False
+
+    @staticmethod
+    def _causal_group_for_candidate(
+        candidate: _CandidateVersion, groups: Mapping[str, GroupAnchor]
+    ) -> str | None:
+        first_seen = _parse_required_timestamp(candidate.first_seen_at, "initial_first_seen_at")
+        fingerprint = _dedup_fingerprint(candidate.title, candidate.language)
+        matches: list[GroupAnchor] = []
+        for group in groups.values():
+            if group.dedup_fingerprint != fingerprint:
+                continue
+            anchor_time = _parse_required_timestamp(
+                group.initial_first_seen_at, "group.initial_first_seen_at"
+            )
+            if not timedelta(0) <= first_seen - anchor_time <= timedelta(hours=72):
+                continue
+            if candidate.canonical_url != group.canonical_url or candidate.source != group.source:
+                matches.append(group)
+        if not matches:
+            return None
+        return min(
+            matches,
+            key=lambda item: (item.initial_first_seen_at, item.anchor_article_id),
+        ).duplicate_group_id
+
+    @staticmethod
+    def _article_from_candidate(
+        candidate: _CandidateVersion, duplicate_group_id: str
+    ) -> ArticleRecord:
+        version_id = derive_article_version_id(
+            article_id=candidate.article_id,
+            first_seen_at=candidate.first_seen_at,
+            language=candidate.language,
+            content_hash=candidate.content_hash,
+        )
+        value = {
+            "article_id": candidate.article_id,
+            "article_version_id": version_id,
+            "provider": PROVIDER_ID,
+            "provider_article_id": None,
+            "provider_observation_id": candidate.observation.provider_observation_id,
+            "source": candidate.source,
+            "canonical_url": candidate.canonical_url,
+            "title": candidate.title,
+            "content": None,
+            "language": candidate.language,
+            "published_at": None,
+            "provider_first_seen_at": candidate.provider_first_seen_at,
+            "first_seen_at": candidate.first_seen_at,
+            "ingested_at": candidate.observation.ingested_at,
+            "provider_updated_at": None,
+            "asset": "BTC",
+            "content_hash": candidate.content_hash,
+            "raw_snapshot_sha256": candidate.observation.raw_snapshot_sha256,
+            "point_in_time_eligible": True,
+            "exclusion_reason": None,
+            "duplicate_group_id": duplicate_group_id,
+        }
+        try:
+            return validate_article_record(value)
+        except ArticleValidationError as exc:
+            raise NormalizationIntegrityError("candidate failed final article validation") from exc
+
+    def _result(
+        self,
+        touched_versions: Mapping[str, ArticleRecord],
+        links: Mapping[str, ObservationLink],
+        exclusions: Mapping[str, ExcludedObservation],
+    ) -> NormalizationResult:
         articles_tuple = tuple(
             sorted(
                 touched_versions.values(),
@@ -532,154 +1345,142 @@ class GSGNormalizer:
             "exclusions": [exclusion.to_dict() for exclusion in exclusions_tuple],
             "normalizer_version": NORMALIZER_VERSION,
             "observation_links": [link.to_dict() for link in links_tuple],
+            "protocol_config_sha256": self.protocol_config_sha256,
+            "rights_approval_sha256": self.rights_approval_sha256,
         }
         return NormalizationResult(
             articles=articles_tuple,
             observation_links=links_tuple,
             exclusions=exclusions_tuple,
+            protocol_config_sha256=self.protocol_config_sha256,
+            rights_approval_sha256=self.rights_approval_sha256,
             semantic_sha256=canonical_sha256(hash_payload),
         )
 
-    def _normalize_observation(self, observation: GSGObservation) -> tuple[ArticleRecord, bool]:
-        if observation.collection_mode == "historical_backfill":
-            raise _ObservationExcluded(
-                "historical_backfill_without_availability",
-                "historical GSG observations are audit-only and never model eligible",
+    @staticmethod
+    def _validate_state_components(
+        versions: Mapping[str, ArticleRecord],
+        fingerprints: Mapping[tuple[str, str], ArticleRecord],
+        links: Mapping[str, ObservationLink],
+        exclusions: Mapping[str, ExcludedObservation],
+        groups: Mapping[str, GroupAnchor],
+        article_groups: Mapping[str, str],
+    ) -> None:
+        if set(links) & set(exclusions):
+            raise NormalizationIntegrityError("an observation is both linked and excluded")
+        if len(versions) != len(fingerprints):
+            raise NormalizationIntegrityError("version and fingerprint indexes disagree")
+        article_times: dict[tuple[str, str], set[str]] = {}
+        initial_records: dict[str, ArticleRecord] = {}
+        for version_id, article in versions.items():
+            if version_id != article.article_version_id:
+                raise NormalizationIntegrityError("version index key mismatch")
+            fingerprint = _fingerprint_for_article(article)
+            if fingerprints.get((article.article_id, fingerprint)) != article:
+                raise NormalizationIntegrityError("fingerprint index mismatch")
+            if article.first_seen_at is None or article.duplicate_group_id is None:
+                raise NormalizationIntegrityError("eligible state article is incomplete")
+            article_times.setdefault((article.article_id, article.first_seen_at), set()).add(
+                fingerprint
             )
-        if not isinstance(observation.raw_url, str) or not observation.raw_url.strip():
-            raise _ObservationExcluded("invalid_url_or_identifier", "endpoint URL is missing")
-        if not isinstance(observation.raw_title, str):
-            raise _ObservationExcluded("missing_title_and_content", "endpoint title is missing")
-        if not isinstance(observation.raw_language, str):
-            raise _ObservationExcluded("unsupported_language", "endpoint language is missing")
-        try:
-            canonical_url = canonicalize_url(observation.raw_url)
-            title = normalize_title(observation.raw_title)
-            language = normalize_gsg_language(observation.raw_language)
-            provider_first_seen_at = normalize_provider_timestamp(
-                observation.raw_provider_first_seen_at
-            )
-        except _ObservationExcluded:
-            raise
-        except (TypeError, ValueError, UnicodeError, idna.IDNAError) as exc:
-            raise _ObservationExcluded("malformed_record", _safe_error_code(exc)) from exc
-        if not title:
-            raise _ObservationExcluded("missing_title_and_content", "normalized title is blank")
-        if not selects_direct_btc(title):
-            raise _ObservationExcluded("asset_mismatch", "title does not match direct BTC selector")
-        source = urlsplit(canonical_url).hostname
-        if source is None:
-            raise _ObservationExcluded("invalid_url_or_identifier", "canonical URL has no host")
-        article_id = derive_article_id(PROVIDER_ID, None, canonical_url)
-        content_hash = derive_content_hash(
-            asset="BTC", content=None, language=language, source=source, title=title
-        )
-        fingerprint = derive_version_fingerprint(
-            article_id=article_id,
-            content_hash=content_hash,
-            content=None,
-            language=language,
-            provider=PROVIDER_ID,
-            source=source,
-            title=title,
-        )
-        key = (article_id, fingerprint)
-        existing = self._versions_by_fingerprint.get(key)
-        if existing is not None:
-            return existing, True
+            prior = initial_records.get(article.article_id)
+            if prior is None or (article.first_seen_at, article.article_version_id) < (
+                prior.first_seen_at or "",
+                prior.article_version_id,
+            ):
+                initial_records[article.article_id] = article
+            if article_groups.get(article.article_id) != article.duplicate_group_id:
+                raise NormalizationIntegrityError("article-to-group index mismatch")
+        if any(len(items) > 1 for items in article_times.values()):
+            raise NormalizationIntegrityError("persisted state contains same-time revisions")
+        if set(article_groups) != set(initial_records):
+            raise NormalizationIntegrityError("article group index is incomplete")
+        for observation_id, link in links.items():
+            if observation_id != link.provider_observation_id:
+                raise NormalizationIntegrityError("observation-link index key mismatch")
+            if link.article_version_id not in versions:
+                raise NormalizationIntegrityError("observation link references a missing version")
+            if (
+                not _is_sha256(link.raw_snapshot_sha256)
+                or _raw_hash_from_observation_id(observation_id) != link.raw_snapshot_sha256
+                or link.input_class not in {"provider_response", "synthetic_fixture"}
+            ):
+                raise NormalizationIntegrityError("observation link provenance is invalid")
+        for observation_id, exclusion in exclusions.items():
+            if observation_id != exclusion.provider_observation_id:
+                raise NormalizationIntegrityError("exclusion index key mismatch")
+            if exclusion.reason not in _EXCLUSION_RANK:
+                raise NormalizationIntegrityError("persisted exclusion reason is unknown")
+            if (
+                not _is_sha256(exclusion.raw_snapshot_sha256)
+                or _raw_hash_from_observation_id(observation_id) != exclusion.raw_snapshot_sha256
+                or exclusion.input_class not in {"provider_response", "synthetic_fixture"}
+            ):
+                raise NormalizationIntegrityError("exclusion provenance is invalid")
+        for article in versions.values():
+            first_link = links.get(article.provider_observation_id)
+            if (
+                first_link is None
+                or first_link.article_version_id != article.article_version_id
+                or first_link.raw_snapshot_sha256 != article.raw_snapshot_sha256
+            ):
+                raise NormalizationIntegrityError(
+                    "article first observation is not bound to its provenance link"
+                )
+        used_group_ids = set(article_groups.values())
+        if set(groups) != used_group_ids:
+            raise NormalizationIntegrityError("group anchors do not match used groups")
+        for group_id, group in groups.items():
+            if group_id != group.duplicate_group_id:
+                raise NormalizationIntegrityError("group index key mismatch")
+            if derive_duplicate_group_id(group.anchor_article_id) != group_id:
+                raise NormalizationIntegrityError("permanent group anchor identity mismatch")
+            anchor = initial_records.get(group.anchor_article_id)
+            if anchor is None:
+                raise NormalizationIntegrityError("group anchor article is missing")
+            if (
+                anchor.first_seen_at != group.initial_first_seen_at
+                or anchor.canonical_url != group.canonical_url
+                or anchor.source != group.source
+                or anchor.title is None
+                or _dedup_fingerprint(anchor.title, anchor.language) != group.dedup_fingerprint
+            ):
+                raise NormalizationIntegrityError("group anchor fields are inconsistent")
 
-        first_seen = _parse_required_timestamp(observation.raw_published_at, "raw_published_at")
-        same_article_versions = [
-            record for record in self._versions_by_id.values() if record.article_id == article_id
-        ]
-        if any(
-            record.first_seen_at == observation.raw_published_at for record in same_article_versions
-        ):
-            raise _ObservationExcluded(
-                "revision_time_unknown",
-                "different content for one article has the same availability timestamp",
-            )
-        duplicate_group_id = self._assign_duplicate_group(
-            article_id=article_id,
-            canonical_url=canonical_url,
-            source=source,
-            title=title,
-            language=language,
-            first_seen=first_seen,
-        )
-        first_seen_text = format_utc_timestamp(first_seen)
-        version_id = derive_article_version_id(
-            article_id=article_id,
-            first_seen_at=first_seen_text,
-            language=language,
-            content_hash=content_hash,
-        )
-        value = {
-            "article_id": article_id,
-            "article_version_id": version_id,
-            "provider": PROVIDER_ID,
-            "provider_article_id": None,
-            "provider_observation_id": observation.provider_observation_id,
-            "source": source,
-            "canonical_url": canonical_url,
-            "title": title,
-            "content": None,
-            "language": language,
-            "published_at": None,
-            "provider_first_seen_at": provider_first_seen_at,
-            "first_seen_at": first_seen_text,
-            "ingested_at": observation.ingested_at,
-            "provider_updated_at": None,
-            "asset": "BTC",
-            "content_hash": content_hash,
-            "raw_snapshot_sha256": observation.raw_snapshot_sha256,
-            "point_in_time_eligible": True,
-            "exclusion_reason": None,
-            "duplicate_group_id": duplicate_group_id,
-        }
-        try:
-            record = validate_article_record(value)
-        except ArticleValidationError as exc:
-            raise _ObservationExcluded("malformed_record", str(exc)) from exc
-        self._versions_by_fingerprint[key] = record
-        self._versions_by_id[record.article_version_id] = record
-        return record, False
-
-    def _assign_duplicate_group(
+    def _validate_rights_bound_state(
         self,
-        *,
-        article_id: str,
-        canonical_url: str,
-        source: str,
-        title: str,
-        language: str,
-        first_seen: datetime,
-    ) -> str:
-        existing_article_group = self._article_groups.get(article_id)
-        if existing_article_group is not None:
-            return existing_article_group
-        dedup_fingerprint = canonical_sha256(
-            {
-                "content": "",
-                "language": language,
-                "serialization_version": "dedup-fingerprint-v1",
-                "title_casefold": title.casefold(),
-            }
-        )
-        candidates = self._dedup_anchors.setdefault(dedup_fingerprint, [])
-        tolerance = timedelta(hours=72)
-        for anchor_time, anchor_article_id, anchor_url, anchor_source in candidates:
-            if first_seen - anchor_time > tolerance:
-                continue
-            if canonical_url != anchor_url or source != anchor_source:
-                group_id = derive_duplicate_group_id(anchor_article_id)
-                self._article_groups[article_id] = group_id
-                return group_id
-        group_id = derive_duplicate_group_id(article_id)
-        candidates.append((first_seen, article_id, canonical_url, source))
-        candidates.sort(key=lambda item: (item[0], item[1]))
-        self._article_groups[article_id] = group_id
-        return group_id
+        versions: Mapping[str, ArticleRecord],
+        links: Mapping[str, ObservationLink],
+    ) -> None:
+        if not versions:
+            return
+        approval = self.rights_approval
+        if (
+            approval is None
+            or not approval.is_structurally_valid()
+            or not approval.approved
+            or approval.network_access_authorized
+            or approval.provider != PROVIDER_ID
+            or approval.scope != RIGHTS_SCOPE
+            or approval.protocol_config_sha256 != self.protocol_config_sha256
+        ):
+            raise NormalizationIntegrityError("eligible state lacks applicable rights approval")
+        if approval.approval_kind == "synthetic_fixture_only":
+            allowed = set(approval.authorized_fixture_sha256)
+            referenced = {item.raw_snapshot_sha256 for item in versions.values()}
+            referenced.update(item.raw_snapshot_sha256 for item in links.values())
+            if not referenced <= allowed or any(
+                item.input_class != "synthetic_fixture" for item in links.values()
+            ):
+                raise NormalizationIntegrityError(
+                    "synthetic state references bytes outside its fixture-only approval"
+                )
+        elif (
+            approval.approval_kind != "provider_rights"
+            or approval.authorized_fixture_sha256
+            or any(item.input_class != "provider_response" for item in links.values())
+        ):
+            raise NormalizationIntegrityError("eligible state rights approval kind is invalid")
 
 
 class _ObservationExcluded(Exception):
@@ -871,7 +1672,9 @@ def publish_normalization(
                 "normalization_semantic_sha256": result.semantic_sha256,
                 "normalizer_version": NORMALIZER_VERSION,
                 "observation_link_count": len(result.observation_links),
+                "protocol_config_sha256": result.protocol_config_sha256,
                 "provider": PROVIDER_ID,
+                "rights_approval_sha256": result.rights_approval_sha256,
             }
         ),
     }
@@ -883,17 +1686,18 @@ def publish_normalization(
             metadata={
                 "coverage_semantic_sha256": coverage.semantic_sha256,
                 "normalization_semantic_sha256": result.semantic_sha256,
+                "protocol_config_sha256": result.protocol_config_sha256,
                 "provider": PROVIDER_ID,
+                "rights_approval_sha256": result.rights_approval_sha256,
                 "scope": "normalized_offline_adapter_batch",
             },
         )
     except PublicationCollisionError as exc:
-        directory = store.publications_root / publication_id
         try:
-            store.verify_publication(publication_id)
-            if all((directory / name).read_bytes() == data for name, data in files.items()):
-                return directory
-        except (OSError, SentimentStorageError):
+            verified = store.read_publication(publication_id)
+            if verified.files == files:
+                return store.publications_root / publication_id
+        except SentimentStorageError:
             pass
         raise ProviderIngestionError(
             f"normalization batch ID collision with different bytes: {batch_id}"
@@ -1039,6 +1843,7 @@ def _observation_from_endpoint(
         ingested_at=receipt.ingested_at,
         raw_published_at=receipt.raw_published_at,
         collection_mode=receipt.collection_mode,
+        input_class=receipt.input_class,
     )
 
 
@@ -1141,6 +1946,114 @@ def _group_gap_points(points: Sequence[tuple[datetime, str]]) -> tuple[ProviderG
 
 def _reject_json_constant(value: str) -> None:
     raise ValueError(f"invalid JSON constant {value}")
+
+
+def _is_sha256(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+def _primary_exclusion(failures: Iterable[tuple[str, str]]) -> tuple[str, str]:
+    materialized = tuple(failures)
+    try:
+        primary = min(materialized, key=lambda item: _EXCLUSION_RANK[item[0]])
+    except (KeyError, ValueError) as exc:
+        raise NormalizationIntegrityError("unrecognized or empty exclusion set") from exc
+    diagnostics = "; ".join(
+        f"{reason}:{diagnostic}"
+        for reason, diagnostic in sorted(
+            materialized, key=lambda item: (_EXCLUSION_RANK[item[0]], item[0], item[1])
+        )
+    )
+    return primary[0], diagnostics
+
+
+def _dedup_fingerprint(title: str, language: str) -> str:
+    return canonical_sha256(
+        {
+            "content": "",
+            "language": language,
+            "serialization_version": "dedup-fingerprint-v1",
+            "title_casefold": title.casefold(),
+        }
+    )
+
+
+def _fingerprint_for_article(article: ArticleRecord) -> str:
+    return derive_version_fingerprint(
+        article_id=article.article_id,
+        content_hash=article.content_hash,
+        content=article.content,
+        language=article.language,
+        provider=article.provider,
+        source=article.source,
+        title=article.title,
+    )
+
+
+def _parse_canonical_json_buffer(value: bytes, description: str) -> Any:
+    try:
+        payload = json.loads(value.decode("utf-8"), parse_constant=_reject_json_constant)
+    except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
+        raise NormalizationIntegrityError(f"{description} is not valid strict JSON") from exc
+    if canonicalize(payload) != value:
+        raise NormalizationIntegrityError(f"{description} is not canonical RFC 8785 JSON")
+    return payload
+
+
+def _require_json_array(value: bytes, description: str) -> list[Any]:
+    payload = _parse_canonical_json_buffer(value, description)
+    if not isinstance(payload, list):
+        raise NormalizationIntegrityError(f"{description} must be an array")
+    return payload
+
+
+def _rights_approval_from_payload(value: Any) -> RightsApproval | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise NormalizationIntegrityError("persisted rights approval must be an object or null")
+    expected_fields = set(RightsApproval.__dataclass_fields__)
+    if set(value) != expected_fields:
+        raise NormalizationIntegrityError("persisted rights approval fields do not match")
+    fixture_hashes = value.get("authorized_fixture_sha256")
+    if not isinstance(fixture_hashes, list) or not all(
+        isinstance(item, str) for item in fixture_hashes
+    ):
+        raise NormalizationIntegrityError("persisted fixture hash allowlist is invalid")
+    try:
+        approval = RightsApproval(**{**value, "authorized_fixture_sha256": tuple(fixture_hashes)})
+    except TypeError as exc:
+        raise NormalizationIntegrityError("persisted rights approval is invalid") from exc
+    if not approval.is_structurally_valid():
+        raise NormalizationIntegrityError("persisted rights approval identity is invalid")
+    return approval
+
+
+def _dataclass_from_exact_mapping(class_type: type[Any], value: Any, description: str) -> Any:
+    if not isinstance(value, dict) or set(value) != set(class_type.__dataclass_fields__):
+        raise NormalizationIntegrityError(f"{description} fields do not match")
+    return class_type(**value)
+
+
+def _unique_by_field(values: Iterable[Any], field: str, description: str) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for value in values:
+        key = getattr(value, field)
+        if not isinstance(key, str) or key in result:
+            raise NormalizationIntegrityError(f"duplicate or invalid {description} identity")
+        result[key] = value
+    return result
+
+
+def _raw_hash_from_observation_id(value: str) -> str:
+    match = re.fullmatch(r"gdelt-gsg:.*:([0-9a-f]{64}):\d+:(?:from|to)", value)
+    if match is None:
+        raise NormalizationIntegrityError("persisted provider observation ID is malformed")
+    return match.group(1)
 
 
 def _is_sensitive_key(value: str) -> bool:

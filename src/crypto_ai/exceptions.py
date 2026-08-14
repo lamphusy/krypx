@@ -71,3 +71,7 @@ class PublicationCollisionError(SentimentStorageError):
 
 class ProviderIngestionError(SentimentError):
     """A provider fixture or ingestion envelope violates the frozen adapter contract."""
+
+
+class NormalizationIntegrityError(ProviderIngestionError):
+    """Normalization cannot continue without violating immutable causal state."""

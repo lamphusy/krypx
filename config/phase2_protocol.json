@@ -1,9 +1,9 @@
 {
   "protocol_id": "krypx-phase2-milestone0",
   "protocol_version": "0.1.0-draft",
-  "status": "approved_offline_engineering_specification_for_milestones_1_and_2",
+  "status": "batch_a_corrected_pending_independent_review",
   "created_at": "2026-08-12T09:52:48Z",
-  "approval_state": "partial_offline_engineering_approval_only",
+  "approval_state": "offline_batch_a_only_corrected_pending_independent_review",
   "approved": false,
   "engineering_specification_approval": {
     "approved": true,
@@ -29,6 +29,41 @@
       "holdout_access_or_evaluation",
       "push"
     ]
+  },
+  "batch_a_corrective_review": {
+    "status": "implementation_and_offline_verification_complete_pending_independent_review",
+    "corrected_at": "2026-08-14",
+    "branch": "codex/phase2-foundation",
+    "milestone1_status": "corrected_pending_independent_review",
+    "milestone2_status": "corrected_pending_independent_review",
+    "milestone3_or_later_complete": false,
+    "real_gdelt_rights_approved": false,
+    "batch_b_authorized": false,
+    "network_collection_authorized": false,
+    "scorer_or_model_authorized": false,
+    "research_gates_authorized": false,
+    "future_collection_or_holdout_authorized": false,
+    "push_authorized_or_performed": false,
+    "corrective_scope": [
+      "single_read_exact_byte_verification",
+      "canonical_immutable_normalizer_state_and_verified_hydration",
+      "initial_first_seen_at_then_article_id_causal_dedup_order",
+      "whole_set_same_time_revision_conflict_exclusion",
+      "provider_scope_protocol_bound_rights_gate",
+      "frozen_primary_exclusion_precedence"
+    ],
+    "verification": {
+      "focused_integrity_regressions": "19_passed",
+      "phase2_sentiment_suite": "57_passed",
+      "full_phase1_and_phase2_suite": "310_passed_12_expected_single_class_metric_warnings",
+      "git_diff_check": "pass",
+      "black_all": "pass_61_files_unchanged",
+      "ruff_all": "pass",
+      "compileall_src_tests": "pass",
+      "pip_check": "pass_no_broken_requirements",
+      "network_access": "none"
+    },
+    "exact_next_action": "independent_review_of_batch_a_corrective_commit_only"
   },
   "verdict": "PROCEED_WITH_FORWARD_ONLY_COLLECTION",
   "article_contract_version": "article-contract-v1",
@@ -58,7 +93,8 @@
     "accounts_created": false,
     "credentials_requested": false,
     "paid_service_started": false,
-    "commit_or_push_performed": false
+    "batch_a_commits_performed": true,
+    "push_performed": false
   },
   "phase1_reference": {
     "git_commit": "8f2800e50a161ac4b82dee3362152f1417b8778b",
@@ -194,6 +230,38 @@
     "provider_timestamp_use": "audit_lower_bound_only",
     "raw_provenance": "compressed_gsg_file_sha256_plus_filename_timestamp_plus_zero_based_line_number_plus_endpoint_side",
     "revision_policy": "first_prospectively_published_observation_of_new_article_id_plus_version_fingerprint_creates_version_at_krypx_atomic_publication_time; repeat_observations_reuse_version_and_original_first_seen_at; only_new_fingerprint_creates_new_version",
+    "normalizer_state_contract": {
+      "version": "gdelt-gsg-normalizer-state-v1",
+      "serialization": "RFC8785_JCS_UTF8",
+      "publication": "content_addressed_atomic_manifest_last_no_overwrite",
+      "hydration": "construct_only_from_single_read_manifest_verified_buffers_then_verify_state_file_hashes_and_all_referenced_raw_objects",
+      "persistent_fields": [
+        "article_versions",
+        "observation_links",
+        "exclusions_and_conflicts",
+        "article_to_group_assignments",
+        "permanent_group_anchors",
+        "protocol_config_sha256",
+        "rights_approval_sha256"
+      ],
+      "causal_dedup_order": [
+        "initial_first_seen_at",
+        "article_id"
+      ],
+      "batch_commit": "validate_resolve_conflicts_materialize_sort_assign_groups_validate_complete_state_then_mutate",
+      "same_time_incoming_conflict": "exclude_every_involved_observation_as_revision_time_unknown_and_create_no_article_version",
+      "same_time_conflict_with_published_state": "raise_project_specific_integrity_error_leave_prior_state_immutable_and_publish_nothing"
+    },
+    "rights_approval_contract": {
+      "required_for_point_in_time_eligibility": true,
+      "provider": "gdelt_gsg",
+      "scope": "gdelt_gsg_english_btc_titles",
+      "bound_to_protocol_config_sha256": true,
+      "real_provider_approval_recorded": false,
+      "default_without_approval": "exclude_license_restricted",
+      "synthetic_fixture_approval": "synthetic_only_exact_raw_hash_allowlist_never_valid_for_provider_response",
+      "network_authority_conferred": false
+    },
     "full_article_body_authorized": false,
     "publisher_page_fetch_authorized": false,
     "coverage_validation_status": "not_run",
@@ -1532,9 +1600,10 @@
     "future_holdout_evaluation": "separate_explicit_authorization_required"
   },
   "next_authorized_task": {
-    "status": "batch_a_authorized_in_progress",
-    "prerequisite": "engineering_specification_approval_recorded",
-    "exact_request": "Implement and fully verify offline Phase 2 Milestone 1, then continue directly into Milestone 2's GDELT GSG adapter using synthetic and captured test fixtures only. Preserve all Phase 1 semantics; perform no network, scorer, research-backtest, future-collection, or holdout activity; commit each accepted milestone separately."
+    "status": "stop_pending_independent_review",
+    "prerequisite": "batch_a_corrective_implementation_and_offline_verification_complete",
+    "exact_request": "Perform an independent review of the single Batch A corrective commit. Do not begin or authorize Batch B, real GDELT rights, network collection, scorer or model activity, research gates, future collection, or holdout activity.",
+    "batch_b_authorized": false
   },
   "source_references": [
     {

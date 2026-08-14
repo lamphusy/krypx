@@ -6,14 +6,14 @@ and 2. It does not approve provider network access, historical or forward collec
 scorer selection, model or tokenizer downloads, research-gate execution, feature
 generation, model training, backtesting, future-holdout collection, or holdout access.
 
-## Milestone 1 — accepted
+## Milestone 1 — corrected implementation complete, pending independent review
 
 Milestone 1 provides strict article and score envelopes, UTC-only timestamp validation,
 dependency-free RFC 8785/JCS canonical serialization, exact-byte SHA-256 hashing,
 content-addressed immutable objects, and atomic manifest-last/no-overwrite bundle
 publication. Its project-specific failures inherit from `CryptoAIError`.
 
-Acceptance evidence:
+Original Batch A evidence before corrective review:
 
 - Focused Phase 2 foundation suite: 24 passed.
 - Full Phase 1 plus Phase 2 suite: 277 passed with 12 pre-existing single-class metric
@@ -22,7 +22,7 @@ Acceptance evidence:
 - Lint: passed for all `src` and `tests` Python files.
 - Tests are protected by the repository-wide real-network connection guard.
 
-## Milestone 2 — accepted
+## Milestone 2 — corrected implementation complete, pending independent review
 
 Milestone 2 provides one offline GDELT GSG adapter. It creates bounded one-minute
 retrieval schedules and pure retry decisions but contains no HTTP client. Caller-supplied
@@ -35,7 +35,7 @@ The adapter preserves first observations, repeated observations, immutable artic
 versions, later title revisions, exact causal duplicate groups, expected-interval gaps,
 zero-line valid files, coverage hashes, and deterministic normalized publications.
 
-Acceptance evidence:
+Original Batch A evidence before corrective review:
 
 - Focused Phase 2 suite: 35 passed.
 - Full Phase 1 plus Phase 2 suite: 288 passed with 12 expected single-class metric
@@ -44,6 +44,42 @@ Acceptance evidence:
 - No test or implementation path opened a network connection; the adapter has no network
   execution method.
 
+## Corrective integrity implementation
+
+The independent review findings were corrected without rewriting the three existing Batch A
+commits. The corrective implementation adds:
+
+- single-open object and publication reads that hash and return or parse the same captured
+  byte buffer;
+- canonical, transitively hashed normalizer state containing article versions, repeated-
+  observation links, exclusions/conflicts, article-group assignments, permanent anchors,
+  protocol hash, and rights approval;
+- manifest-last, no-overwrite state publication and hydration only from fully verified byte
+  buffers, including verification of referenced raw content-addressed objects;
+- transactional batches whose new logical articles are grouped only after sorting by
+  `(initial_first_seen_at, article_id)`;
+- whole-set `revision_time_unknown` exclusion for incoming same-time conflicts and a
+  project-specific fail-closed error when a conflict reaches already-published state;
+- an explicit provider/scope/protocol-bound rights gate that defaults to
+  `license_restricted`; no real GDELT rights approval is recorded; and
+- deterministic primary exclusion selection from the frozen precedence table.
+
+Milestones 1 and 2 are presented for independent review rather than marked finally accepted.
+Milestone 3 and all later milestones remain incomplete.
+
+Corrective verification evidence:
+
+- Focused integrity regression suite: 19 passed.
+- Complete Phase 2 sentiment suite: 57 passed.
+- Complete Phase 1 plus Phase 2 repository suite: 310 passed with 12 expected
+  single-class metric warnings from the unchanged synthetic Phase 1 integration test.
+- `git diff --check`: passed.
+- Formatter: passed with 61 files unchanged.
+- Lint and bytecode compilation: passed.
+- Installed dependency consistency: no broken requirements.
+- All execution remained under the repository's real-network connection guard; no network
+  access occurred.
+
 ## Remaining authorization boundary
 
 Real GDELT retrieval, GDELT title-only/right-use acceptance, prospective collection,
@@ -51,7 +87,8 @@ scorer/model selection, model downloads, scoring, feature construction, numerica
 gates, training, backtests, and any future-holdout activity remain unapproved. Milestone 3
 and later milestones are not complete.
 
-The next possible Batch B is a bounded prospective GSG collection pilot. It requires a new
+The exact next action is independent review of the single corrective commit. Batch B is not
+authorized. A later bounded prospective GSG collection pilot would require a new
 authorization that explicitly:
 
 1. approves GDELT GSG title-only use and the documented-use interpretation;
