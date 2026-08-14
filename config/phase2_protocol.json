@@ -1,10 +1,35 @@
 {
   "protocol_id": "krypx-phase2-milestone0",
   "protocol_version": "0.1.0-draft",
-  "status": "draft_human_approval_required",
+  "status": "approved_offline_engineering_specification_for_milestones_1_and_2",
   "created_at": "2026-08-12T09:52:48Z",
-  "approval_state": "human_approval_required",
+  "approval_state": "partial_offline_engineering_approval_only",
   "approved": false,
+  "engineering_specification_approval": {
+    "approved": true,
+    "approved_at": "2026-08-14",
+    "branch": "codex/phase2-foundation",
+    "authorized_scope": [
+      "commit_milestone0_protocol_documents",
+      "implement_and_verify_milestone1_offline",
+      "implement_and_verify_milestone2_gdelt_gsg_with_synthetic_and_captured_test_fixtures_only",
+      "commit_each_accepted_milestone_separately"
+    ],
+    "explicitly_not_approved": [
+      "gdelt_or_other_network_collection",
+      "provider_or_publisher_api_access",
+      "google_cloud_access",
+      "credentials_accounts_or_paid_services",
+      "scorer_or_model_selection",
+      "model_downloads_or_real_article_scoring",
+      "research_gate_approval",
+      "real_sentiment_feature_generation",
+      "model_training_or_research_backtesting",
+      "future_collection",
+      "holdout_access_or_evaluation",
+      "push"
+    ]
+  },
   "verdict": "PROCEED_WITH_FORWARD_ONLY_COLLECTION",
   "article_contract_version": "article-contract-v1",
   "contract_versions": {
@@ -1476,8 +1501,7 @@
   },
   "human_decisions_required": [
     "approve_or_reject_gdelt_gsg_title_only_and_rights_interpretation",
-    "approve_article_and_score_contracts_for_synthetic_milestone1_implementation",
-    "later_approve_any_prospective_network_storage_pilot_budget",
+    "later_approve_any_real_prospective_network_storage_pilot_budget",
     "approve_scorer_and_model_weight_license",
     "approve_engineering_coverage_development_concentration_and_final_gates",
     "approve_total_third_party_compute_cap",
@@ -1485,8 +1509,7 @@
   ],
   "unresolved_decisions": [
     "gdelt_gsg_title_only_provider_approval",
-    "article_and_score_contract_approval_for_synthetic_milestone1",
-    "future_prospective_pilot_budget_and_network_authorization",
+    "future_real_prospective_pilot_budget_and_network_authorization",
     "llama2_license_account_weight_hash_and_hardware_approval",
     "primary_scorer_quality_acceptance",
     "numerical_gate_approval",
@@ -1509,9 +1532,9 @@
     "future_holdout_evaluation": "separate_explicit_authorization_required"
   },
   "next_authorized_task": {
-    "status": "not_authorized_recommendation_only",
-    "prerequisite": "human_approval_of_milestone0_protocol",
-    "exact_request": "Implement Phase 2 Milestone 1—schemas and immutable storage—using synthetic fixtures only. Implement the approved article and score contracts, validators, RFC 8785 canonical serialization, exact-byte SHA-256 identities, content-addressed storage, manifests, and project-specific exceptions. Add tests for malformed timestamps, non-finite scores, hash mismatches, duplicate identities, immutable first-seen time, repeated-observation reuse, replacement races, incomplete writes, and no-overwrite publication. Run the complete Phase 1 and Phase 2 suites. Do not access any network, provider/archive/API, Google Cloud project, publisher page, market source, model repository, credential, or paid service; do not score real articles, build research features, train, backtest, collect a holdout, or change Phase 1 semantics or artifacts."
+    "status": "batch_a_authorized_in_progress",
+    "prerequisite": "engineering_specification_approval_recorded",
+    "exact_request": "Implement and fully verify offline Phase 2 Milestone 1, then continue directly into Milestone 2's GDELT GSG adapter using synthetic and captured test fixtures only. Preserve all Phase 1 semantics; perform no network, scorer, research-backtest, future-collection, or holdout activity; commit each accepted milestone separately."
   },
   "source_references": [
     {

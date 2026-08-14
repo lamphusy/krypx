@@ -1,6 +1,6 @@
 # KrypX Phase 2 — Milestone 0 Research Protocol and News-Source Feasibility
 
-**Protocol status:** draft; human approval required before any data acquisition, scoring, implementation, or holdout claim
+**Protocol status:** approved on 2026-08-14 only as the engineering specification for offline Phase 2 Milestones 1 and 2
 
 **Research decision:** `PROCEED_WITH_FORWARD_ONLY_COLLECTION`
 
@@ -11,6 +11,8 @@
 **Prepared:** 2026-08-12
 **Companion machine-readable draft:** `config/phase2_protocol.json`
 
+**Approval boundary:** Batch A authorizes synthetic-fixture implementation, local verification, and separate Milestone 0/1/2 commits on `codex/phase2-foundation`. It does not approve GDELT network collection, provider/API access, scorer selection, model downloads, research gates, real feature generation, training/backtesting, forward collection, or holdout access/evaluation.
+
 ## Executive decision
 
 No candidate clears the retrospective historical-and-immutable gate. GDELT GSG is the closest: its archived records couple URL, title, language, and a GDELT first-seen claim, but official sources do not promise append-only history, publish provider checksums/version IDs, or describe a correction/rewrite policy. KrypX must therefore never use historical GSG rows to rescore the consumed Phase 1 period. Prospectively, however, GDELT's open title metadata can be snapshotted on receipt, content-addressed, and assigned KrypX's own durable `first_seen_at`; that forward path is feasible without publisher-body retrieval.
@@ -20,6 +22,7 @@ This recommendation is deliberately title-only. It does not authorize fetching p
 | Decision item | Milestone 0 result |
 |---|---|
 | Exact verdict | `PROCEED_WITH_FORWARD_ONLY_COLLECTION` |
+| Engineering-specification approval | Approved for offline Milestones 1 and 2 only; all research and external-access approvals remain false |
 | Recommended provider | GDELT GSG, title-only, with KrypX receipt time and exact raw-byte hashes; human approval still required |
 | Historical feasibility | `REJECTED`: no retrospective news scoring/backtest for the Phase 1 period |
 | Main blocker to outcomes | A newly collected development corpus does not yet exist; scorer, gates, budget, and later holdout are unapproved |
@@ -672,6 +675,8 @@ For the rolling 30-day gate, align the augmented and control ledgers on the sort
 
 ### Required authorizations
 
+Batch A approval is deliberately narrower than research approval. The article/score schemas and storage/provider-fixture contracts may now be implemented and tested offline. The provider recommendation, scorer/model choice, numerical gates, real collection, and future-holdout policy remain proposals requiring their own later approvals.
+
 | Action | Current state |
 |---|---|
 | Download/query GDELT or any provider data | Not authorized |
@@ -683,13 +688,13 @@ For the rolling 30-day gate, align the augmented and control ledgers on the sort
 | Start future-holdout collection | Not authorized; requires approved frozen protocol/generation |
 | Claim or evaluate the future holdout | Separate explicit authorization required after readiness |
 
-### Exact next Codex task after approval
+### Authorized Batch A implementation
 
-No next task is authorized by this document. After a human approves this Milestone 0 protocol, the exact recommended request is:
+The user authorized the following offline work on 2026-08-14:
 
-> Implement Phase 2 Milestone 1—schemas and immutable storage—using synthetic fixtures only. Implement the approved article and score contracts, validators, RFC 8785 canonical serialization, exact-byte SHA-256 identities, content-addressed storage, manifests, and project-specific exceptions. Add tests for malformed timestamps, non-finite scores, hash mismatches, duplicate identities, immutable first-seen time, repeated-observation reuse, replacement races, incomplete writes, and no-overwrite publication. Run the complete Phase 1 and Phase 2 suites. Do not access any network, provider/archive/API, Google Cloud project, publisher page, market source, model repository, credential, or paid service; do not score real articles, build research features, train, backtest, collect a holdout, or change Phase 1 semantics or artifacts.
+> Implement and verify Phase 2 Milestone 1, then continue directly into Milestone 2's GDELT GSG adapter using synthetic and captured test fixtures only. Preserve Phase 1 semantics and remain completely offline. Commit the approved Milestone 0 specification and each accepted implementation milestone separately.
 
-Any real prospective GSG pilot belongs to Milestone 2 and requires separate network/storage authorization after Milestone 1 passes. Historical GSG samples remain ineligible and can never seed the forward corpus.
+Any real GSG retrieval or prospective pilot remains outside Batch A and requires separate Batch B network/storage authorization. Historical GSG samples remain ineligible and can never seed the forward corpus.
 
 ## Official source register
 
