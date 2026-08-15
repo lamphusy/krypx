@@ -18,9 +18,12 @@ from crypto_ai.exceptions import (
 from crypto_ai.sentiment import storage as storage_module
 from crypto_ai.sentiment.canonical import canonicalize, sha256_bytes
 from crypto_ai.sentiment.providers.gdelt_gsg import (
+    GapAttempt,
     GSGAdapter,
     GSGNormalizer,
     RightsApproval,
+    TerminalGapEvidence,
+    expected_gsg_source_locator,
     plan_retrieval,
 )
 from crypto_ai.sentiment.storage import ContentAddressedStore
@@ -100,14 +103,17 @@ def normalize(
     end_minute: int,
     *,
     as_of: str = "2026-08-14T03:00:00Z",
+    gap_evidence: list[TerminalGapEvidence] | None = None,
 ):
+    plan = plan_retrieval(
+        f"2026-08-14T01:{start_minute:02d}:00Z",
+        f"2026-08-14T01:{end_minute:02d}:00Z",
+    )
     return instance.normalize(
         snapshots,
-        retrieval_plan=plan_retrieval(
-            f"2026-08-14T01:{start_minute:02d}:00Z",
-            f"2026-08-14T01:{end_minute:02d}:00Z",
-        ),
+        retrieval_plan=plan,
         terminal_as_of=as_of,
+        gap_evidence=gap_evidence or (),
     )
 
 
@@ -125,7 +131,16 @@ def publish_modified_state(
     identity.pop("state_sha256")
     state_index["state_sha256"] = sha256_bytes(canonicalize(identity))
     files["state.json"] = canonicalize(state_index)
-    return store.publish_bundle(publication_id, files)
+    return store.publish_bundle(
+        publication_id,
+        files,
+        metadata={
+            "protocol_config_sha256": state_index["protocol_config_sha256"],
+            "provider": state_index["provider"],
+            "rights_approval_sha256": state_index["rights_approval_sha256"],
+            "state_sha256": state_index["state_sha256"],
+        },
+    )
 
 
 def test_late_older_batch_is_rejected_before_mutation_without_restart(tmp_path: Path) -> None:
@@ -202,13 +217,32 @@ def test_explicit_provider_gap_advances_chronology(tmp_path: Path) -> None:
     instance = approved_normalizer(minute_0)
     normalize(instance, [minute_0], 0, 1)
 
-    normalize(instance, [], 1, 2)
+    plan = plan_retrieval("2026-08-14T01:01:00Z", "2026-08-14T01:02:00Z")
+    evidence = TerminalGapEvidence.create(
+        interval_start=plan.start_at,
+        interval_end_exclusive=plan.end_at_exclusive,
+        expected_source_locator=expected_gsg_source_locator(plan.intervals[0]),
+        attempts=(
+            GapAttempt(
+                attempt_number=1,
+                attempted_at="2026-08-14T01:31:00Z",
+                http_status=404,
+                error_kind=None,
+                retry_after_seconds=None,
+                retry_disposition="gap",
+            ),
+        ),
+        terminal_at="2026-08-14T01:31:00Z",
+        protocol_config_sha256=PROTOCOL_HASH,
+    )
+    normalize(instance, [], 1, 2, gap_evidence=[evidence])
 
     assert instance.next_expected_interval_start == "2026-08-14T01:02:00Z"
     gap = instance.terminal_intervals[-1]
     assert gap.outcome == "provider_gap"
     assert gap.snapshot_state == "missing"
-    assert gap.terminal_reason == "missing_after_due_time"
+    assert gap.terminal_reason == "verified_terminal_gap_evidence"
+    assert gap.gap_evidence_id == evidence.evidence_id
 
 
 def test_pending_interval_cannot_advance_watermark(tmp_path: Path) -> None:

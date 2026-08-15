@@ -1,9 +1,9 @@
 {
   "protocol_id": "krypx-phase2-milestone0",
   "protocol_version": "0.1.0-draft",
-  "status": "batch_a_global_watermark_corrected_pending_independent_review",
+  "status": "batch_a_causal_availability_and_gap_evidence_corrected_pending_independent_review",
   "created_at": "2026-08-12T09:52:48Z",
-  "approval_state": "offline_batch_a_only_global_watermark_corrected_pending_independent_review",
+  "approval_state": "offline_batch_a_only_causal_availability_and_gap_evidence_corrected_pending_independent_review",
   "approved": false,
   "engineering_specification_approval": {
     "approved": true,
@@ -54,12 +54,39 @@
       "push"
     ]
   },
+  "causal_availability_gap_evidence_corrective_authorization": {
+    "approved": true,
+    "approved_at": "2026-08-16",
+    "branch": "codex/phase2-foundation",
+    "authorized_scope": [
+      "reopen_batch_a_for_milestone2_causal_availability_and_gap_evidence_correction",
+      "preserve_the_existing_filename_watermark_and_terminal_interval_ledger",
+      "implement_persistent_causal_availability_chronology",
+      "freeze_equal_time_and_valid_stream_partition_semantics",
+      "implement_immutable_synthetic_terminal_gap_evidence",
+      "add_offline_synthetic_regression_coverage",
+      "update_protocol_records",
+      "create_exactly_one_new_corrective_commit"
+    ],
+    "explicitly_not_approved": [
+      "batch_b",
+      "real_gdelt_rights",
+      "network_or_provider_collection",
+      "scorer_or_model_activity",
+      "feature_generation",
+      "training_or_backtesting",
+      "research_gates",
+      "future_collection",
+      "holdout_access_or_evaluation",
+      "push"
+    ]
+  },
   "batch_a_corrective_review": {
-    "status": "global_watermark_implementation_and_offline_verification_complete_pending_independent_review",
-    "corrected_at": "2026-08-15",
+    "status": "causal_availability_and_gap_evidence_implementation_complete_pending_independent_review",
+    "corrected_at": "2026-08-16",
     "branch": "codex/phase2-foundation",
     "milestone1_status": "corrected_pending_independent_review",
-    "milestone2_status": "global_watermark_corrected_pending_independent_review",
+    "milestone2_status": "causal_availability_and_gap_evidence_corrected_pending_independent_review",
     "milestone3_or_later_complete": false,
     "real_gdelt_rights_approved": false,
     "batch_b_authorized": false,
@@ -78,10 +105,14 @@
       "persistent_exclusive_global_terminal_watermark",
       "canonical_minute_level_terminal_interval_ledger",
       "fail_closed_cross_call_and_restart_chronology",
-      "partition_and_restart_independent_state_bytes",
-      "transactional_chronology_publication_and_hydration"
+      "transactional_chronology_publication_and_hydration",
+      "persistent_exclusive_causal_availability_boundary",
+      "strictly_increasing_distinct_snapshot_publication_times",
+      "valid_stream_partition_and_restart_independent_state_bytes",
+      "immutable_verified_terminal_gap_evidence",
+      "closed_world_ledger_receipt_article_link_exclusion_and_gap_evidence_hydration"
     ],
-    "global_watermark_contract": {
+    "prior_global_watermark_contract": {
       "implementation_status": "complete_pending_independent_review",
       "normalizer_version": "gdelt-gsg-normalizer-v2",
       "state_version": "gdelt-gsg-normalizer-state-v2",
@@ -97,9 +128,10 @@
       "advance_policy": "advance_only_after_the_entire_submitted_plan_is_terminal_and_normalization_validation_succeeds",
       "persistence": "canonical_RFC8785_chronology_json_transitively_hashed_by_state_sha256",
       "hydration": "single_read_manifest_verified_buffers_with_strict_canonical_contiguous_ledger_and_watermark_validation",
-      "batch_partition_bytes_affect_state": false
+      "batch_partition_bytes_affect_state_for_valid_streams": false,
+      "superseded_unconditional_partition_claim": true
     },
-    "verification": {
+    "prior_global_watermark_verification": {
       "focused_global_watermark_regressions": "24_passed",
       "phase2_sentiment_suite": "81_passed",
       "full_phase1_and_phase2_suite": "334_passed_12_expected_single_class_metric_warnings",
@@ -110,7 +142,99 @@
       "pip_check": "pass_no_broken_requirements",
       "network_access": "none"
     },
-    "exact_next_action": "independent_review_of_new_global_watermark_corrective_commit_only"
+    "causal_availability_and_gap_evidence_contract": {
+      "implementation_status": "complete_pending_independent_review",
+      "normalizer_version": "gdelt-gsg-normalizer-v3",
+      "state_version": "gdelt-gsg-normalizer-state-v3",
+      "chronology_version": "gdelt-gsg-terminal-chronology-v2",
+      "gap_evidence_version": "gdelt-gsg-terminal-gap-evidence-v1",
+      "retry_policy_version": "gdelt-gsg-retry-policy-v1",
+      "filename_watermark": {
+        "field": "next_expected_interval_start",
+        "semantics": "exclusive_end_of_last_terminally_normalized_minute",
+        "preserved_from_commit": "8bd1050"
+      },
+      "causal_availability_boundary": {
+        "field": "closed_availability_through",
+        "semantics": "exclusive_boundary_one_utc_microsecond_after_the_last_fully_validated_terminal_event_time",
+        "derivation": "terminal_interval_events_only_never_inferred_from_article_rows",
+        "complete_terminal_event_time": "raw_published_at",
+        "missing_or_invalid_gap_terminal_event_time": "verified_terminal_gap_evidence_terminal_at",
+        "ordering": "strictly_increasing_across_every_terminal_interval",
+        "advance_policy": "advance_only_with_a_fully_validated_terminal_batch_and_never_on_normalization_or_publication_failure"
+      },
+      "snapshot_publication_policy": "raw_published_at_is_canonical_utc_gte_ingested_at_and_strictly_increases_across_distinct_raw_snapshots",
+      "equal_time_policy": {
+        "distinct_raw_snapshots": "equal_raw_published_at_is_invalid_and_rejected_before_mutation",
+        "one_raw_snapshot": "same_article_id_same_time_conflicting_fingerprints_are_all_excluded_as_revision_time_unknown",
+        "conflict_with_immutable_prior_state": "fail_closed_without_mutation_or_rewriting_history",
+        "recovery": "requires_a_separate_chronological_state_generation_outside_this_task"
+      },
+      "partition_independence": "required_only_for_valid_input_streams_satisfying_filename_and_causal_availability_chronology",
+      "terminal_gap_evidence": {
+        "required_for": [
+          "missing_snapshot",
+          "invalid_snapshot"
+        ],
+        "version": "gdelt-gsg-terminal-gap-evidence-v1",
+        "identity_and_integrity": "evidence_id_is_sha256_of_the_RFC8785_identity_envelope;_evidence_sha256_is_sha256_of_the_RFC8785_evidence_body_including_evidence_id_and_excluding_the_checksum_field;_the_full_gap_evidence_file_has_an_exact_byte_descriptor_transitively_covered_by_state_sha256",
+        "bindings": [
+          "provider",
+          "scope",
+          "interval_start_and_exclusive_end",
+          "expected_source_locator",
+          "collection_mode",
+          "input_class",
+          "retry_policy_version",
+          "ordered_attempt_facts",
+          "final_terminal_disposition",
+          "terminal_at",
+          "protocol_config_sha256"
+        ],
+        "attempt_fact_fields": [
+          "attempt_number",
+          "attempted_at",
+          "http_status_or_bounded_error_kind",
+          "retry_after_seconds_when_applicable",
+          "retry_disposition"
+        ],
+        "invalid_snapshot_additional_bindings": [
+          "snapshot_id",
+          "raw_snapshot_sha256",
+          "bounded_parser_error_kind"
+        ],
+        "accepted_terminal_outcomes": [
+          "non_retryable",
+          "retry_exhausted"
+        ],
+        "synthetic_fixture_only": true,
+        "network_authority_conferred": false
+      },
+      "persistence": "canonical_RFC8785_state_files_including_chronology_json_and_gap_evidence_json_transitively_hashed_by_state_sha256",
+      "hydration": "reject_legacy_state_and_verify_single_read_manifest_buffers_canonical_encoding_transitive_descriptors_raw_receipts_both_watermarks_complete_snapshot_times_gap_evidence_and_all_cross_file_relationships",
+      "silent_migration_inference_or_repair": false
+    },
+    "current_corrective_verification": {
+      "status": "offline_verification_complete_pending_independent_review",
+      "focused_causal_availability_regressions": "17_passed",
+      "focused_terminal_gap_evidence_regressions": "44_passed",
+      "focused_gsg_suite": "117_passed",
+      "phase2_sentiment_suite": "144_passed",
+      "full_phase1_and_phase2_suite": "397_passed_12_expected_single_class_metric_warnings",
+      "git_diff_check": "pass",
+      "black_check": "pass",
+      "ruff_check": "pass",
+      "compileall": "pass",
+      "pip_check": "pass_no_broken_requirements",
+      "json_validation": "pass",
+      "markdown_json_reconciliation": "pass",
+      "fixtures": "synthetic_only_with_temporary_storage",
+      "network_access": "none",
+      "network_access_authorized": false,
+      "external_service_access_authorized": false,
+      "holdout_access_authorized": false
+    },
+    "exact_next_action": "independent_review_of_new_causal_availability_and_gap_evidence_corrective_commit_only"
   },
   "verdict": "PROCEED_WITH_FORWARD_ONLY_COLLECTION",
   "article_contract_version": "article-contract-v1",
@@ -273,15 +397,25 @@
     ],
     "provider_first_seen_semantics": "fromDate/toDate are documented as when GDELT first saw the endpoint article",
     "model_eligible_first_seen_mapping": "raw_published_at_synchronized_krypx_utc_timestamp_after_full_compressed_response_hash_verification_and_atomic_no_overwrite_publication",
-    "normalization_order": "strict_contiguous_retrieval_interval_order_across_calls_and_restarts_then_initial_first_seen_at_article_id_causal_grouping_with_no_overlap_or_replay",
+    "normalization_order": "strict_contiguous_retrieval_interval_order_and_strictly_increasing_terminal_causal_availability_order_across_calls_and_restarts_then_initial_first_seen_at_article_id_causal_grouping_with_no_overlap_replay_or_equal_distinct_snapshot_publication_times",
     "provider_timestamp_use": "audit_lower_bound_only",
     "raw_provenance": "compressed_gsg_file_sha256_plus_filename_timestamp_plus_zero_based_line_number_plus_endpoint_side",
+    "raw_snapshot_identity_version": "gdelt-gsg-snapshot-v2",
+    "parser_policy": {
+      "version": "gdelt-gsg-parser-policy-v1",
+      "bounds_are_persisted_and_hashed_in_snapshot_identity": true,
+      "hydration_reparse_uses_exact_persisted_bounds": true,
+      "maximum_compressed_bytes": 67108864,
+      "maximum_decompressed_bytes": 268435456,
+      "maximum_json_lines": 1000000
+    },
     "revision_policy": "first_prospectively_published_observation_of_new_article_id_plus_version_fingerprint_creates_version_at_krypx_atomic_publication_time; repeat_observations_reuse_version_and_original_first_seen_at; only_new_fingerprint_creates_new_version",
     "normalizer_state_contract": {
-      "version": "gdelt-gsg-normalizer-state-v2",
+      "version": "gdelt-gsg-normalizer-state-v3",
       "serialization": "RFC8785_JCS_UTF8",
       "publication": "content_addressed_atomic_manifest_last_no_overwrite",
-      "hydration": "construct_only_from_single_read_manifest_verified_buffers_then_verify_state_file_hashes_and_all_referenced_raw_objects",
+      "hydration": "construct_only_from_single_read_manifest_verified_buffers_then_verify_canonical_state_file_hashes_raw_receipts_and_parser_policy_both_watermarks_terminal_gap_evidence_closed_world_cross_file_relationships_and_deterministic_raw_byte_reparse_plus_normalization_replay",
+      "legacy_state_policy": "reject_without_silent_migration_inference_repair_or_filling_missing_chronology",
       "persistent_fields": [
         "article_versions",
         "observation_links",
@@ -289,7 +423,9 @@
         "article_to_group_assignments",
         "permanent_group_anchors",
         "next_expected_interval_start",
+        "closed_availability_through",
         "minute_level_terminal_interval_ledger",
+        "immutable_terminal_gap_evidence",
         "protocol_config_sha256",
         "rights_approval_sha256"
       ],
@@ -298,21 +434,46 @@
         "article_id"
       ],
       "chronology_contract": {
-        "version": "gdelt-gsg-terminal-chronology-v1",
+        "version": "gdelt-gsg-terminal-chronology-v2",
         "terminal_interval_width_seconds": 60,
         "canonical_order": "strictly_increasing_contiguous_start_at",
-        "complete_outcome": "retrieved_and_normalized_with_raw_snapshot_sha256_and_json_line_count",
-        "gap_outcome": "provider_gap_with_missing_or_invalid_snapshot_fact_and_terminal_reason",
-        "watermark": "exclusive_end_of_last_terminal_interval",
+        "complete_outcome": "retrieved_and_normalized_with_snapshot_id_raw_snapshot_sha256_json_line_count_ingested_at_raw_published_at_and_terminal_at_equal_to_raw_published_at",
+        "gap_outcome": "provider_gap_with_missing_or_invalid_snapshot_fact_and_verified_terminal_gap_evidence_id_sha256_and_terminal_at",
+        "filename_watermark": "next_expected_interval_start_is_the_exclusive_end_of_the_last_terminal_interval",
+        "causal_availability_boundary": "closed_availability_through_is_one_utc_microsecond_after_the_last_strictly_increasing_terminal_at",
+        "distinct_snapshot_publication_order": "raw_published_at_must_strictly_increase",
         "overlap_or_replay": "reject_before_mutation",
         "unrecorded_forward_gap": "reject_before_mutation",
         "pending_interval": "reject_without_watermark_advance",
-        "partition_independence_required": true,
-        "restart_independence_required": true
+        "partition_independence_required_for_valid_streams": true,
+        "unconditional_partition_independence_claim": false,
+        "restart_independence_required_for_valid_streams": true
+      },
+      "terminal_gap_evidence_contract": {
+        "version": "gdelt-gsg-terminal-gap-evidence-v1",
+        "retry_policy_version": "gdelt-gsg-retry-policy-v1",
+        "required_for_missing_or_invalid_snapshot": true,
+        "canonical_id_and_sha256_required": true,
+        "attempts_strictly_canonical_ordered_and_policy_verified": true,
+        "attempt_fact_fields": [
+          "attempt_number",
+          "attempted_at",
+          "http_status_or_bounded_error_kind",
+          "retry_after_seconds_when_applicable",
+          "retry_disposition"
+        ],
+        "missing_snapshot_binding": "exact_provider_scope_interval_expected_locator_mode_input_class_policy_protocol_and_terminal_outcome",
+        "invalid_snapshot_binding": "missing_snapshot_bindings_plus_snapshot_id_raw_snapshot_sha256_and_parser_error_kind",
+        "coverage_gap_inference_without_evidence": false,
+        "state_storage": "gap-evidence.json_transitively_covered_by_state_sha256",
+        "synthetic_fixture_only": true,
+        "network_authority_conferred": false
       },
       "batch_commit": "validate_resolve_conflicts_materialize_sort_assign_groups_validate_complete_state_then_mutate",
       "same_time_incoming_conflict": "exclude_every_involved_observation_as_revision_time_unknown_and_create_no_article_version",
-      "same_time_conflict_with_published_state": "raise_project_specific_integrity_error_leave_prior_state_immutable_and_publish_nothing"
+      "equal_time_distinct_snapshots": "reject_before_mutation",
+      "same_time_conflict_with_published_state": "raise_project_specific_integrity_error_leave_prior_state_immutable_and_publish_nothing",
+      "partition_independence_scope": "valid_streams_only_invalid_availability_or_prior_state_conflicts_fail_closed_and_are_not_compared_to_atomic_rebuilds"
     },
     "rights_approval_contract": {
       "required_for_point_in_time_eligibility": true,
@@ -1663,8 +1824,8 @@
   },
   "next_authorized_task": {
     "status": "stop_pending_independent_review",
-    "prerequisite": "batch_a_global_watermark_corrective_implementation_and_offline_verification_complete",
-    "exact_request": "Perform an independent review of the new single Batch A global-watermark corrective commit. Do not begin or authorize Batch B, real GDELT rights, network collection, scorer or model activity, research gates, future collection, or holdout activity.",
+    "prerequisite": "batch_a_causal_availability_and_gap_evidence_corrective_implementation_and_offline_verification_complete",
+    "exact_request": "Perform an independent review of the new single Batch A causal-availability and terminal-gap-evidence corrective commit. Do not begin or authorize Batch B, real GDELT rights, network collection, scorer or model activity, feature generation, training or backtesting, research gates, future collection, or holdout activity.",
     "batch_b_authorized": false
   },
   "source_references": [

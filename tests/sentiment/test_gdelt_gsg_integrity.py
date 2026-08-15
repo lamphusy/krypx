@@ -16,7 +16,7 @@ from crypto_ai.exceptions import (
     SentimentStorageError,
 )
 from crypto_ai.sentiment import storage as storage_module
-from crypto_ai.sentiment.canonical import canonicalize, sha256_bytes
+from crypto_ai.sentiment.canonical import canonical_sha256, canonicalize, sha256_bytes
 from crypto_ai.sentiment.contracts import (
     derive_article_version_id,
     derive_content_hash,
@@ -137,7 +137,16 @@ def publish_modified_state(
     state_identity.pop("state_sha256")
     state_index["state_sha256"] = sha256_bytes(canonicalize(state_identity))
     files["state.json"] = canonicalize(state_index)
-    return store.publish_bundle(publication_id, files)
+    return store.publish_bundle(
+        publication_id,
+        files,
+        metadata={
+            "protocol_config_sha256": state_index["protocol_config_sha256"],
+            "provider": state_index["provider"],
+            "rights_approval_sha256": state_index["rights_approval_sha256"],
+            "state_sha256": state_index["state_sha256"],
+        },
+    )
 
 
 def test_restart_repeat_preserves_first_seen_version_group_links_and_semantics(
@@ -394,6 +403,104 @@ def test_hydration_rejects_noncanonical_conflicting_partial_and_missing_transiti
         GSGNormalizer.hydrate(store, "gsg-normalizer-state-missing-raw")
 
 
+def test_hydration_replays_raw_bytes_and_rejects_self_consistent_article_tampering(
+    tmp_path: Path,
+) -> None:
+    store = ContentAddressedStore(tmp_path)
+    item = snapshot(
+        store,
+        gzip_records(
+            [
+                relation(
+                    "https://a.example/raw-replay",
+                    "Bitcoin synthetic raw replay",
+                    "https://b.example/raw-replay",
+                    "Bitcoin synthetic raw replay companion",
+                )
+            ]
+        ),
+        0,
+    )
+    instance = normalizer(item)
+    normalize(instance, [item], start_minute=0, end_minute=1)
+    files = dict(instance.export_state_files())
+    articles = json.loads(files["articles.json"])
+    links = json.loads(files["observation-links.json"])
+    groups = json.loads(files["groups.json"])
+    target = dict(articles[0])
+    old_version_id = target["article_version_id"]
+    target["title"] = f"{target['title']} forged"
+    target["content_hash"] = derive_content_hash(
+        asset=target["asset"],
+        content=target["content"],
+        language=target["language"],
+        source=target["source"],
+        title=target["title"],
+    )
+    target["article_version_id"] = derive_article_version_id(
+        article_id=target["article_id"],
+        first_seen_at=target["first_seen_at"],
+        language=target["language"],
+        content_hash=target["content_hash"],
+    )
+    articles[0] = target
+    articles.sort(key=lambda value: value["article_version_id"])
+    for link in links:
+        if link["article_version_id"] == old_version_id:
+            link["article_version_id"] = target["article_version_id"]
+    for group in groups:
+        if group["duplicate_group_id"] == target["duplicate_group_id"]:
+            group["dedup_fingerprint"] = canonical_sha256(
+                {
+                    "content": "",
+                    "language": target["language"],
+                    "serialization_version": "dedup-fingerprint-v1",
+                    "title_casefold": target["title"].casefold(),
+                }
+            )
+    files["articles.json"] = canonicalize(articles)
+    files["observation-links.json"] = canonicalize(links)
+    files["groups.json"] = canonicalize(groups)
+    publication_id = "gsg-normalizer-state-forged-raw-semantics"
+    publish_modified_state(store, publication_id, files)
+
+    with pytest.raises(NormalizationIntegrityError, match="raw-byte replay"):
+        GSGNormalizer.hydrate(store, publication_id)
+
+
+def test_normalizer_protocol_and_rights_configuration_are_generation_immutable(
+    tmp_path: Path,
+) -> None:
+    store = ContentAddressedStore(tmp_path)
+    item = snapshot(
+        store,
+        gzip_records(
+            [
+                relation(
+                    "https://a.example/config-immutable",
+                    "Bitcoin synthetic immutable configuration",
+                    "https://b.example/config-immutable",
+                    "Bitcoin synthetic immutable configuration companion",
+                )
+            ]
+        ),
+        0,
+    )
+    instance = GSGNormalizer(protocol_config_sha256=PROTOCOL_HASH)
+    normalize(instance, [item], start_minute=0, end_minute=1)
+    before = instance.export_state_files()
+
+    with pytest.raises(AttributeError):
+        instance.rights_approval = synthetic_approval(item)  # type: ignore[misc]
+    with pytest.raises(AttributeError):
+        instance.protocol_config_sha256 = "f" * 64  # type: ignore[misc]
+
+    assert instance.export_state_files() == before
+    instance.publish_state(store, "immutable-generation-config")
+    hydrated = GSGNormalizer.hydrate(store, "gsg-normalizer-state-immutable-generation-config")
+    assert hydrated.export_state_files() == before
+
+
 def test_equal_time_endpoint_and_line_order_use_lexicographically_smallest_article_anchor(
     tmp_path: Path,
 ) -> None:
@@ -551,7 +658,9 @@ def test_revision_conflict_precedence_is_stable_without_rights_approval(tmp_path
     assert repeated.to_dict() == result.to_dict()
 
 
-def test_conflicts_across_snapshots_are_order_independent(tmp_path: Path) -> None:
+def test_equal_publication_across_distinct_snapshots_is_rejected_atomically(
+    tmp_path: Path,
+) -> None:
     store = ContentAddressedStore(tmp_path)
     first = snapshot(
         store,
@@ -584,18 +693,12 @@ def test_conflicts_across_snapshots_are_order_independent(tmp_path: Path) -> Non
         published_minute=0,
     )
     approval = synthetic_approval(first, second)
-    results = [
-        normalize(
-            normalizer(first, second, approval=approval),
-            order,
-            start_minute=0,
-            end_minute=2,
-        )
-        for order in ([first, second], [second, first])
-    ]
-    assert results[0].to_dict() == results[1].to_dict()
-    assert len(results[0].articles) == 2
-    assert len(results[0].exclusions) == 2
+    for order in ([first, second], [second, first]):
+        instance = normalizer(first, second, approval=approval)
+        before = instance.export_state_files()
+        with pytest.raises(NormalizationIntegrityError, match="causal availability"):
+            normalize(instance, order, start_minute=0, end_minute=2)
+        assert instance.export_state_files() == before
 
 
 def test_conflict_after_hydration_fails_closed_without_partial_publication(
@@ -639,7 +742,7 @@ def test_conflict_after_hydration_fails_closed_without_partial_publication(
     hydrated = GSGNormalizer.hydrate(store, "gsg-normalizer-state-before-conflict")
     before = hydrated.export_state_files()
 
-    with pytest.raises(NormalizationIntegrityError, match="same-time revision"):
+    with pytest.raises(NormalizationIntegrityError, match="causal availability"):
         normalize(hydrated, [conflicting], start_minute=1, end_minute=2)
     assert hydrated.export_state_files() == before
     assert not (store.publications_root / "gsg-normalizer-state-after-conflict").exists()
@@ -754,7 +857,7 @@ def test_synthetic_approval_cannot_authorize_provider_response_or_network(tmp_pa
     assert not hasattr(GSGAdapter, "fetch")
 
     synthetic_item = snapshot(store, raw, 1, input_class="synthetic_fixture")
-    provider_item = snapshot(store, raw, 2, input_class="provider_response")
+    provider_item = snapshot(store, raw, 2, published_minute=1, input_class="provider_response")
     synthetic_state = normalizer(synthetic_item)
     normalize(synthetic_state, [synthetic_item], start_minute=1, end_minute=2)
     provider_result = normalize(synthetic_state, [provider_item], start_minute=2, end_minute=3)

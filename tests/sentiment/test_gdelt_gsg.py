@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import json
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -94,6 +95,10 @@ def test_retrieval_plan_is_minute_aligned_bounded_and_due_after_30_minutes() -> 
         plan_retrieval("2026-08-14T01:00:00Z", "2026-08-14T01:04:00Z", maximum_intervals=3)
     with pytest.raises(ProviderIngestionError, match="exact UTC minute"):
         plan_retrieval("2026-08-14T01:00:01Z", "2026-08-14T01:02:00Z")
+
+    forged = replace(plan, plan_id="0" * 64)
+    with pytest.raises(ProviderIngestionError, match="plan identity"):
+        build_coverage_report(forged, (), as_of="2026-08-14T01:00:00Z")
 
 
 def test_retry_policy_is_bounded_and_honors_longer_retry_after() -> None:
@@ -197,7 +202,7 @@ def test_historical_records_are_reported_but_never_normalized_as_eligible(tmp_pa
     }
 
 
-def test_coverage_treats_zero_line_as_complete_and_missing_or_corrupt_as_gaps(
+def test_coverage_treats_zero_line_as_complete_and_omissions_as_unresolved(
     tmp_path: Path,
 ) -> None:
     adapter = adapter_at(
@@ -216,15 +221,16 @@ def test_coverage_treats_zero_line_as_complete_and_missing_or_corrupt_as_gaps(
     assert report.expected_due_intervals == 4
     assert report.complete_intervals == 2
     assert report.zero_line_intervals == 1
-    assert report.gap_intervals == 2
+    assert report.gap_intervals == 0
+    assert report.unresolved_intervals == 2
     assert report.retrieval_rate == 0.5
-    assert report.maximum_gap_minutes == 2
-    assert len(report.gaps) == 1
+    assert report.maximum_gap_minutes == 0
+    assert report.gaps == ()
     affected = decisions_intersecting_gaps(
         report,
         ["2026-08-14T01:01:00Z", "2026-08-14T02:00:00Z", "2026-08-16T02:00:00Z"],
     )
-    assert affected == ("2026-08-14T02:00:00Z",)
+    assert affected == ()
 
 
 def test_deterministic_rerun_produces_identical_semantic_bytes(tmp_path: Path) -> None:

@@ -1,7 +1,8 @@
 # Phase 2 Batch A engineering record
 
 This record is limited to the offline engineering work authorized on 2026-08-14 and
-the global-watermark corrective task authorized on 2026-08-15.
+the global-watermark corrective task authorized on 2026-08-15, plus the causal-
+availability and terminal-gap-evidence corrective task authorized on 2026-08-16.
 Milestone 0 is approved only as the engineering specification for offline Milestones 1
 and 2. It does not approve provider network access, historical or forward collection,
 scorer selection, model or tokenizer downloads, research-gate execution, feature
@@ -28,8 +29,9 @@ Original Batch A evidence before corrective review:
 Milestone 2 provides one offline GDELT GSG adapter. It creates bounded one-minute
 retrieval schedules and pure retry decisions but contains no HTTP client. Caller-supplied
 gzip bytes are stored exactly, receipt locators and headers are redacted, and normalization
-can advance its durable exclusive global watermark only after every contiguous expected
-minute is terminally complete or recorded as a provider gap. Historical-backfill
+can advance its durable exclusive filename and causal-availability boundaries only after
+every contiguous expected minute is terminally complete or recorded as a provider gap backed
+by verified immutable evidence. Historical-backfill
 observations are reported and excluded rather than
 assigned a model-eligible availability time.
 
@@ -82,11 +84,11 @@ First corrective verification evidence:
 - All execution remained under the repository's real-network connection guard; no network
   access occurred.
 
-## Global-watermark corrective implementation
+## Prior global-watermark corrective implementation
 
-The remaining cross-call and cross-restart chronology defect is corrected in one new,
-isolated commit without amending the existing Batch A history. Normalizer state v2 now
-includes canonical `chronology.json`, whose minute-level terminal ledger and
+The filename-order cross-call and cross-restart chronology defect was corrected in commit
+`8bd1050` without amending the existing Batch A history. Normalizer state v2 added
+canonical `chronology.json`, whose minute-level terminal ledger and
 `next_expected_interval_start` exclusive watermark are transitively covered by
 `state_sha256`.
 
@@ -101,8 +103,9 @@ The correction provides:
 - single-read, manifest-verified hydration that also verifies canonical chronology,
   transitive file size/hash descriptors, raw content-addressed objects, ledger continuity,
   terminal-fact consistency, and watermark justification;
-- canonical state bytes independent of equivalent normalize-call partitions and
-  persist/hydrate boundaries; and
+- canonical state bytes intended to be independent of equivalent normalize-call partitions
+  and persist/hydrate boundaries; this prior unconditional claim is superseded by the valid-
+  stream scope frozen below; and
 - atomic publication-failure coverage for the chronology file, state index, manifest, and
   final rename, including preservation of unrelated staging directories.
 
@@ -120,14 +123,85 @@ Global-watermark corrective verification evidence:
 Milestone 2 remains pending independent review. This correction does not approve real
 GDELT rights, network collection, Batch B, or any scorer/research/holdout activity.
 
+## Causal-availability and terminal-gap-evidence corrective implementation
+
+The filename watermark and minute ledger from `8bd1050` remain intact. The current isolated
+correction advances the normalizer to state v3 and chronology v2 while adding a separate
+causal-availability invariant and immutable synthetic gap evidence.
+
+The correction freezes these contracts:
+
+- `next_expected_interval_start` remains the exclusive end of the last terminal filename
+  interval. Regressing, overlapping, replayed, pending, and forward-gapped plans still fail
+  before mutation.
+- `closed_availability_through` is a separate exclusive causal boundary. Every complete
+  interval uses its canonical `raw_published_at` as `terminal_at`; every missing or invalid
+  gap uses the matching verified evidence's `terminal_at`. All terminal event times must be
+  strictly increasing, and the next boundary is exactly the final event plus one UTC
+  microsecond. It is persisted and never inferred from article rows.
+- Each complete snapshot requires canonical UTC `raw_published_at >= ingested_at`. Distinct
+  raw snapshots must have strictly increasing publication times across calls and restarts;
+  a publication before the persisted causal boundary fails before article/group mutation.
+- `gdelt-gsg-snapshot-v2` binds `gdelt-gsg-parser-policy-v1` and the exact compressed-byte,
+  decompressed-byte, and JSON-line bounds. Hydration uses those same bounded settings to
+  reparse each single-read raw buffer and chronologically replay normalization, rejecting any
+  canonically rehashed article/link/exclusion state that disagrees with the raw observations.
+- Equal-time conflicting fingerprints for one `article_id` inside one raw snapshot are all
+  excluded as `revision_time_unknown`. Equal publication time across distinct raw snapshots
+  is invalid. A conflict against prior immutable state remains fail-closed and cannot rewrite
+  a version or duplicate-group anchor.
+- Partition- and restart-independent canonical state bytes are required only for valid input
+  streams satisfying both filename and causal-availability chronology. Invalid regressions,
+  distinct-snapshot equal times, and conflicts against immutable prior state are not claimed
+  to match an atomic rebuild. Recovery requires a separate chronological state generation
+  outside this task.
+- Absence plus caller-supplied time is not provider-gap evidence. Every missing or invalid
+  interval requires canonical immutable `gdelt-gsg-terminal-gap-evidence-v1`, including an
+  evidence ID plus a detached canonical-body SHA-256, provider/scope/interval/expected-
+  locator/mode/input-class bindings,
+  `gdelt-gsg-retry-policy-v1`, attempt count, and strictly ordered attempt facts containing
+  attempt number/time, HTTP status or bounded error kind, retry disposition, and Retry-After
+  when applicable. It also binds a verified terminal outcome/time and the protocol hash.
+  Invalid-snapshot evidence binds snapshot ID, raw SHA-256, and the bounded parser error. Only
+  a non-retryable terminal result or exact retry exhaustion may close the interval. Synthetic
+  evidence grants no provider or network authority.
+- Canonical `gap-evidence.json`, chronology, and both boundaries are transitively covered by
+  `state_sha256`. Hydration rejects legacy state and uses the existing single-read,
+  manifest-verified buffers to validate canonical bytes, descriptors, raw receipts, both
+  watermarks, complete snapshot times, gap evidence, and closed-world relations among ledger
+  records, articles, links, exclusions, receipts, and evidence. It never silently migrates,
+  infers, repairs, or fills missing chronology.
+- Any normalization or publication failure leaves articles, groups, exclusions, links,
+  ledger, gap evidence, and both boundaries unchanged and publishes no partial generation.
+
+Current causal-availability and terminal-gap-evidence corrective verification evidence:
+
+- Focused causal-availability regressions: 17 passed.
+- Focused terminal-gap-evidence regressions: 44 passed.
+- All five focused GSG files: 117 passed.
+- Complete Phase 2 sentiment suite: 144 passed.
+- Complete Phase 1 plus Phase 2 repository suite: 397 passed with 12 expected single-class
+  metric warnings from the unchanged synthetic Phase 1 integration test.
+- Diff validation, formatting, lint, bytecode compilation, installed-package consistency,
+  JSON validation, and Markdown/JSON reconciliation: passed.
+- All tests used synthetic fixtures and temporary storage under the repository-wide real-
+  network guard. No network, provider, publisher, credential, model, market-data, or holdout
+  access occurred.
+
+Milestones 1 and 2 remain corrected but pending independent review. Milestone 3 and all later
+milestones remain incomplete. The earlier totals above remain clearly identified as prior
+evidence.
+
 ## Remaining authorization boundary
 
-Real GDELT retrieval, GDELT title-only/right-use acceptance, prospective collection,
+Real GDELT retrieval, GDELT title-only/right-use acceptance, all network/provider and
+publisher access, accounts, credentials, paid services, historical or prospective collection,
 scorer/model selection, model downloads, scoring, feature construction, numerical research
-gates, training, backtests, and any future-holdout activity remain unapproved. Milestone 3
-and later milestones are not complete.
+gates, training, backtests, and all holdout access/evaluation remain unapproved. Batch B is
+not authorized. Milestone 3 and later milestones are not complete.
 
-The exact next action is independent review of the new global-watermark corrective commit.
+The exact next action is independent review of the new causal-availability and terminal-gap-
+evidence corrective commit.
 Batch B is not authorized. A later bounded prospective GSG collection pilot would require a new
 authorization that explicitly:
 
