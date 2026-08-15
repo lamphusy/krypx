@@ -45,8 +45,9 @@ from crypto_ai.sentiment.storage import ContentAddressedStore
 
 PROVIDER_ID = "gdelt_gsg"
 PARSER_VERSION = "gdelt-gsg-jsonl-v1"
-NORMALIZER_VERSION = "gdelt-gsg-normalizer-v1"
-NORMALIZER_STATE_VERSION = "gdelt-gsg-normalizer-state-v1"
+NORMALIZER_VERSION = "gdelt-gsg-normalizer-v2"
+NORMALIZER_STATE_VERSION = "gdelt-gsg-normalizer-state-v2"
+CHRONOLOGY_VERSION = "gdelt-gsg-terminal-chronology-v1"
 URL_NORMALIZER_VERSION = "url-canonicalization-v1"
 TEXT_NORMALIZER_VERSION = "text-normalization-v1"
 LANGUAGE_MAP_VERSION = "language-map-v1"
@@ -80,6 +81,7 @@ _EXCLUSION_RANK = {reason: index for index, reason in enumerate(PRIMARY_EXCLUSIO
 _STATE_DATA_FILES = (
     "approval.json",
     "articles.json",
+    "chronology.json",
     "exclusions.json",
     "groups.json",
     "observation-links.json",
@@ -105,6 +107,16 @@ _SENSITIVE_KEYS = frozenset(
         "secret",
         "signature",
         "token",
+    }
+)
+_SAFE_SNAPSHOT_ERROR_CODES = frozenset(
+    {
+        "invalid_gzip",
+        "invalid_json",
+        "invalid_jsonl",
+        "invalid_utf8",
+        "malformed_snapshot",
+        "resource_limit_exceeded",
     }
 )
 
@@ -409,6 +421,22 @@ class CoverageReport:
         return value
 
 
+@dataclass(frozen=True, slots=True)
+class TerminalInterval:
+    """One immutable minute-level fact that advances normalization chronology."""
+
+    start_at: str
+    end_at_exclusive: str
+    outcome: str
+    snapshot_state: str
+    raw_snapshot_sha256: str | None
+    json_line_count: int | None
+    terminal_reason: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
 class GSGRetryPolicy:
     """Pure retry classification: one initial attempt and at most two retries."""
 
@@ -638,11 +666,23 @@ class GSGNormalizer:
         self._exclusions: dict[str, ExcludedObservation] = {}
         self._groups_by_id: dict[str, GroupAnchor] = {}
         self._article_groups: dict[str, str] = {}
+        self._terminal_intervals: tuple[TerminalInterval, ...] = ()
+        self._next_expected_interval_start: str | None = None
 
     @property
     def rights_approval_sha256(self) -> str:
         payload = self.rights_approval.to_dict() if self.rights_approval is not None else None
         return canonical_sha256(payload)
+
+    @property
+    def next_expected_interval_start(self) -> str | None:
+        """Exclusive end of the last terminally normalized interval."""
+        return self._next_expected_interval_start
+
+    @property
+    def terminal_intervals(self) -> tuple[TerminalInterval, ...]:
+        """Return the immutable, contiguous terminal interval ledger."""
+        return self._terminal_intervals
 
     def normalize(
         self,
@@ -653,6 +693,8 @@ class GSGNormalizer:
     ) -> NormalizationResult:
         """Validate a whole terminal batch, then commit one order-independent state change."""
         materialized_snapshots = tuple(snapshots)
+        self._validate_chronology(self._terminal_intervals, self._next_expected_interval_start)
+        self._validate_plan_chronology(retrieval_plan)
         coverage = build_coverage_report(
             retrieval_plan, materialized_snapshots, as_of=terminal_as_of
         )
@@ -660,6 +702,10 @@ class GSGNormalizer:
             raise ProviderIngestionError(
                 "normalization watermark is not terminal; planned intervals remain pending"
             )
+        appended_intervals = _terminal_interval_facts(retrieval_plan, materialized_snapshots)
+        next_terminal_intervals = self._terminal_intervals + appended_intervals
+        next_watermark = retrieval_plan.end_at_exclusive
+        self._validate_chronology(next_terminal_intervals, next_watermark)
         observations = sorted(
             (
                 observation
@@ -897,13 +943,112 @@ class GSGNormalizer:
             next_article_groups,
         )
         self._validate_rights_bound_state(next_versions, next_links)
+        result = self._result(touched_versions, batch_links, batch_exclusions)
         self._versions_by_id = next_versions
         self._versions_by_fingerprint = next_fingerprints
         self._links = next_links
         self._exclusions = next_exclusions
         self._groups_by_id = next_groups
         self._article_groups = next_article_groups
-        return self._result(touched_versions, batch_links, batch_exclusions)
+        self._terminal_intervals = next_terminal_intervals
+        self._next_expected_interval_start = next_watermark
+        return result
+
+    def _validate_plan_chronology(self, retrieval_plan: RetrievalPlan) -> None:
+        """Require an exact next plan; overlap and replay are intentionally unsupported."""
+        _validate_retrieval_plan(retrieval_plan)
+        watermark = self._next_expected_interval_start
+        if watermark is None:
+            return
+        plan_start = _parse_minute_timestamp(retrieval_plan.start_at, "plan.start_at")
+        watermark_time = _parse_minute_timestamp(watermark, "next_expected_interval_start")
+        if plan_start < watermark_time:
+            raise NormalizationIntegrityError(
+                "retrieval plan regresses or overlaps the terminal chronology"
+            )
+        if plan_start > watermark_time:
+            raise NormalizationIntegrityError(
+                "retrieval plan leaves an unrecorded interval before its start"
+            )
+
+    @staticmethod
+    def _validate_chronology(intervals: Sequence[TerminalInterval], watermark: str | None) -> None:
+        previous_end: datetime | None = None
+        for position, interval in enumerate(intervals):
+            if not isinstance(interval, TerminalInterval):
+                raise NormalizationIntegrityError(
+                    "terminal chronology contains an invalid interval record"
+                )
+            start = _parse_chronology_minute(interval.start_at, "terminal interval start")
+            end = _parse_chronology_minute(interval.end_at_exclusive, "terminal interval end")
+            if end - start != EXPECTED_INTERVAL:
+                raise NormalizationIntegrityError(
+                    "terminal chronology intervals must cover exactly one minute"
+                )
+            if previous_end is not None and start != previous_end:
+                raise NormalizationIntegrityError(
+                    "terminal chronology is duplicated, overlapping, or discontinuous"
+                )
+            if interval.outcome == "retrieved_and_normalized":
+                if (
+                    interval.snapshot_state != "complete"
+                    or not _is_sha256(interval.raw_snapshot_sha256)
+                    or not isinstance(interval.json_line_count, int)
+                    or isinstance(interval.json_line_count, bool)
+                    or interval.json_line_count < 0
+                    or interval.terminal_reason is not None
+                ):
+                    raise NormalizationIntegrityError(
+                        "successful terminal interval facts are contradictory"
+                    )
+            elif interval.outcome == "provider_gap":
+                if interval.snapshot_state == "missing":
+                    if (
+                        interval.raw_snapshot_sha256 is not None
+                        or interval.json_line_count is not None
+                    ):
+                        raise NormalizationIntegrityError(
+                            "missing terminal interval has snapshot facts"
+                        )
+                elif interval.snapshot_state == "invalid":
+                    if (
+                        not _is_sha256(interval.raw_snapshot_sha256)
+                        or not isinstance(interval.json_line_count, int)
+                        or isinstance(interval.json_line_count, bool)
+                        or interval.json_line_count < 0
+                        or interval.terminal_reason not in _SAFE_SNAPSHOT_ERROR_CODES
+                    ):
+                        raise NormalizationIntegrityError(
+                            "invalid terminal interval has malformed snapshot facts"
+                        )
+                else:
+                    raise NormalizationIntegrityError(
+                        "provider gap has an unsupported snapshot state"
+                    )
+                if not isinstance(interval.terminal_reason, str) or not interval.terminal_reason:
+                    raise NormalizationIntegrityError(
+                        "provider gap must record one terminal reason"
+                    )
+            else:
+                raise NormalizationIntegrityError(
+                    "terminal chronology contains an unsupported outcome"
+                )
+            previous_end = end
+            if position and intervals[position - 1].start_at >= interval.start_at:
+                raise NormalizationIntegrityError(
+                    "terminal chronology is not in canonical interval order"
+                )
+        if not intervals:
+            if watermark is not None:
+                raise NormalizationIntegrityError(
+                    "terminal watermark is not justified by interval facts"
+                )
+            return
+        watermark_time = _parse_chronology_minute(watermark, "next_expected_interval_start")
+        if previous_end != watermark_time:
+            raise NormalizationIntegrityError(
+                "terminal watermark is not justified by interval facts"
+            )
 
     def export_state_files(self) -> dict[str, bytes]:
         """Return the complete deterministic state as canonical, transitively hashed files."""
@@ -918,6 +1063,7 @@ class GSGNormalizer:
             self._article_groups,
         )
         self._validate_rights_bound_state(self._versions_by_id, self._links)
+        self._validate_chronology(self._terminal_intervals, self._next_expected_interval_start)
         data_files = {
             "approval.json": canonicalize(
                 self.rights_approval.to_dict() if self.rights_approval is not None else None
@@ -930,6 +1076,15 @@ class GSGNormalizer:
                         key=lambda value: value.article_version_id,
                     )
                 ]
+            ),
+            "chronology.json": canonicalize(
+                {
+                    "next_expected_interval_start": self._next_expected_interval_start,
+                    "terminal_intervals": [
+                        interval.to_dict() for interval in self._terminal_intervals
+                    ],
+                    "version": CHRONOLOGY_VERSION,
+                }
             ),
             "exclusions.json": canonicalize(
                 [
@@ -1061,6 +1216,22 @@ class GSGNormalizer:
         links_payload = _require_json_array(
             verified.files["observation-links.json"], "state observation links"
         )
+        chronology_payload = _parse_canonical_json_buffer(
+            verified.files["chronology.json"], "state chronology"
+        )
+        if not isinstance(chronology_payload, dict) or set(chronology_payload) != {
+            "next_expected_interval_start",
+            "terminal_intervals",
+            "version",
+        }:
+            raise NormalizationIntegrityError(
+                "persisted chronology fields do not match the contract"
+            )
+        if chronology_payload["version"] != CHRONOLOGY_VERSION:
+            raise NormalizationIntegrityError("persisted chronology version is unsupported")
+        raw_terminal_intervals = chronology_payload["terminal_intervals"]
+        if not isinstance(raw_terminal_intervals, list):
+            raise NormalizationIntegrityError("persisted terminal intervals must be an array")
         try:
             articles = [validate_article_record(item) for item in articles_payload]
             exclusions = [
@@ -1075,8 +1246,21 @@ class GSGNormalizer:
                 _dataclass_from_exact_mapping(ObservationLink, item, "state observation link")
                 for item in links_payload
             ]
+            terminal_intervals = [
+                _dataclass_from_exact_mapping(TerminalInterval, item, "state terminal interval")
+                for item in raw_terminal_intervals
+            ]
         except (ArticleValidationError, TypeError, ValueError) as exc:
             raise NormalizationIntegrityError("normalizer state payload validation failed") from exc
+
+        normalizer._terminal_intervals = tuple(terminal_intervals)
+        normalizer._next_expected_interval_start = chronology_payload[
+            "next_expected_interval_start"
+        ]
+        normalizer._validate_chronology(
+            normalizer._terminal_intervals,
+            normalizer._next_expected_interval_start,
+        )
 
         for article in articles:
             normalizer._versions_by_id[article.article_version_id] = article
@@ -1100,6 +1284,11 @@ class GSGNormalizer:
         referenced_raw_hashes = {article.raw_snapshot_sha256 for article in articles}
         for observation_id in set(normalizer._links) | set(normalizer._exclusions):
             referenced_raw_hashes.add(_raw_hash_from_observation_id(observation_id))
+        referenced_raw_hashes.update(
+            interval.raw_snapshot_sha256
+            for interval in normalizer._terminal_intervals
+            if interval.raw_snapshot_sha256 is not None
+        )
         for digest in sorted(referenced_raw_hashes):
             try:
                 store.get_bytes(digest)
@@ -1535,6 +1724,109 @@ def plan_retrieval(
     )
 
 
+def _validate_retrieval_plan(plan: RetrievalPlan) -> None:
+    if not isinstance(plan, RetrievalPlan):
+        raise NormalizationIntegrityError("retrieval plan does not match its contract")
+    try:
+        expected = plan_retrieval(plan.start_at, plan.end_at_exclusive)
+    except ProviderIngestionError as exc:
+        raise NormalizationIntegrityError("retrieval plan is malformed") from exc
+    if plan != expected:
+        raise NormalizationIntegrityError(
+            "retrieval plan identity or expected-minute schedule is inconsistent"
+        )
+
+
+def _terminal_interval_facts(
+    plan: RetrievalPlan, snapshots: Sequence[SnapshotResult]
+) -> tuple[TerminalInterval, ...]:
+    """Derive batch-boundary-independent facts for an already terminal plan."""
+    snapshot_by_timestamp = {
+        snapshot.receipt.filename_timestamp: snapshot for snapshot in snapshots
+    }
+    facts: list[TerminalInterval] = []
+    for interval in plan.intervals:
+        start = _parse_minute_timestamp(interval.filename_timestamp, "interval.filename_timestamp")
+        end = format_utc_timestamp(start + EXPECTED_INTERVAL)
+        snapshot = snapshot_by_timestamp.get(interval.filename_timestamp)
+        if snapshot is None:
+            facts.append(
+                TerminalInterval(
+                    start_at=interval.filename_timestamp,
+                    end_at_exclusive=end,
+                    outcome="provider_gap",
+                    snapshot_state="missing",
+                    raw_snapshot_sha256=None,
+                    json_line_count=None,
+                    terminal_reason="missing_after_due_time",
+                )
+            )
+            continue
+        _validate_snapshot_terminal_fact(snapshot, interval.filename_timestamp)
+        if snapshot.state == "complete":
+            facts.append(
+                TerminalInterval(
+                    start_at=interval.filename_timestamp,
+                    end_at_exclusive=end,
+                    outcome="retrieved_and_normalized",
+                    snapshot_state="complete",
+                    raw_snapshot_sha256=snapshot.receipt.raw_snapshot_sha256,
+                    json_line_count=snapshot.json_line_count,
+                    terminal_reason=None,
+                )
+            )
+        else:
+            facts.append(
+                TerminalInterval(
+                    start_at=interval.filename_timestamp,
+                    end_at_exclusive=end,
+                    outcome="provider_gap",
+                    snapshot_state="invalid",
+                    raw_snapshot_sha256=snapshot.receipt.raw_snapshot_sha256,
+                    json_line_count=snapshot.json_line_count,
+                    terminal_reason=snapshot.error_code,
+                )
+            )
+    return tuple(facts)
+
+
+def _validate_snapshot_terminal_fact(snapshot: SnapshotResult, interval_start: str) -> None:
+    if snapshot.receipt.filename_timestamp != interval_start:
+        raise NormalizationIntegrityError(
+            "snapshot receipt does not belong to its terminal interval"
+        )
+    if not _is_sha256(snapshot.receipt.raw_snapshot_sha256):
+        raise NormalizationIntegrityError("terminal snapshot raw hash is invalid")
+    if (
+        not isinstance(snapshot.json_line_count, int)
+        or isinstance(snapshot.json_line_count, bool)
+        or snapshot.json_line_count < 0
+    ):
+        raise NormalizationIntegrityError("terminal snapshot line count is invalid")
+    if snapshot.state == "complete":
+        if snapshot.error_code is not None:
+            raise NormalizationIntegrityError(
+                "complete terminal snapshot cannot contain an error code"
+            )
+        if len(snapshot.observations) != snapshot.json_line_count * 2:
+            raise NormalizationIntegrityError(
+                "complete terminal snapshot line and observation counts disagree"
+            )
+    elif snapshot.state == "invalid":
+        if snapshot.observations or snapshot.error_code not in _SAFE_SNAPSHOT_ERROR_CODES:
+            raise NormalizationIntegrityError("invalid terminal snapshot facts are contradictory")
+    else:
+        raise NormalizationIntegrityError("snapshot has an unsupported terminal state")
+    for observation in snapshot.observations:
+        if (
+            observation.filename_timestamp != interval_start
+            or observation.raw_snapshot_sha256 != snapshot.receipt.raw_snapshot_sha256
+        ):
+            raise NormalizationIntegrityError(
+                "terminal snapshot observations have inconsistent provenance"
+            )
+
+
 def build_coverage_report(
     plan: RetrievalPlan, snapshots: Iterable[SnapshotResult], *, as_of: str
 ) -> CoverageReport:
@@ -1883,6 +2175,18 @@ def _parse_minute_timestamp(value: str, field: str) -> datetime:
     parsed = _parse_required_timestamp(value, field)
     if parsed.second or parsed.microsecond:
         raise ProviderIngestionError(f"{field} must be aligned to an exact UTC minute")
+    return parsed
+
+
+def _parse_chronology_minute(value: object, field: str) -> datetime:
+    if not isinstance(value, str):
+        raise NormalizationIntegrityError(f"{field} must be a UTC timestamp string")
+    try:
+        parsed = _parse_minute_timestamp(value, field)
+    except ProviderIngestionError as exc:
+        raise NormalizationIntegrityError(str(exc)) from exc
+    if format_utc_timestamp(parsed) != value:
+        raise NormalizationIntegrityError(f"{field} must use canonical UTC RFC3339 representation")
     return parsed
 
 

@@ -536,7 +536,12 @@ def test_revision_conflict_precedence_is_stable_without_rights_approval(tmp_path
     )
     instance = GSGNormalizer(protocol_config_sha256=PROTOCOL_HASH)
     result = normalize(instance, [item], start_minute=0, end_minute=1)
-    repeated = normalize(instance, [item], start_minute=0, end_minute=1)
+    repeated = normalize(
+        GSGNormalizer(protocol_config_sha256=PROTOCOL_HASH),
+        [item],
+        start_minute=0,
+        end_minute=1,
+    )
 
     assert result.articles == ()
     assert [item.reason for item in result.exclusions] == [
@@ -749,11 +754,12 @@ def test_synthetic_approval_cannot_authorize_provider_response_or_network(tmp_pa
     assert not hasattr(GSGAdapter, "fetch")
 
     synthetic_item = snapshot(store, raw, 1, input_class="synthetic_fixture")
-    provider_item = snapshot(store, raw, 1, input_class="provider_response")
+    provider_item = snapshot(store, raw, 2, input_class="provider_response")
     synthetic_state = normalizer(synthetic_item)
     normalize(synthetic_state, [synthetic_item], start_minute=1, end_minute=2)
-    with pytest.raises(NormalizationIntegrityError, match="provenance class"):
-        normalize(synthetic_state, [provider_item], start_minute=1, end_minute=2)
+    provider_result = normalize(synthetic_state, [provider_item], start_minute=2, end_minute=3)
+    assert provider_result.articles == ()
+    assert {item.reason for item in provider_result.exclusions} == {"license_restricted"}
 
 
 def test_rights_and_protocol_hashes_change_semantic_identity(tmp_path: Path) -> None:
@@ -804,7 +810,12 @@ def test_historical_and_multi_failure_precedence_are_stable(tmp_path: Path) -> N
     approval = synthetic_approval(historical)
     instance = normalizer(historical, approval=approval)
     result = normalize(instance, [historical], start_minute=0, end_minute=1)
-    reverse_result = normalize(instance, [historical], start_minute=0, end_minute=1)
+    reverse_result = normalize(
+        normalizer(historical, approval=approval),
+        [historical],
+        start_minute=0,
+        end_minute=1,
+    )
 
     assert [item.reason for item in result.exclusions] == [
         "invalid_timestamp",

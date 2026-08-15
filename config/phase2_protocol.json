@@ -1,9 +1,9 @@
 {
   "protocol_id": "krypx-phase2-milestone0",
   "protocol_version": "0.1.0-draft",
-  "status": "batch_a_corrected_pending_independent_review",
+  "status": "batch_a_global_watermark_corrected_pending_independent_review",
   "created_at": "2026-08-12T09:52:48Z",
-  "approval_state": "offline_batch_a_only_corrected_pending_independent_review",
+  "approval_state": "offline_batch_a_only_global_watermark_corrected_pending_independent_review",
   "approved": false,
   "engineering_specification_approval": {
     "approved": true,
@@ -30,12 +30,36 @@
       "push"
     ]
   },
+  "global_watermark_corrective_authorization": {
+    "approved": true,
+    "approved_at": "2026-08-15",
+    "branch": "codex/phase2-foundation",
+    "authorized_scope": [
+      "reopen_batch_a_for_milestone2_global_watermark_correction",
+      "implement_persistent_terminal_watermark_and_interval_ledger",
+      "add_offline_synthetic_regression_coverage",
+      "update_protocol_records",
+      "create_exactly_one_new_corrective_commit"
+    ],
+    "explicitly_not_approved": [
+      "batch_b",
+      "real_gdelt_rights",
+      "network_or_provider_collection",
+      "scorer_or_model_activity",
+      "feature_generation",
+      "training_or_backtesting",
+      "research_gates",
+      "future_collection",
+      "holdout_access_or_evaluation",
+      "push"
+    ]
+  },
   "batch_a_corrective_review": {
-    "status": "implementation_and_offline_verification_complete_pending_independent_review",
-    "corrected_at": "2026-08-14",
+    "status": "global_watermark_implementation_and_offline_verification_complete_pending_independent_review",
+    "corrected_at": "2026-08-15",
     "branch": "codex/phase2-foundation",
     "milestone1_status": "corrected_pending_independent_review",
-    "milestone2_status": "corrected_pending_independent_review",
+    "milestone2_status": "global_watermark_corrected_pending_independent_review",
     "milestone3_or_later_complete": false,
     "real_gdelt_rights_approved": false,
     "batch_b_authorized": false,
@@ -50,20 +74,43 @@
       "initial_first_seen_at_then_article_id_causal_dedup_order",
       "whole_set_same_time_revision_conflict_exclusion",
       "provider_scope_protocol_bound_rights_gate",
-      "frozen_primary_exclusion_precedence"
+      "frozen_primary_exclusion_precedence",
+      "persistent_exclusive_global_terminal_watermark",
+      "canonical_minute_level_terminal_interval_ledger",
+      "fail_closed_cross_call_and_restart_chronology",
+      "partition_and_restart_independent_state_bytes",
+      "transactional_chronology_publication_and_hydration"
     ],
+    "global_watermark_contract": {
+      "implementation_status": "complete_pending_independent_review",
+      "normalizer_version": "gdelt-gsg-normalizer-v2",
+      "state_version": "gdelt-gsg-normalizer-state-v2",
+      "chronology_version": "gdelt-gsg-terminal-chronology-v1",
+      "watermark_field": "next_expected_interval_start",
+      "watermark_semantics": "exclusive_end_of_last_terminally_normalized_minute",
+      "terminal_outcomes": [
+        "retrieved_and_normalized",
+        "provider_gap"
+      ],
+      "overlap_and_replay_policy": "reject_before_mutation_including_exact_replay",
+      "forward_gap_policy": "reject_before_mutation_unless_every_prior_minute_has_a_terminal_ledger_record",
+      "advance_policy": "advance_only_after_the_entire_submitted_plan_is_terminal_and_normalization_validation_succeeds",
+      "persistence": "canonical_RFC8785_chronology_json_transitively_hashed_by_state_sha256",
+      "hydration": "single_read_manifest_verified_buffers_with_strict_canonical_contiguous_ledger_and_watermark_validation",
+      "batch_partition_bytes_affect_state": false
+    },
     "verification": {
-      "focused_integrity_regressions": "19_passed",
-      "phase2_sentiment_suite": "57_passed",
-      "full_phase1_and_phase2_suite": "310_passed_12_expected_single_class_metric_warnings",
+      "focused_global_watermark_regressions": "24_passed",
+      "phase2_sentiment_suite": "81_passed",
+      "full_phase1_and_phase2_suite": "334_passed_12_expected_single_class_metric_warnings",
       "git_diff_check": "pass",
-      "black_all": "pass_61_files_unchanged",
+      "black_all": "pass_62_files_unchanged",
       "ruff_all": "pass",
       "compileall_src_tests": "pass",
       "pip_check": "pass_no_broken_requirements",
       "network_access": "none"
     },
-    "exact_next_action": "independent_review_of_batch_a_corrective_commit_only"
+    "exact_next_action": "independent_review_of_new_global_watermark_corrective_commit_only"
   },
   "verdict": "PROCEED_WITH_FORWARD_ONLY_COLLECTION",
   "article_contract_version": "article-contract-v1",
@@ -226,12 +273,12 @@
     ],
     "provider_first_seen_semantics": "fromDate/toDate are documented as when GDELT first saw the endpoint article",
     "model_eligible_first_seen_mapping": "raw_published_at_synchronized_krypx_utc_timestamp_after_full_compressed_response_hash_verification_and_atomic_no_overwrite_publication",
-    "normalization_order": "raw_published_at_then_filename_timestamp_then_raw_snapshot_sha256_then_zero_based_line_then_endpoint_side_with_publication_time_watermark",
+    "normalization_order": "strict_contiguous_retrieval_interval_order_across_calls_and_restarts_then_initial_first_seen_at_article_id_causal_grouping_with_no_overlap_or_replay",
     "provider_timestamp_use": "audit_lower_bound_only",
     "raw_provenance": "compressed_gsg_file_sha256_plus_filename_timestamp_plus_zero_based_line_number_plus_endpoint_side",
     "revision_policy": "first_prospectively_published_observation_of_new_article_id_plus_version_fingerprint_creates_version_at_krypx_atomic_publication_time; repeat_observations_reuse_version_and_original_first_seen_at; only_new_fingerprint_creates_new_version",
     "normalizer_state_contract": {
-      "version": "gdelt-gsg-normalizer-state-v1",
+      "version": "gdelt-gsg-normalizer-state-v2",
       "serialization": "RFC8785_JCS_UTF8",
       "publication": "content_addressed_atomic_manifest_last_no_overwrite",
       "hydration": "construct_only_from_single_read_manifest_verified_buffers_then_verify_state_file_hashes_and_all_referenced_raw_objects",
@@ -241,6 +288,8 @@
         "exclusions_and_conflicts",
         "article_to_group_assignments",
         "permanent_group_anchors",
+        "next_expected_interval_start",
+        "minute_level_terminal_interval_ledger",
         "protocol_config_sha256",
         "rights_approval_sha256"
       ],
@@ -248,6 +297,19 @@
         "initial_first_seen_at",
         "article_id"
       ],
+      "chronology_contract": {
+        "version": "gdelt-gsg-terminal-chronology-v1",
+        "terminal_interval_width_seconds": 60,
+        "canonical_order": "strictly_increasing_contiguous_start_at",
+        "complete_outcome": "retrieved_and_normalized_with_raw_snapshot_sha256_and_json_line_count",
+        "gap_outcome": "provider_gap_with_missing_or_invalid_snapshot_fact_and_terminal_reason",
+        "watermark": "exclusive_end_of_last_terminal_interval",
+        "overlap_or_replay": "reject_before_mutation",
+        "unrecorded_forward_gap": "reject_before_mutation",
+        "pending_interval": "reject_without_watermark_advance",
+        "partition_independence_required": true,
+        "restart_independence_required": true
+      },
       "batch_commit": "validate_resolve_conflicts_materialize_sort_assign_groups_validate_complete_state_then_mutate",
       "same_time_incoming_conflict": "exclude_every_involved_observation_as_revision_time_unknown_and_create_no_article_version",
       "same_time_conflict_with_published_state": "raise_project_specific_integrity_error_leave_prior_state_immutable_and_publish_nothing"
@@ -1601,8 +1663,8 @@
   },
   "next_authorized_task": {
     "status": "stop_pending_independent_review",
-    "prerequisite": "batch_a_corrective_implementation_and_offline_verification_complete",
-    "exact_request": "Perform an independent review of the single Batch A corrective commit. Do not begin or authorize Batch B, real GDELT rights, network collection, scorer or model activity, research gates, future collection, or holdout activity.",
+    "prerequisite": "batch_a_global_watermark_corrective_implementation_and_offline_verification_complete",
+    "exact_request": "Perform an independent review of the new single Batch A global-watermark corrective commit. Do not begin or authorize Batch B, real GDELT rights, network collection, scorer or model activity, research gates, future collection, or holdout activity.",
     "batch_b_authorized": false
   },
   "source_references": [

@@ -1,6 +1,6 @@
 # KrypX Phase 2 — Milestone 0 Research Protocol and News-Source Feasibility
 
-**Protocol status:** Batch A corrected and verified offline; Milestones 1 and 2 are pending independent review
+**Protocol status:** Batch A global-watermark correction implemented and verified offline; Milestones 1 and 2 are pending independent review
 
 **Research decision:** `PROCEED_WITH_FORWARD_ONLY_COLLECTION`
 
@@ -9,6 +9,7 @@
 **Research asset / interval:** BTC/USDT, 1 hour
 
 **Prepared:** 2026-08-12
+**Latest offline correction:** 2026-08-15
 **Companion machine-readable draft:** `config/phase2_protocol.json`
 
 **Approval boundary:** Batch A authorizes synthetic-fixture implementation, corrective hardening, and local verification on `codex/phase2-foundation`. It does not approve real GDELT title-use rights, Batch B, GDELT network collection, provider/API access, scorer selection, model downloads, research gates, real feature generation, training/backtesting, forward collection, or holdout access/evaluation.
@@ -175,7 +176,7 @@ For each **prospectively received** GSG gzip and each decompressed `from`/`to` e
 
 1. Preserve the compressed file exactly. Immediately after its final byte arrives record `ingested_at`; after SHA-256 verification and successful atomic no-overwrite publication record `raw_published_at`. Also record filename timestamp, byte count, source URL, and decompressor/parser versions.
 2. Create a provider observation ID from `gdelt-gsg:<file_timestamp>:<raw_snapshot_sha256>:<zero_based_line_number>:<from|to>` so a rewritten same-name file cannot collide.
-3. A single deterministic normalizer processes observations by `(raw_published_at, filename_timestamp, raw_snapshot_sha256, zero_based_line_number, endpoint_side)`. It does not publish a version until every raw snapshot through that publication-time watermark is terminally parsed or marked a gap.
+3. A single deterministic normalizer accepts only a contiguous retrieval plan beginning at its durable exclusive watermark. Every minute must become either `retrieved_and_normalized` or an explicit `provider_gap` before the watermark advances. Regressing, overlapping, replayed, pending, or forward-gapped plans fail before mutation. Within an accepted terminal plan, candidate versions use their KrypX availability times and deterministic article identities for causal grouping.
 4. Normalize the endpoint URL and title using the frozen rules below, then derive an article ID from provider plus canonical URL.
 5. Derive an availability-independent `version_fingerprint` as SHA-256 of RFC 8785 JCS UTF-8 bytes for provider, article ID, language, normalized source/title/content, and content hash.
 6. Look up `(article_id, version_fingerprint)`. If it already exists, link this observation to the existing immutable version and preserve that version's original `first_seen_at`; a repeated file observation never mints a new version or moves availability forward.
@@ -186,7 +187,9 @@ For each **prospectively received** GSG gzip and each decompressed `from`/`to` e
 The corrected Batch A implementation adds these mandatory integrity rules:
 
 - A GSG record is never eligible from prospective receipt alone. Eligibility requires an immutable approval input bound to provider `gdelt_gsg`, scope `gdelt_gsg_english_btc_titles`, and the exact protocol-config SHA-256. No approval defaults to `license_restricted`. Batch A records no real-provider approval. Synthetic tests use an exact-raw-hash allowlist whose `synthetic_fixture_only` approval cannot authorize bytes labeled as a provider response and never grants network authority.
-- Normalizer state is exported as canonical RFC 8785 files plus a canonical state index. The index transitively hashes the article versions, observation links, exclusions/conflicts, permanent group anchors, approval, and protocol hash. The complete bundle is published atomically, manifest-last, and without replacement. Hydration constructs state only from single-read buffers verified against both the publication manifest and state index, then verifies every referenced raw object before accepting the state.
+- Normalizer state v2 is exported as canonical RFC 8785 files plus a canonical state index. The index transitively hashes the article versions, observation links, exclusions/conflicts, permanent group anchors, approval, protocol hash, and `gdelt-gsg-terminal-chronology-v1` ledger. The complete bundle is published atomically, manifest-last, and without replacement. Hydration constructs state only from single-read buffers verified against both the publication manifest and state index, then verifies every referenced raw object before accepting the state.
+- The chronology ledger stores one canonical minute record for every terminal interval from the generation's first accepted plan through `next_expected_interval_start`, the exclusive global watermark. Records distinguish `retrieved_and_normalized` snapshots from explicit missing/invalid provider gaps and bind delivered snapshots to raw SHA-256 and line count. Records are strictly ordered, contiguous, immutable, and independent of normalize-call boundaries. The corrected implementation intentionally rejects every overlap and replay rather than attempting idempotent replay.
+- Hydration rejects missing, malformed, noncanonical, duplicated, overlapping, discontinuous, contradictory, or hash-mismatched chronology and any watermark not justified by the final interval. The watermark and ledger advance only with the rest of a fully validated batch; pending intervals and any validation or publication failure leave the prior exported state byte-identical.
 - Each terminal batch is parsed and validated without mutating state. Repeats and candidate logical versions are resolved first. New logical articles are then sorted exactly by `(initial_first_seen_at, article_id)` before permanent causal group anchors are assigned. Raw snapshot order, JSONL line order, raw hash, and `from`/`to` endpoint order cannot select the anchor. The state changes only after the complete candidate state passes validation.
 - If multiple fingerprints for one `article_id` share one model-availability timestamp in the incoming batch, every involved observation receives primary exclusion `revision_time_unknown`, and no conflicting version is created. If a new observation conflicts with an already-published immutable state, normalization raises a project-specific integrity error, leaves that state unchanged, and publishes no replacement. This fail-closed generation must not be modeled.
 - Primary exclusions are selected from the frozen precedence table, not from validation call order. Multiple failures retain deterministic secondary diagnostics but exactly one stable primary reason.
@@ -704,9 +707,9 @@ The user authorized the following offline work on 2026-08-14:
 
 Any real GSG retrieval or prospective pilot remains outside Batch A and requires separate Batch B network/storage authorization. Historical GSG samples remain ineligible and can never seed the forward corpus.
 
-The original Batch A commits remain intact. One later corrective commit hardens normalizer-state persistence/hydration, causal deduplication order, same-time conflict handling, provider-rights gating, exact-byte reads, and exclusion precedence. Milestones 1 and 2 are implementation- and verification-complete but are not finally accepted until independent review finishes.
+The original Batch A commits and first integrity-corrective commit remain intact. This new isolated correction adds the persistent exclusive global watermark, minute-level terminal ledger, strict cross-call/restart chronology, and partition-independent state bytes. Milestones 1 and 2 are implementation- and verification-complete but are not finally accepted until independent review finishes.
 
-The exact next action is independent review of that corrective commit. This is not authorization for Batch B. Before any Batch B pilot, a later user instruction must separately approve the GDELT GSG English-BTC-title rights interpretation and provide explicit network endpoint, prospective start, request/interval, retry, byte, retained-storage, elapsed-time, and cost caps. Scoring, models, research gates, features, training, backtests, forward research collection, and holdout work remain separately unauthorized.
+The exact next action is independent review of the new global-watermark corrective commit. This is not authorization for Batch B. Before any Batch B pilot, a later user instruction must separately approve the GDELT GSG English-BTC-title rights interpretation and provide explicit network endpoint, prospective start, request/interval, retry, byte, retained-storage, elapsed-time, and cost caps. Scoring, models, research gates, features, training, backtests, forward research collection, and holdout work remain separately unauthorized.
 
 ## Official source register
 
