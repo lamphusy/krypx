@@ -1,6 +1,7 @@
 """Strict article and score contract tests."""
 
 from copy import deepcopy
+from typing import cast
 
 import pytest
 
@@ -91,6 +92,24 @@ def valid_score(**overrides: object) -> dict[str, object]:
     return value
 
 
+def refresh_article_content_identity(value: dict[str, object]) -> None:
+    """Recompute identities after a test mutates scorer-visible article fields."""
+    content_hash = derive_content_hash(
+        asset=cast(str, value["asset"]),
+        content=cast(str | None, value["content"]),
+        language=cast(str, value["language"]),
+        source=cast(str, value["source"]),
+        title=cast(str | None, value["title"]),
+    )
+    value["content_hash"] = content_hash
+    value["article_version_id"] = derive_article_version_id(
+        article_id=cast(str, value["article_id"]),
+        first_seen_at=cast(str, value["first_seen_at"]),
+        language=cast(str, value["language"]),
+        content_hash=content_hash,
+    )
+
+
 @pytest.mark.parametrize(
     "timestamp",
     [
@@ -111,6 +130,54 @@ def test_article_rejects_hash_mismatch_and_extra_fields() -> None:
         validate_article_record(valid_article(content_hash="0" * 64))
     with pytest.raises(ArticleValidationError, match="extra"):
         validate_article_record({**valid_article(), "surprise": True})
+
+
+@pytest.mark.parametrize("field", ["title", "content"])
+@pytest.mark.parametrize("malformed", [7, ["not", "text"], {"not": "text"}])
+def test_article_rejects_non_string_title_and_content_with_recomputed_hashes(
+    field: str, malformed: object
+) -> None:
+    value = valid_article()
+    value[field] = malformed
+    refresh_article_content_identity(value)
+
+    with pytest.raises(ArticleValidationError, match=rf"^{field} must be a string or null$"):
+        validate_article_record(value)
+
+
+@pytest.mark.parametrize(
+    ("title", "content"),
+    [
+        (None, "Synthetic article body"),
+        ("", "Synthetic article body"),
+        ("Synthetic article title", None),
+        ("Synthetic article title", ""),
+    ],
+)
+def test_article_allows_nullable_or_blank_text_when_other_text_is_nonblank(
+    title: str | None, content: str | None
+) -> None:
+    value = valid_article(title=title, content=content)
+    refresh_article_content_identity(value)
+
+    record = validate_article_record(value)
+
+    assert record.title == title
+    assert record.content == content
+
+
+@pytest.mark.parametrize(
+    ("title", "content"),
+    [(None, None), (None, ""), ("", None), ("", ""), (" \t", "\n")],
+)
+def test_article_rejects_title_and_content_when_both_are_blank(
+    title: str | None, content: str | None
+) -> None:
+    value = valid_article(title=title, content=content)
+    refresh_article_content_identity(value)
+
+    with pytest.raises(ArticleValidationError, match="title and content cannot both be blank"):
+        validate_article_record(value)
 
 
 def test_collection_rejects_duplicate_identities() -> None:

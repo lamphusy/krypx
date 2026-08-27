@@ -1,6 +1,6 @@
 # KrypX Phase 2 — Milestone 0 Research Protocol and News-Source Feasibility
 
-**Protocol status:** Batch A causal-availability and terminal-gap-evidence correction implemented offline; Milestones 1 and 2 remain pending independent review
+**Protocol status:** All five Batch A acceptance blockers corrected offline; Milestones 1 and 2 remain pending a new independent review
 
 **Research decision:** `PROCEED_WITH_FORWARD_ONLY_COLLECTION`
 
@@ -9,10 +9,10 @@
 **Research asset / interval:** BTC/USDT, 1 hour
 
 **Prepared:** 2026-08-12
-**Latest offline correction:** 2026-08-16
+**Latest offline correction:** 2026-08-27
 **Companion machine-readable draft:** `config/phase2_protocol.json`
 
-**Approval boundary:** Batch A authorizes synthetic-fixture implementation, corrective hardening, and local verification on `codex/phase2-foundation`. It does not approve real GDELT title-use rights, Batch B, GDELT network collection, provider/API access, scorer selection, model downloads, research gates, real feature generation, training/backtesting, forward collection, or holdout access/evaluation.
+**Approval boundary:** Batch A authorizes synthetic-fixture implementation, corrective hardening, local verification, and one no-push corrective commit on `codex/phase2-foundation`. It does not approve real GDELT title-use rights, Batch B or Milestone 3, GDELT network collection, provider/API access, scorer selection, model downloads, research gates, real feature generation, training/backtesting, forward collection, or holdout access/evaluation.
 
 ## Executive decision
 
@@ -23,7 +23,7 @@ This recommendation is deliberately title-only. It does not authorize fetching p
 | Decision item | Milestone 0 result |
 |---|---|
 | Exact verdict | `PROCEED_WITH_FORWARD_ONLY_COLLECTION` |
-| Engineering-specification approval | Approved for offline Milestones 1 and 2 only; corrected implementations are pending independent review and all research/external-access approvals remain false |
+| Engineering-specification approval | Approved for offline Milestones 1 and 2 only; all five acceptance blockers are corrected but pending a new independent review, and all research/external-access approvals remain false |
 | Recommended provider | GDELT GSG, title-only, with KrypX receipt time and exact raw-byte hashes; human approval still required |
 | Historical feasibility | `REJECTED`: no retrospective news scoring/backtest for the Phase 1 period |
 | Main blocker to outcomes | A newly collected development corpus does not yet exist; scorer, gates, budget, and later holdout are unapproved |
@@ -702,7 +702,7 @@ Batch A approval is deliberately narrower than research approval. The article/sc
 | Start future-holdout collection | Not authorized; requires approved frozen protocol/generation |
 | Claim or evaluate the future holdout | Separate explicit authorization required after readiness |
 
-### Batch A corrected implementation — pending independent review
+### Batch A acceptance blockers corrected — pending new independent review
 
 The user authorized the following offline work on 2026-08-14:
 
@@ -710,11 +710,15 @@ The user authorized the following offline work on 2026-08-14:
 
 Any real GSG retrieval or prospective pilot remains outside Batch A and requires separate Batch B network/storage authorization. Historical GSG samples remain ineligible and can never seed the forward corpus.
 
-The original Batch A commits remain intact, including the filename-watermark correction in `8bd1050`. The current isolated correction adds normalizer state v3 and chronology v2, a separate exclusive causal-availability boundary, strictly increasing distinct-snapshot publication times, frozen equal-time behavior, and verified immutable synthetic terminal-gap evidence. Partition/restart independence is claimed only for valid streams satisfying both frozen chronologies; invalid availability or immutable-state conflicts fail closed without mutation. Milestones 1 and 2 are corrected but are not finally accepted until independent review finishes. Milestone 3 and every later milestone remain incomplete.
+The original Batch A commits remain intact, including the filename-watermark correction in `8bd1050` and the causal-availability/gap-evidence correction in `3e31538e79be85002fc4f11633f22b189058a42a`. The latter added normalizer state v3 and chronology v2, a separate exclusive causal-availability boundary, strictly increasing distinct-snapshot publication times, frozen equal-time behavior, and verified immutable synthetic terminal-gap evidence. Partition/restart independence is claimed only for valid streams satisfying both frozen chronologies; invalid availability or immutable-state conflicts fail closed without mutation.
 
-Final offline verification for this correction recorded 17 passing causal-availability regressions, 44 passing terminal-gap-evidence regressions, 117 passing focused GSG tests, 144 passing Phase 2 sentiment tests, and 397 passing full-repository tests with the same 12 expected Phase 1 single-class metric warnings. Diff, formatting, lint, compilation, dependency, JSON, and Markdown/JSON reconciliation checks passed. All fixtures and storage were local and synthetic; no external or holdout access occurred.
+The next independent adversarial review found five remaining blockers in strict article text typing, non-regular descriptor handling, outer publication-envelope validation, normalization/coverage publication-boundary validation, and full-manifest collision equality. The no-push correction authorized on 2026-08-25 addresses all five. It explicitly type-checks article text before string operations and hashing; opens storage descriptors nonblocking and rejects non-regular descriptors after `fstat`; enforces the exact `immutable-publication-v1` outer schema before state-v3 hydration; validates coverage chronology, arithmetic, gaps, rates, types, ordering, and canonical identities; recomputes normalization and coverage semantic SHA-256 values; and requires exact payload plus complete-manifest equality for idempotent collisions.
 
-The exact next action is independent review of the new causal-availability and terminal-gap-evidence corrective commit. This is not authorization for Batch B. Real GDELT rights, network or provider collection, publisher access, accounts, credentials, paid services, scoring, models, features, training, backtests, research gates, future collection, and holdout access/evaluation all remain unauthorized. Before any Batch B pilot, a later user instruction must separately approve the GDELT GSG English-BTC-title rights interpretation and provide explicit network endpoint, prospective start, request/interval, retry, byte, retained-storage, elapsed-time, and cost caps.
+Current offline verification records 27 passing article-contract tests, 15 passing immutable-storage tests, 24 passing GSG adapter/publication tests, 24 passing state-integrity tests, 179 passing Phase 2 sentiment tests, 253 passing frozen Phase 1 tests, and 432 passing repository-wide tests with the same 12 expected Phase 1 single-class metric warnings. Diff, formatting, lint, compilation, dependency, RFC 8785 differential, JSON, and Markdown/JSON reconciliation checks passed. All fixtures and storage were local and synthetic; no network, external-service, or holdout access occurred.
+
+The governance record also now reflects the local Git evidence: commit `3e31538e79be85002fc4f11633f22b189058a42a` updated `origin/codex/phase2-foundation` at `2026-08-16T16:59:32+07:00`, local `main` was fast-forwarded at `2026-08-16T16:59:45+07:00`, and `origin/main` was updated at `2026-08-16T16:59:50+07:00`. The reflog does not establish the actor, and this protocol contains no matching push authorization. The current corrective task authorized and performed no push.
+
+Milestones 1 and 2 are corrected but are not finally accepted until the new independent review finishes. Milestone 3 and every later milestone remain incomplete. The exact next action is independent read-only review of the single five-finding corrective commit based on `3e31538e79be85002fc4f11633f22b189058a42a`, including reproduction of the five prior adversarial probes and review of the governance reconciliation. This is not authorization for Batch B. Real GDELT rights, network or provider collection, publisher access, accounts, credentials, paid services, scoring, models, features, training, backtests, research gates, future collection, and holdout access/evaluation all remain unauthorized. Before any Batch B pilot, a later user instruction must separately approve the GDELT GSG English-BTC-title rights interpretation and provide explicit network endpoint, prospective start, request/interval, retry, byte, retained-storage, elapsed-time, and cost caps.
 
 ## Official source register
 

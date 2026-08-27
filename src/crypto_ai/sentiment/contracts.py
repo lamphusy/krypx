@@ -257,6 +257,8 @@ def validate_article_record(value: Mapping[str, Any]) -> ArticleRecord:
 
 
 def _validate_article(record: ArticleRecord) -> None:
+    _require_nullable_string(record.title, "title", ArticleValidationError)
+    _require_nullable_string(record.content, "content", ArticleValidationError)
     _require_hash(record.article_id, "article_id", ArticleValidationError)
     _require_hash(record.article_version_id, "article_version_id", ArticleValidationError)
     _require_hash(record.content_hash, "content_hash", ArticleValidationError)
@@ -458,6 +460,11 @@ def _require_hash(value: object, field: str, error: type[Exception]) -> None:
 def _require_nonblank(value: object, field: str, error: type[Exception]) -> None:
     if not isinstance(value, str) or not value.strip():
         raise error(f"{field} must be a nonblank string")
+
+
+def _require_nullable_string(value: object, field: str, error: type[Exception]) -> None:
+    if value is not None and not isinstance(value, str):
+        raise error(f"{field} must be a string or null")
 
 
 def _require_exact_fields(

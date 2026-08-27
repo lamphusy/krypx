@@ -11,11 +11,14 @@ from pathlib import Path
 import pytest
 
 from crypto_ai.exceptions import ProviderIngestionError
-from crypto_ai.sentiment.canonical import canonicalize, sha256_bytes
+from crypto_ai.sentiment.canonical import canonical_sha256, canonicalize, sha256_bytes
 from crypto_ai.sentiment.providers.gdelt_gsg import (
+    CoverageReport,
     GSGAdapter,
     GSGNormalizer,
     GSGRetryPolicy,
+    NormalizationResult,
+    ProviderGap,
     RightsApproval,
     build_coverage_report,
     canonicalize_url,
@@ -68,6 +71,19 @@ def approved_normalizer(*snapshots) -> GSGNormalizer:
         protocol_config_sha256=PROTOCOL_CONFIG_SHA256,
         rights_approval=approval,
     )
+
+
+def normalized_publication_inputs(
+    tmp_path: Path,
+) -> tuple[GSGAdapter, NormalizationResult, CoverageReport]:
+    adapter = adapter_at(tmp_path, datetime(2026, 8, 14, 1, 0, 31, tzinfo=UTC))
+    snapshot = ingest(adapter, gzip_fixture("base.jsonl"), 0)
+    plan = plan_retrieval("2026-08-14T01:00:00Z", "2026-08-14T01:01:00Z")
+    coverage = build_coverage_report(plan, [snapshot], as_of="2026-08-14T01:30:00Z")
+    result = approved_normalizer(snapshot).normalize(
+        [snapshot], retrieval_plan=plan, terminal_as_of="2026-08-14T01:30:00Z"
+    )
+    return adapter, result, coverage
 
 
 def normalize_terminal(
@@ -257,13 +273,7 @@ def test_deterministic_rerun_produces_identical_semantic_bytes(tmp_path: Path) -
 
 
 def test_normalized_batch_publication_is_exact_and_idempotent(tmp_path: Path) -> None:
-    adapter = adapter_at(tmp_path, datetime(2026, 8, 14, 1, 0, 31, tzinfo=UTC))
-    snapshot = ingest(adapter, gzip_fixture("base.jsonl"), 0)
-    plan = plan_retrieval("2026-08-14T01:00:00Z", "2026-08-14T01:01:00Z")
-    coverage = build_coverage_report(plan, [snapshot], as_of="2026-08-14T01:30:00Z")
-    result = approved_normalizer(snapshot).normalize(
-        [snapshot], retrieval_plan=plan, terminal_as_of="2026-08-14T01:30:00Z"
-    )
+    adapter, result, coverage = normalized_publication_inputs(tmp_path)
 
     first = publish_normalization(adapter.store, "fixture-001", result, coverage)
     second = publish_normalization(adapter.store, "fixture-001", result, coverage)
@@ -273,6 +283,119 @@ def test_normalized_batch_publication_is_exact_and_idempotent(tmp_path: Path) ->
     lines = (first / "articles.jsonl").read_bytes().splitlines()
     assert len(lines) == 2
     assert all(canonicalize(json.loads(line)) == line for line in lines)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("complete_intervals", -1, "nonnegative integer"),
+        ("zero_line_intervals", -1, "nonnegative integer"),
+        ("gap_intervals", -1, "nonnegative integer"),
+        ("retrieval_rate", -0.1, "finite in"),
+        ("retrieval_rate", 1.1, "finite in"),
+        ("retrieval_rate", float("inf"), "finite in"),
+        ("as_of", "not-a-timestamp", "as_of timestamp"),
+        ("semantic_sha256", "0" * 64, "semantic hash mismatch"),
+    ],
+)
+def test_normalized_publication_rejects_forged_coverage_fields(
+    tmp_path: Path, field: str, value: object, message: str
+) -> None:
+    adapter, result, coverage = normalized_publication_inputs(tmp_path)
+    forged = replace(coverage, **{field: value})
+
+    with pytest.raises(ProviderIngestionError, match=message):
+        publish_normalization(adapter.store, "forged-coverage", result, forged)
+
+    assert not (adapter.store.publications_root / "gsg-normalized-forged-coverage").exists()
+
+
+def test_normalized_publication_recomputes_coverage_arithmetic(tmp_path: Path) -> None:
+    adapter, result, coverage = normalized_publication_inputs(tmp_path)
+    forged = replace(coverage, complete_intervals=coverage.complete_intervals + 1)
+    forged = replace(
+        forged,
+        semantic_sha256=canonical_sha256(forged.to_dict(include_hash=False)),
+    )
+
+    with pytest.raises(ProviderIngestionError, match="due interval arithmetic"):
+        publish_normalization(adapter.store, "forged-arithmetic", result, forged)
+
+
+def test_normalized_publication_rejects_forged_gap_bounds(tmp_path: Path) -> None:
+    adapter, result, coverage = normalized_publication_inputs(tmp_path)
+    forged_gap = ProviderGap(
+        start_at="2026-08-14T01:00:00Z",
+        end_at_exclusive="2026-08-14T01:01:00Z",
+        duration_minutes=2,
+        reasons=("synthetic_gap",),
+    )
+    forged = replace(coverage, gaps=(forged_gap,))
+    forged = replace(
+        forged,
+        semantic_sha256=canonical_sha256(forged.to_dict(include_hash=False)),
+    )
+
+    with pytest.raises(ProviderIngestionError, match="gap fields"):
+        publish_normalization(adapter.store, "forged-gap", result, forged)
+
+
+def test_normalized_publication_rejects_adjacent_ungrouped_gaps(tmp_path: Path) -> None:
+    adapter, result, coverage = normalized_publication_inputs(tmp_path)
+    gaps = (
+        ProviderGap(
+            start_at="2026-08-14T01:00:00Z",
+            end_at_exclusive="2026-08-14T01:01:00Z",
+            duration_minutes=1,
+            reasons=("non_retryable",),
+        ),
+        ProviderGap(
+            start_at="2026-08-14T01:01:00Z",
+            end_at_exclusive="2026-08-14T01:02:00Z",
+            duration_minutes=1,
+            reasons=("retry_exhausted",),
+        ),
+    )
+    forged = replace(
+        coverage,
+        complete_intervals=0,
+        expected_due_intervals=2,
+        gap_intervals=2,
+        gaps=gaps,
+        maximum_gap_minutes=1,
+        retrieval_rate=0.0,
+        zero_line_intervals=0,
+    )
+    forged = replace(
+        forged,
+        semantic_sha256=canonical_sha256(forged.to_dict(include_hash=False)),
+    )
+
+    with pytest.raises(ProviderIngestionError, match="not maximally grouped"):
+        publish_normalization(adapter.store, "ungrouped-gaps", result, forged)
+
+
+def test_normalized_publication_rejects_forged_normalization_hash(tmp_path: Path) -> None:
+    adapter, result, coverage = normalized_publication_inputs(tmp_path)
+    forged = replace(result, semantic_sha256="0" * 64)
+
+    with pytest.raises(ProviderIngestionError, match="normalization semantic hash mismatch"):
+        publish_normalization(adapter.store, "forged-normalization", forged, coverage)
+
+
+def test_normalized_publication_collision_rejects_altered_manifest_metadata(
+    tmp_path: Path,
+) -> None:
+    adapter, result, coverage = normalized_publication_inputs(tmp_path)
+    published = publish_normalization(adapter.store, "metadata-collision", result, coverage)
+    manifest_path = published / "manifest.json"
+    manifest = json.loads(manifest_path.read_bytes())
+    manifest["metadata"]["provider"] = "forged-provider"
+    manifest["metadata"]["scope"] = "forged-scope"
+    manifest_path.write_bytes(canonicalize(manifest))
+
+    with pytest.raises(ProviderIngestionError, match="collision with different bytes"):
+        publish_normalization(adapter.store, "metadata-collision", result, coverage)
 
 
 def test_normalizer_refuses_a_nonterminal_expected_interval(tmp_path: Path) -> None:
