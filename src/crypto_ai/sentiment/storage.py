@@ -19,6 +19,8 @@ from crypto_ai.exceptions import PublicationCollisionError, SentimentStorageErro
 from crypto_ai.sentiment.canonical import canonicalize, sha256_bytes
 
 SHA256_LENGTH = 64
+PUBLICATION_SCHEMA_VERSION = "immutable-publication-v1"
+PUBLICATION_MANIFEST_FIELDS = frozenset({"files", "metadata", "publication_id", "schema_version"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,7 +122,7 @@ class ContentAddressedStore:
                 "files": file_manifest,
                 "metadata": dict(metadata or {}),
                 "publication_id": publication_id,
-                "schema_version": "immutable-publication-v1",
+                "schema_version": PUBLICATION_SCHEMA_VERSION,
             }
             _write_fsynced(staging_directory / "manifest.json", canonicalize(manifest))
             _fsync_tree_directories(staging_directory)
@@ -162,8 +164,14 @@ class ContentAddressedStore:
             raise SentimentStorageError(f"invalid publication manifest: {publication_id}") from exc
         if not isinstance(manifest, dict) or canonicalize(manifest) != raw_manifest:
             raise SentimentStorageError("publication manifest is not canonical JCS")
+        if set(manifest) != PUBLICATION_MANIFEST_FIELDS:
+            raise SentimentStorageError("publication manifest has unexpected fields")
+        if manifest["schema_version"] != PUBLICATION_SCHEMA_VERSION:
+            raise SentimentStorageError("unsupported publication manifest schema")
         if manifest.get("publication_id") != publication_id:
             raise SentimentStorageError("publication ID does not match its manifest")
+        if not isinstance(manifest["metadata"], dict):
+            raise SentimentStorageError("publication manifest metadata must be an object")
         files = manifest.get("files")
         if not isinstance(files, dict) or not files:
             raise SentimentStorageError("publication manifest has no file inventory")
@@ -174,11 +182,12 @@ class ContentAddressedStore:
             expected_paths.add(name)
             if not isinstance(descriptor, dict) or set(descriptor) != {"sha256", "size_bytes"}:
                 raise SentimentStorageError(f"invalid manifest entry for {name}")
+            size_bytes = descriptor["size_bytes"]
+            if isinstance(size_bytes, bool) or not isinstance(size_bytes, int) or size_bytes < 0:
+                raise SentimentStorageError(f"invalid manifest size for {name}")
             path = directory / PurePosixPath(name)
             data = _read_regular_file_once(path, description=f"publication member {name}")
-            if descriptor.get("size_bytes") != len(data) or descriptor.get(
-                "sha256"
-            ) != sha256_bytes(data):
+            if size_bytes != len(data) or descriptor["sha256"] != sha256_bytes(data):
                 raise SentimentStorageError(f"publication member hash mismatch: {name}")
             verified_files[name] = data
         actual_paths = {
@@ -245,6 +254,7 @@ def _read_regular_file_once(path: Path, *, description: str) -> bytes:
     flags = os.O_RDONLY
     if hasattr(os, "O_CLOEXEC"):
         flags |= os.O_CLOEXEC
+    flags |= getattr(os, "O_NONBLOCK", 0)
     nofollow_available = hasattr(os, "O_NOFOLLOW")
     if nofollow_available:
         flags |= os.O_NOFOLLOW

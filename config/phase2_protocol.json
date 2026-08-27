@@ -1,9 +1,9 @@
 {
   "protocol_id": "krypx-phase2-milestone0",
   "protocol_version": "0.1.0-draft",
-  "status": "batch_a_causal_availability_and_gap_evidence_corrected_pending_independent_review",
+  "status": "batch_a_acceptance_blockers_corrected_pending_independent_review",
   "created_at": "2026-08-12T09:52:48Z",
-  "approval_state": "offline_batch_a_only_causal_availability_and_gap_evidence_corrected_pending_independent_review",
+  "approval_state": "offline_batch_a_only_acceptance_blockers_corrected_pending_independent_review",
   "approved": false,
   "engineering_specification_approval": {
     "approved": true,
@@ -81,12 +81,44 @@
       "push"
     ]
   },
-  "batch_a_corrective_review": {
-    "status": "causal_availability_and_gap_evidence_implementation_complete_pending_independent_review",
-    "corrected_at": "2026-08-16",
+  "acceptance_blocker_corrective_authorization": {
+    "approved": true,
+    "approved_at": "2026-08-25",
     "branch": "codex/phase2-foundation",
-    "milestone1_status": "corrected_pending_independent_review",
-    "milestone2_status": "causal_availability_and_gap_evidence_corrected_pending_independent_review",
+    "reviewed_commit": "3e31538e79be85002fc4f11633f22b189058a42a",
+    "authorized_scope": [
+      "reopen_batch_a_to_correct_all_five_acceptance_blocking_findings",
+      "enforce_strict_article_title_and_content_types",
+      "reject_nonregular_storage_descriptors_without_blocking",
+      "enforce_exact_outer_publication_schema_and_state_v3_hydration",
+      "validate_and_recompute_normalization_and_coverage_identities",
+      "compare_complete_manifest_identity_on_publication_collision",
+      "reconcile_historical_push_metadata",
+      "add_offline_adversarial_regression_coverage",
+      "update_protocol_records",
+      "create_one_offline_corrective_commit"
+    ],
+    "explicitly_not_approved": [
+      "batch_b_or_milestone3",
+      "real_gdelt_rights",
+      "network_or_provider_collection",
+      "publisher_access",
+      "scorer_or_model_activity",
+      "feature_generation",
+      "training_or_backtesting",
+      "research_gates",
+      "future_collection",
+      "holdout_access_or_evaluation",
+      "push"
+    ]
+  },
+  "batch_a_corrective_review": {
+    "status": "acceptance_blocker_correction_implemented_pending_independent_review",
+    "corrected_at": "2026-08-27",
+    "branch": "codex/phase2-foundation",
+    "reviewed_commit": "3e31538e79be85002fc4f11633f22b189058a42a",
+    "milestone1_status": "acceptance_blockers_corrected_pending_independent_review",
+    "milestone2_status": "acceptance_blockers_corrected_pending_independent_review",
     "milestone3_or_later_complete": false,
     "real_gdelt_rights_approved": false,
     "batch_b_authorized": false,
@@ -94,7 +126,9 @@
     "scorer_or_model_authorized": false,
     "research_gates_authorized": false,
     "future_collection_or_holdout_authorized": false,
-    "push_authorized_or_performed": false,
+    "current_corrective_push_authorized": false,
+    "current_corrective_push_performed": false,
+    "historical_push_observed": true,
     "corrective_scope": [
       "single_read_exact_byte_verification",
       "canonical_immutable_normalizer_state_and_verified_hydration",
@@ -110,7 +144,13 @@
       "strictly_increasing_distinct_snapshot_publication_times",
       "valid_stream_partition_and_restart_independent_state_bytes",
       "immutable_verified_terminal_gap_evidence",
-      "closed_world_ledger_receipt_article_link_exclusion_and_gap_evidence_hydration"
+      "closed_world_ledger_receipt_article_link_exclusion_and_gap_evidence_hydration",
+      "strict_nullable_string_article_text_validation",
+      "nonblocking_descriptor_level_regular_file_validation",
+      "exact_outer_publication_manifest_schema_validation",
+      "normalization_and_coverage_publication_boundary_validation",
+      "semantic_identity_recomputation_before_publication",
+      "complete_manifest_collision_equality"
     ],
     "prior_global_watermark_contract": {
       "implementation_status": "complete_pending_independent_review",
@@ -214,7 +254,7 @@
       "hydration": "reject_legacy_state_and_verify_single_read_manifest_buffers_canonical_encoding_transitive_descriptors_raw_receipts_both_watermarks_complete_snapshot_times_gap_evidence_and_all_cross_file_relationships",
       "silent_migration_inference_or_repair": false
     },
-    "current_corrective_verification": {
+    "causal_availability_and_gap_evidence_verification": {
       "status": "offline_verification_complete_pending_independent_review",
       "focused_causal_availability_regressions": "17_passed",
       "focused_terminal_gap_evidence_regressions": "44_passed",
@@ -234,7 +274,31 @@
       "external_service_access_authorized": false,
       "holdout_access_authorized": false
     },
-    "exact_next_action": "independent_review_of_new_causal_availability_and_gap_evidence_corrective_commit_only"
+    "acceptance_blocker_corrective_verification": {
+      "status": "offline_verification_complete_pending_independent_review",
+      "strict_article_contract_tests": "27_passed",
+      "immutable_storage_tests": "15_passed",
+      "gsg_adapter_and_publication_tests": "24_passed",
+      "normalizer_state_integrity_tests": "24_passed",
+      "phase2_sentiment_suite": "179_passed",
+      "phase1_suite": "253_passed_12_expected_single_class_metric_warnings",
+      "full_phase1_and_phase2_suite": "432_passed_12_expected_single_class_metric_warnings",
+      "git_diff_check": "pass",
+      "black_check": "pass_64_files_unchanged",
+      "ruff_check": "pass",
+      "compileall": "pass",
+      "pip_check": "pass_no_broken_requirements",
+      "rfc8785_canonicalization": "pass_49972_binary64_values_matched_local_v8",
+      "json_validation": "pass",
+      "markdown_json_reconciliation": "pass",
+      "fixtures": "synthetic_only_with_temporary_storage",
+      "network_access": "none",
+      "network_access_authorized": false,
+      "external_service_access_authorized": false,
+      "holdout_access_authorized": false,
+      "push_performed_during_corrective_task": false
+    },
+    "exact_next_action": "independent_read_only_review_of_acceptance_blocker_corrective_commit_only"
   },
   "verdict": "PROCEED_WITH_FORWARD_ONLY_COLLECTION",
   "article_contract_version": "article-contract-v1",
@@ -265,7 +329,18 @@
     "credentials_requested": false,
     "paid_service_started": false,
     "batch_a_commits_performed": true,
-    "push_performed": false
+    "push_performed": true,
+    "historical_push_reconciliation": {
+      "source": "local_git_reflog",
+      "commit": "3e31538e79be85002fc4f11633f22b189058a42a",
+      "origin_phase2_branch_updated_at": "2026-08-16T16:59:32+07:00",
+      "main_fast_forwarded_at": "2026-08-16T16:59:45+07:00",
+      "origin_main_updated_at": "2026-08-16T16:59:50+07:00",
+      "authorization_evidence_in_protocol_record": "not_recorded",
+      "actor_attribution": "not_established_by_local_reflog",
+      "current_corrective_task_push_authorized": false,
+      "current_corrective_task_push_performed": false
+    }
   },
   "phase1_reference": {
     "git_commit": "8f2800e50a161ac4b82dee3362152f1417b8778b",
@@ -1824,8 +1899,8 @@
   },
   "next_authorized_task": {
     "status": "stop_pending_independent_review",
-    "prerequisite": "batch_a_causal_availability_and_gap_evidence_corrective_implementation_and_offline_verification_complete",
-    "exact_request": "Perform an independent review of the new single Batch A causal-availability and terminal-gap-evidence corrective commit. Do not begin or authorize Batch B, real GDELT rights, network collection, scorer or model activity, feature generation, training or backtesting, research gates, future collection, or holdout activity.",
+    "prerequisite": "batch_a_acceptance_blocker_corrective_implementation_and_offline_verification_complete",
+    "exact_request": "Perform an independent read-only review of the single Batch A acceptance-blocker corrective commit based on 3e31538e79be85002fc4f11633f22b189058a42a. Reproduce all five prior adversarial failures and verify the governance reconciliation. Do not begin or authorize Batch B, Milestone 3, real GDELT rights, network collection, scorer or model activity, feature generation, training or backtesting, research gates, future collection, or holdout activity.",
     "batch_b_authorized": false
   },
   "source_references": [

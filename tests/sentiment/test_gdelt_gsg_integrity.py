@@ -304,6 +304,31 @@ def test_state_round_trip_is_deterministic_and_collision_is_no_overwrite(tmp_pat
         instance.publish_state(store, "roundtrip")
 
 
+@pytest.mark.parametrize("damage", ["unknown_schema", "extra_field", "metadata_type"])
+def test_state_hydration_rejects_invalid_outer_publication_manifest(
+    tmp_path: Path, damage: str
+) -> None:
+    store = ContentAddressedStore(tmp_path)
+    publication = GSGNormalizer(protocol_config_sha256=PROTOCOL_HASH).publish_state(
+        store, f"outer-{damage}"
+    )
+    manifest_path = publication / "manifest.json"
+    manifest = json.loads(manifest_path.read_bytes())
+    if damage == "unknown_schema":
+        manifest["schema_version"] = "unknown-publication-v999"
+    elif damage == "extra_field":
+        manifest["unexpected_field"] = "must fail closed"
+    else:
+        manifest["metadata"] = ["not", "an", "object"]
+    manifest_path.write_bytes(canonicalize(manifest))
+
+    with pytest.raises(
+        NormalizationIntegrityError,
+        match="state publication failed verification",
+    ):
+        GSGNormalizer.hydrate(store, f"gsg-normalizer-state-outer-{damage}")
+
+
 @pytest.mark.parametrize("damage", ["corrupt", "missing"])
 def test_hydration_rejects_corrupt_or_missing_referenced_state_file(
     tmp_path: Path, damage: str

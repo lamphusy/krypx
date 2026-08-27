@@ -1,13 +1,16 @@
 """Immutable exact-byte storage and publication tests."""
 
+import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from crypto_ai.exceptions import PublicationCollisionError, SentimentStorageError
 from crypto_ai.sentiment import storage as storage_module
-from crypto_ai.sentiment.canonical import sha256_bytes
+from crypto_ai.sentiment.canonical import canonicalize, sha256_bytes
 from crypto_ai.sentiment.storage import ContentAddressedStore
 
 
@@ -98,6 +101,41 @@ def test_get_bytes_rejects_symlink_disappearance_and_read_failure(
         store.get_bytes(digest)
 
 
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="named pipes are unavailable")
+def test_get_bytes_rejects_fifo_without_blocking(tmp_path: Path) -> None:
+    store = ContentAddressedStore(tmp_path)
+    digest = store.put_bytes(b"replace with named pipe")
+    object_path = store.objects_root / digest[:2] / digest
+    object_path.unlink()
+    os.mkfifo(object_path)
+
+    probe = """
+import sys
+from pathlib import Path
+
+from crypto_ai.exceptions import SentimentStorageError
+from crypto_ai.sentiment.storage import ContentAddressedStore
+
+try:
+    ContentAddressedStore(Path(sys.argv[1])).get_bytes(sys.argv[2])
+except SentimentStorageError as exc:
+    print(f"{type(exc).__name__}: {exc}")
+else:
+    raise SystemExit("FIFO was accepted as a content object")
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", probe, str(tmp_path), digest],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=1.0,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.startswith("SentimentStorageError:")
+    assert "not a regular file" in completed.stdout
+
+
 def test_replacement_race_accepts_identical_winner(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -162,6 +200,42 @@ def test_publication_is_manifest_last_verified_and_no_overwrite(tmp_path: Path) 
     with pytest.raises(PublicationCollisionError):
         store.publish_bundle("fixture-run-001", {"articles.jsonl": b"replacement"})
     assert (published / "articles.jsonl").read_bytes() == b'{"fixture":true}\n'
+
+
+def test_publication_rejects_unknown_outer_schema(tmp_path: Path) -> None:
+    store = ContentAddressedStore(tmp_path)
+    published = store.publish_bundle("unknown-schema", {"payload.bin": b"payload"})
+    manifest_path = published / "manifest.json"
+    manifest = json.loads(manifest_path.read_bytes())
+    manifest["schema_version"] = "unknown-publication-v999"
+    manifest_path.write_bytes(canonicalize(manifest))
+
+    with pytest.raises(SentimentStorageError, match="unsupported.*schema"):
+        store.verify_publication("unknown-schema")
+
+
+def test_publication_rejects_unexpected_outer_fields(tmp_path: Path) -> None:
+    store = ContentAddressedStore(tmp_path)
+    published = store.publish_bundle("extra-field", {"payload.bin": b"payload"})
+    manifest_path = published / "manifest.json"
+    manifest = json.loads(manifest_path.read_bytes())
+    manifest["unexpected_field"] = "must fail closed"
+    manifest_path.write_bytes(canonicalize(manifest))
+
+    with pytest.raises(SentimentStorageError, match="unexpected fields"):
+        store.verify_publication("extra-field")
+
+
+def test_publication_rejects_non_object_metadata(tmp_path: Path) -> None:
+    store = ContentAddressedStore(tmp_path)
+    published = store.publish_bundle("bad-metadata", {"payload.bin": b"payload"})
+    manifest_path = published / "manifest.json"
+    manifest = json.loads(manifest_path.read_bytes())
+    manifest["metadata"] = ["not", "an", "object"]
+    manifest_path.write_bytes(canonicalize(manifest))
+
+    with pytest.raises(SentimentStorageError, match="metadata must be an object"):
+        store.verify_publication("bad-metadata")
 
 
 def test_incomplete_bundle_is_cleaned_and_never_visible(

@@ -40,9 +40,10 @@ from crypto_ai.sentiment.contracts import (
     derive_version_fingerprint,
     format_utc_timestamp,
     parse_utc_timestamp,
+    validate_article_collection,
     validate_article_record,
 )
-from crypto_ai.sentiment.storage import ContentAddressedStore
+from crypto_ai.sentiment.storage import PUBLICATION_SCHEMA_VERSION, ContentAddressedStore
 
 PROVIDER_ID = "gdelt_gsg"
 PARSER_VERSION = "gdelt-gsg-jsonl-v1"
@@ -127,6 +128,7 @@ _SAFE_SNAPSHOT_ERROR_CODES = frozenset(
     }
 )
 _SUPPORTED_GAP_ERROR_KINDS = frozenset({"network_transport_error", *_SAFE_SNAPSHOT_ERROR_CODES})
+_COVERAGE_GAP_REASONS = frozenset({"non_retryable", "retry_exhausted", *_SAFE_SNAPSHOT_ERROR_CODES})
 _RETRY_AFTER_HTTP_STATUSES = frozenset({429, 503})
 MAX_RETRY_AFTER_SECONDS = 86_400.0
 
@@ -3125,6 +3127,8 @@ def publish_normalization(
     coverage: CoverageReport,
 ) -> Path:
     """Publish deterministic normalized records with no-overwrite/idempotent semantics."""
+    _validate_normalization_result_for_publication(result)
+    _validate_coverage_report_for_publication(coverage)
     if coverage.pending_intervals or coverage.unresolved_intervals:
         raise ProviderIngestionError(
             "cannot publish normalization with nonterminal coverage intervals"
@@ -3153,29 +3157,242 @@ def publish_normalization(
         ),
     }
     publication_id = f"gsg-normalized-{batch_id}"
+    metadata = {
+        "coverage_semantic_sha256": coverage.semantic_sha256,
+        "normalization_semantic_sha256": result.semantic_sha256,
+        "protocol_config_sha256": result.protocol_config_sha256,
+        "provider": PROVIDER_ID,
+        "rights_approval_sha256": result.rights_approval_sha256,
+        "scope": "normalized_offline_adapter_batch",
+    }
+    expected_manifest = {
+        "files": {
+            name: {"sha256": sha256_bytes(data), "size_bytes": len(data)}
+            for name, data in sorted(files.items())
+        },
+        "metadata": metadata,
+        "publication_id": publication_id,
+        "schema_version": PUBLICATION_SCHEMA_VERSION,
+    }
     try:
-        return store.publish_bundle(
-            publication_id,
-            files,
-            metadata={
-                "coverage_semantic_sha256": coverage.semantic_sha256,
-                "normalization_semantic_sha256": result.semantic_sha256,
-                "protocol_config_sha256": result.protocol_config_sha256,
-                "provider": PROVIDER_ID,
-                "rights_approval_sha256": result.rights_approval_sha256,
-                "scope": "normalized_offline_adapter_batch",
-            },
-        )
+        return store.publish_bundle(publication_id, files, metadata=metadata)
     except PublicationCollisionError as exc:
         try:
             verified = store.read_publication(publication_id)
-            if verified.files == files:
+            if verified.files == files and verified.manifest == expected_manifest:
                 return store.publications_root / publication_id
         except SentimentStorageError:
             pass
         raise ProviderIngestionError(
             f"normalization batch ID collision with different bytes: {batch_id}"
         ) from exc
+
+
+def _validate_normalization_result_for_publication(result: object) -> None:
+    """Reject caller-forged normalization artifacts before immutable publication."""
+    if not isinstance(result, NormalizationResult):
+        raise NormalizationIntegrityError("normalization result does not match its contract")
+    if not _is_sha256(result.protocol_config_sha256) or not _is_sha256(
+        result.rights_approval_sha256
+    ):
+        raise NormalizationIntegrityError("normalization configuration identity is malformed")
+    if not _is_sha256(result.semantic_sha256):
+        raise NormalizationIntegrityError("normalization semantic hash is malformed")
+    if not all(
+        isinstance(value, tuple)
+        for value in (result.articles, result.observation_links, result.exclusions)
+    ):
+        raise NormalizationIntegrityError("normalization collections must be immutable tuples")
+
+    validated_articles: list[ArticleRecord] = []
+    try:
+        for article in result.articles:
+            if not isinstance(article, ArticleRecord):
+                raise NormalizationIntegrityError(
+                    "normalization article does not match its contract"
+                )
+            validated = validate_article_record(article.to_dict())
+            if validated != article:
+                raise NormalizationIntegrityError("normalization article changed during validation")
+            validated_articles.append(validated)
+        validate_article_collection(validated_articles)
+    except ArticleValidationError as exc:
+        raise NormalizationIntegrityError("normalization article validation failed") from exc
+    expected_articles = tuple(
+        sorted(
+            validated_articles,
+            key=lambda item: (
+                item.first_seen_at or "",
+                item.article_id,
+                item.article_version_id,
+            ),
+        )
+    )
+    if result.articles != expected_articles:
+        raise NormalizationIntegrityError("normalization articles are not canonically ordered")
+
+    version_ids = {article.article_version_id for article in result.articles}
+    link_observations: set[str] = set()
+    for link in result.observation_links:
+        if (
+            not isinstance(link, ObservationLink)
+            or not isinstance(link.provider_observation_id, str)
+            or not link.provider_observation_id.strip()
+            or not _is_sha256(link.article_version_id)
+            or link.article_version_id not in version_ids
+            or not isinstance(link.reused_existing_version, bool)
+            or not _is_sha256(link.raw_snapshot_sha256)
+            or not isinstance(link.input_class, str)
+            or link.input_class not in {"provider_response", "synthetic_fixture"}
+            or link.provider_observation_id in link_observations
+        ):
+            raise NormalizationIntegrityError("normalization observation link is invalid")
+        link_observations.add(link.provider_observation_id)
+    if result.observation_links != tuple(
+        sorted(result.observation_links, key=lambda item: item.provider_observation_id)
+    ):
+        raise NormalizationIntegrityError("normalization observation links are not ordered")
+
+    exclusion_observations: set[str] = set()
+    for exclusion in result.exclusions:
+        if (
+            not isinstance(exclusion, ExcludedObservation)
+            or not isinstance(exclusion.provider_observation_id, str)
+            or not exclusion.provider_observation_id.strip()
+            or not isinstance(exclusion.reason, str)
+            or exclusion.reason not in _EXCLUSION_RANK
+            or not isinstance(exclusion.diagnostic, str)
+            or not exclusion.diagnostic.strip()
+            or not _is_sha256(exclusion.raw_snapshot_sha256)
+            or not isinstance(exclusion.input_class, str)
+            or exclusion.input_class not in {"provider_response", "synthetic_fixture"}
+            or exclusion.provider_observation_id in exclusion_observations
+        ):
+            raise NormalizationIntegrityError("normalization exclusion is invalid")
+        exclusion_observations.add(exclusion.provider_observation_id)
+    if link_observations & exclusion_observations:
+        raise NormalizationIntegrityError("normalization observation is linked and excluded")
+    if result.exclusions != tuple(
+        sorted(result.exclusions, key=lambda item: item.provider_observation_id)
+    ):
+        raise NormalizationIntegrityError("normalization exclusions are not ordered")
+
+    try:
+        expected_semantic_sha256 = canonical_sha256(result.to_dict(include_hash=False))
+    except CanonicalizationError as exc:
+        raise NormalizationIntegrityError("normalization result is not canonicalizable") from exc
+    if result.semantic_sha256 != expected_semantic_sha256:
+        raise NormalizationIntegrityError("normalization semantic hash mismatch")
+
+
+def _validate_coverage_report_for_publication(coverage: object) -> None:
+    """Validate coverage arithmetic, chronology, canonical order, and semantic identity."""
+    if not isinstance(coverage, CoverageReport):
+        raise NormalizationIntegrityError("coverage report does not match its contract")
+    if not _is_sha256(coverage.plan_id):
+        raise NormalizationIntegrityError("coverage plan identity is malformed")
+    try:
+        as_of = _parse_required_timestamp(coverage.as_of, "coverage.as_of")
+    except ProviderIngestionError as exc:
+        raise NormalizationIntegrityError("coverage as_of timestamp is invalid") from exc
+    if format_utc_timestamp(as_of) != coverage.as_of:
+        raise NormalizationIntegrityError("coverage as_of timestamp is not canonical UTC")
+
+    counter_fields = (
+        "expected_due_intervals",
+        "complete_intervals",
+        "zero_line_intervals",
+        "pending_intervals",
+        "unresolved_intervals",
+        "gap_intervals",
+        "maximum_gap_minutes",
+    )
+    for field in counter_fields:
+        value = getattr(coverage, field)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise NormalizationIntegrityError(f"coverage {field} must be a nonnegative integer")
+    if (
+        isinstance(coverage.retrieval_rate, bool)
+        or not isinstance(coverage.retrieval_rate, (int, float))
+        or not math.isfinite(coverage.retrieval_rate)
+        or not 0.0 <= coverage.retrieval_rate <= 1.0
+    ):
+        raise NormalizationIntegrityError("coverage retrieval_rate must be finite in [0, 1]")
+    for field in (
+        "expected_schedule_sha256",
+        "observed_receipts_sha256",
+        "terminal_gap_evidence_sha256",
+        "semantic_sha256",
+    ):
+        if not _is_sha256(getattr(coverage, field)):
+            raise NormalizationIntegrityError(f"coverage {field} is malformed")
+    if not isinstance(coverage.gaps, tuple):
+        raise NormalizationIntegrityError("coverage gaps must be an immutable tuple")
+
+    gap_minutes = 0
+    maximum_gap = 0
+    previous_end: datetime | None = None
+    for gap in coverage.gaps:
+        if not isinstance(gap, ProviderGap):
+            raise NormalizationIntegrityError("coverage gap does not match its contract")
+        try:
+            start = _parse_minute_timestamp(gap.start_at, "coverage.gap.start_at")
+            end = _parse_minute_timestamp(gap.end_at_exclusive, "coverage.gap.end_at_exclusive")
+        except ProviderIngestionError as exc:
+            raise NormalizationIntegrityError("coverage gap timestamp is invalid") from exc
+        if (
+            format_utc_timestamp(start) != gap.start_at
+            or format_utc_timestamp(end) != gap.end_at_exclusive
+            or end <= start
+        ):
+            raise NormalizationIntegrityError("coverage gap bounds are invalid")
+        duration_seconds = int((end - start).total_seconds())
+        if duration_seconds % int(EXPECTED_INTERVAL.total_seconds()):
+            raise NormalizationIntegrityError("coverage gap is not minute aligned")
+        expected_duration = duration_seconds // int(EXPECTED_INTERVAL.total_seconds())
+        if (
+            isinstance(gap.duration_minutes, bool)
+            or not isinstance(gap.duration_minutes, int)
+            or gap.duration_minutes != expected_duration
+            or not isinstance(gap.reasons, tuple)
+            or not gap.reasons
+            or any(
+                not isinstance(reason, str) or reason not in _COVERAGE_GAP_REASONS
+                for reason in gap.reasons
+            )
+            or gap.reasons != tuple(sorted(set(gap.reasons)))
+        ):
+            raise NormalizationIntegrityError("coverage gap fields are invalid")
+        if previous_end is not None and start <= previous_end:
+            raise NormalizationIntegrityError("coverage gaps overlap or are not maximally grouped")
+        previous_end = end
+        gap_minutes += gap.duration_minutes
+        maximum_gap = max(maximum_gap, gap.duration_minutes)
+
+    if coverage.gap_intervals != gap_minutes:
+        raise NormalizationIntegrityError("coverage gap interval count is inconsistent")
+    if coverage.maximum_gap_minutes != maximum_gap:
+        raise NormalizationIntegrityError("coverage maximum gap is inconsistent")
+    if coverage.zero_line_intervals > coverage.complete_intervals:
+        raise NormalizationIntegrityError("coverage zero-line count exceeds complete intervals")
+    if coverage.expected_due_intervals != (
+        coverage.complete_intervals + coverage.gap_intervals + coverage.unresolved_intervals
+    ):
+        raise NormalizationIntegrityError("coverage due interval arithmetic is inconsistent")
+    expected_rate = (
+        coverage.complete_intervals / coverage.expected_due_intervals
+        if coverage.expected_due_intervals
+        else 1.0
+    )
+    if coverage.retrieval_rate != expected_rate:
+        raise NormalizationIntegrityError("coverage retrieval rate is inconsistent")
+
+    try:
+        expected_semantic_sha256 = canonical_sha256(coverage.to_dict(include_hash=False))
+    except CanonicalizationError as exc:
+        raise NormalizationIntegrityError("coverage report is not canonicalizable") from exc
+    if coverage.semantic_sha256 != expected_semantic_sha256:
+        raise NormalizationIntegrityError("coverage semantic hash mismatch")
 
 
 def canonicalize_url(value: str) -> str:

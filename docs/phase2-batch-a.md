@@ -2,13 +2,15 @@
 
 This record is limited to the offline engineering work authorized on 2026-08-14 and
 the global-watermark corrective task authorized on 2026-08-15, plus the causal-
-availability and terminal-gap-evidence corrective task authorized on 2026-08-16.
+availability and terminal-gap-evidence corrective task authorized on 2026-08-16 and
+the five-finding acceptance-blocker correction authorized on 2026-08-25 and completed
+offline on 2026-08-27.
 Milestone 0 is approved only as the engineering specification for offline Milestones 1
 and 2. It does not approve provider network access, historical or forward collection,
 scorer selection, model or tokenizer downloads, research-gate execution, feature
 generation, model training, backtesting, future-holdout collection, or holdout access.
 
-## Milestone 1 — corrected implementation complete, pending independent review
+## Milestone 1 — acceptance blockers corrected, pending independent review
 
 Milestone 1 provides strict article and score envelopes, UTC-only timestamp validation,
 dependency-free RFC 8785/JCS canonical serialization, exact-byte SHA-256 hashing,
@@ -24,7 +26,7 @@ Original Batch A evidence before corrective review:
 - Lint: passed for all `src` and `tests` Python files.
 - Tests are protected by the repository-wide real-network connection guard.
 
-## Milestone 2 — corrected implementation complete, pending independent review
+## Milestone 2 — acceptance blockers corrected, pending independent review
 
 Milestone 2 provides one offline GDELT GSG adapter. It creates bounded one-minute
 retrieval schedules and pure retry decisions but contains no HTTP client. Caller-supplied
@@ -192,6 +194,60 @@ Milestones 1 and 2 remain corrected but pending independent review. Milestone 3 
 milestones remain incomplete. The earlier totals above remain clearly identified as prior
 evidence.
 
+## Five-finding acceptance-blocker corrective implementation
+
+An independent adversarial review of commit
+`3e31538e79be85002fc4f11633f22b189058a42a` returned **NOT ACCEPTED** despite the
+then-green repository suite. The current isolated offline correction addresses every reported
+failure without rewriting prior commits:
+
+- Article validation now checks `title` and `content` are exactly `str | None` before any
+  string operation or identity recomputation. Integer, list, and object payloads fail closed
+  with `ArticleValidationError`, including when their dependent hashes are recomputed.
+- Exact-byte storage opens descriptors with `O_NONBLOCK` where available and validates the
+  opened descriptor with `fstat`. FIFOs and every other non-regular object fail immediately
+  with `SentimentStorageError` rather than blocking before validation.
+- Every outer publication manifest must contain exactly `files`, `metadata`,
+  `publication_id`, and `schema_version`; the version must be
+  `immutable-publication-v1`, and metadata must be an object. State-v3 hydration therefore
+  rejects unknown schemas, extra fields, and malformed metadata before deserialization.
+- Normalized-publication boundaries validate immutable tuple contents, canonical order,
+  article/link/exclusion relationships, UTC `as_of`, finite retrieval rates in `[0,1]`,
+  nonnegative integer counters, due/complete/gap arithmetic, zero-line bounds, gap duration
+  and grouping invariants, all declared hashes, and both recomputed RFC 8785 semantic
+  identities before writing any final artifact.
+- Idempotent normalization collisions compare the exact payload buffers and the complete
+  expected manifest, including schema, file descriptors, metadata, provider, scope, protocol
+  hash, rights hash, and semantic hashes. Altered metadata is rejected as a collision rather
+  than accepted as an idempotent rerun.
+
+Corrective verification evidence:
+
+- Strict article contract tests: 27 passed.
+- Immutable storage tests: 15 passed, including a subprocess-bounded FIFO regression.
+- GSG adapter and normalized-publication tests: 24 passed.
+- Normalizer state-integrity tests: 24 passed, including state-v3 outer-manifest rejection.
+- Complete Phase 2 sentiment suite: 179 passed.
+- Frozen Phase 1 suite: 253 passed with 12 expected single-class synthetic metric warnings.
+- Complete repository suite: 432 passed with the same 12 expected warnings.
+- Diff validation, formatting (64 Python files unchanged), lint, bytecode compilation,
+  installed-package consistency, RFC 8785 differential verification, JSON validation, and
+  Markdown/JSON reconciliation: passed.
+- Tests used only synthetic/captured fixtures and temporary storage. No network, provider,
+  publisher, credential, model, market-data, or holdout access occurred, and no push was
+  performed during this corrective task.
+
+The governance record now distinguishes the current no-push correction from historical
+repository activity. Local reflogs record commit `3e31538e79be85002fc4f11633f22b189058a42a`
+updating `origin/codex/phase2-foundation` at `2026-08-16T16:59:32+07:00`, fast-forwarding
+local `main` at `2026-08-16T16:59:45+07:00`, and updating `origin/main` at
+`2026-08-16T16:59:50+07:00`. The local evidence does not identify the actor, and no matching
+push authorization is recorded in this protocol. The current corrective task explicitly
+prohibits and performs no push.
+
+Milestones 1 and 2 are corrected but remain pending a new independent read-only review.
+Milestone 3 and all later milestones remain incomplete.
+
 ## Remaining authorization boundary
 
 Real GDELT retrieval, GDELT title-only/right-use acceptance, all network/provider and
@@ -200,8 +256,10 @@ scorer/model selection, model downloads, scoring, feature construction, numerica
 gates, training, backtests, and all holdout access/evaluation remain unapproved. Batch B is
 not authorized. Milestone 3 and later milestones are not complete.
 
-The exact next action is independent review of the new causal-availability and terminal-gap-
-evidence corrective commit.
+The exact next action is independent read-only review of the single five-finding
+acceptance-blocker corrective commit based on
+`3e31538e79be85002fc4f11633f22b189058a42a`, including reproduction of all five prior
+adversarial probes and verification of the governance reconciliation.
 Batch B is not authorized. A later bounded prospective GSG collection pilot would require a new
 authorization that explicitly:
 
