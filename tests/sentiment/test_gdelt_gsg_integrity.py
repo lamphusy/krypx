@@ -22,6 +22,7 @@ from crypto_ai.sentiment.contracts import (
     derive_content_hash,
     derive_duplicate_group_id,
 )
+from crypto_ai.sentiment.providers import gdelt_gsg as gdelt_module
 from crypto_ai.sentiment.providers.gdelt_gsg import (
     PROVIDER_ID,
     RIGHTS_SCOPE,
@@ -30,7 +31,7 @@ from crypto_ai.sentiment.providers.gdelt_gsg import (
     RightsApproval,
     plan_retrieval,
 )
-from crypto_ai.sentiment.storage import ContentAddressedStore
+from crypto_ai.sentiment.storage import ContentAddressedStore, VerifiedPublication
 
 PROJECT_ROOT = Path(__file__).parents[2]
 PROTOCOL_HASH = sha256_bytes((PROJECT_ROOT / "config" / "phase2_protocol.json").read_bytes())
@@ -327,6 +328,61 @@ def test_state_hydration_rejects_invalid_outer_publication_manifest(
         match="state publication failed verification",
     ):
         GSGNormalizer.hydrate(store, f"gsg-normalizer-state-outer-{damage}")
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        {
+            "protocol_config_sha256": PROTOCOL_HASH,
+            "provider": PROVIDER_ID,
+            "rights_approval_sha256": canonical_sha256(None),
+            "state_sha256": "0" * 64,
+            "unexpected": "field",
+        },
+        {
+            "protocol_config_sha256": 7,
+            "provider": PROVIDER_ID,
+            "rights_approval_sha256": canonical_sha256(None),
+            "state_sha256": "0" * 64,
+        },
+        {
+            "protocol_config_sha256": PROTOCOL_HASH,
+            "provider": "forged-provider",
+            "rights_approval_sha256": canonical_sha256(None),
+            "state_sha256": "0" * 64,
+        },
+    ],
+)
+def test_hydration_rejects_malformed_metadata_before_state_v3_parser(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    metadata: dict[str, object],
+) -> None:
+    store = ContentAddressedStore(tmp_path)
+    publication_id = "gsg-normalizer-state-metadata-order"
+    GSGNormalizer(protocol_config_sha256=PROTOCOL_HASH).publish_state(store, "metadata-order")
+    read_publication = store.read_publication
+
+    def forged_read(requested_id: str) -> VerifiedPublication:
+        verified = read_publication(requested_id)
+        manifest = dict(verified.manifest)
+        manifest["metadata"] = metadata
+        return VerifiedPublication(manifest=manifest, files=verified.files)
+
+    parser_called = False
+
+    def parser_sentinel(*_args: object, **_kwargs: object) -> object:
+        nonlocal parser_called
+        parser_called = True
+        raise AssertionError("state-v3 parser must not see malformed metadata")
+
+    monkeypatch.setattr(store, "read_publication", forged_read)
+    monkeypatch.setattr(gdelt_module, "_parse_canonical_json_buffer", parser_sentinel)
+
+    with pytest.raises(NormalizationIntegrityError, match="manifest metadata"):
+        GSGNormalizer.hydrate(store, publication_id)
+    assert parser_called is False
 
 
 @pytest.mark.parametrize("damage", ["corrupt", "missing"])
@@ -793,14 +849,14 @@ def test_conflict_state_publication_failure_leaves_no_partial_state(
     )
     instance = normalizer(item)
     normalize(instance, [item], start_minute=0, end_minute=1)
-    original_write = storage_module._write_fsynced
+    original_write = storage_module._write_fsynced_at
 
-    def fail_state_index(path: Path, data: bytes) -> None:
-        if path.name == "state.json":
+    def fail_state_index(parent_descriptor: int, name: str, data: bytes) -> None:
+        if name == "state.json":
             raise SentimentStorageError("simulated state publication failure")
-        original_write(path, data)
+        original_write(parent_descriptor, name, data)
 
-    monkeypatch.setattr(storage_module, "_write_fsynced", fail_state_index)
+    monkeypatch.setattr(storage_module, "_write_fsynced_at", fail_state_index)
     with pytest.raises(SentimentStorageError, match="state publication failure"):
         instance.publish_state(store, "failed-conflict")
     assert not (store.publications_root / "gsg-normalizer-state-failed-conflict").exists()

@@ -4,13 +4,15 @@ This record is limited to the offline engineering work authorized on 2026-08-14 
 the global-watermark corrective task authorized on 2026-08-15, plus the causal-
 availability and terminal-gap-evidence corrective task authorized on 2026-08-16 and
 the five-finding acceptance-blocker correction authorized on 2026-08-25 and completed
-offline on 2026-08-27.
+offline on 2026-08-27, plus the final-integrity correction authorized on 2026-08-27 and
+completed offline on 2026-08-30 on `codex/phase2-batch-a-final-integrity`, pending a new
+independent read-only review.
 Milestone 0 is approved only as the engineering specification for offline Milestones 1
 and 2. It does not approve provider network access, historical or forward collection,
 scorer selection, model or tokenizer downloads, research-gate execution, feature
 generation, model training, backtesting, future-holdout collection, or holdout access.
 
-## Milestone 1 — acceptance blockers corrected, pending independent review
+## Milestone 1 — final integrity corrected offline, pending independent review
 
 Milestone 1 provides strict article and score envelopes, UTC-only timestamp validation,
 dependency-free RFC 8785/JCS canonical serialization, exact-byte SHA-256 hashing,
@@ -26,7 +28,7 @@ Original Batch A evidence before corrective review:
 - Lint: passed for all `src` and `tests` Python files.
 - Tests are protected by the repository-wide real-network connection guard.
 
-## Milestone 2 — acceptance blockers corrected, pending independent review
+## Milestone 2 — final integrity corrected offline, pending independent review
 
 Milestone 2 provides one offline GDELT GSG adapter. It creates bounded one-minute
 retrieval schedules and pure retry decisions but contains no HTTP client. Caller-supplied
@@ -190,15 +192,15 @@ Current causal-availability and terminal-gap-evidence corrective verification ev
   network guard. No network, provider, publisher, credential, model, market-data, or holdout
   access occurred.
 
-Milestones 1 and 2 remain corrected but pending independent review. Milestone 3 and all later
-milestones remain incomplete. The earlier totals above remain clearly identified as prior
-evidence.
+At that review stage, Milestones 1 and 2 were recorded as corrected but pending independent
+review. Milestone 3 and all later milestones remained incomplete. The earlier totals above
+are historical evidence only.
 
 ## Five-finding acceptance-blocker corrective implementation
 
 An independent adversarial review of commit
 `3e31538e79be85002fc4f11633f22b189058a42a` returned **NOT ACCEPTED** despite the
-then-green repository suite. The current isolated offline correction addresses every reported
+then-green repository suite. That isolated offline correction addressed every reported
 failure without rewriting prior commits:
 
 - Article validation now checks `title` and `content` are exactly `str | None` before any
@@ -237,16 +239,77 @@ Corrective verification evidence:
   publisher, credential, model, market-data, or holdout access occurred, and no push was
   performed during this corrective task.
 
-The governance record now distinguishes the current no-push correction from historical
-repository activity. Local reflogs record commit `3e31538e79be85002fc4f11633f22b189058a42a`
-updating `origin/codex/phase2-foundation` at `2026-08-16T16:59:32+07:00`, fast-forwarding
-local `main` at `2026-08-16T16:59:45+07:00`, and updating `origin/main` at
-`2026-08-16T16:59:50+07:00`. The local evidence does not identify the actor, and no matching
-push authorization is recorded in this protocol. The current corrective task explicitly
-prohibits and performs no push.
+Those verification results remain historical evidence for commit
+`21e954d24f6639da8c4d902924ebf01ffba715d8`; a later independent adversarial review did not
+accept that commit. It reproduced five additional blockers: caller-forged coverage and gap
+claims, incomplete normalization provenance, state-v3 parsing before field-level metadata
+validation, incomplete detection of unmanifested non-regular objects, and symlinked ancestor
+traversal in storage paths.
 
-Milestones 1 and 2 are corrected but remain pending a new independent read-only review.
-Milestone 3 and all later milestones remain incomplete.
+## Final-integrity corrective implementation — complete, pending independent review
+
+The final offline corrective task was authorized on 2026-08-27, based on merge commit
+`587e4475114db8b65fe47a7a8b2197952f2b9e75`, without rewriting prior history. Its frozen
+implementation boundary is:
+
+- Normalized coverage publication is derived from and bound to a verified retrieval plan,
+  exact raw snapshots, terminal-gap evidence, canonical `as_of`, protocol identity, and the
+  existing interval cap. Caller-created coverage counters, rates, schedule identities, or
+  gaps cannot become authoritative merely by carrying a self-consistent semantic hash.
+- Publication validates closed-world normalization provenance. Each published article must
+  retain exactly one non-reused representative observation link. Current-batch observations,
+  links, reused observations, exclusions, and articles reconcile exactly; representative
+  links from earlier batches are separately persisted and their immutable receipt/CAS bytes
+  are replayed under the recorded snapshot-v2 bounds. Full chronological raw-byte replay must
+  reproduce both the exact committed normalizer state and current-batch result, so a
+  self-consistent forged reused link or exclusion also fails closed. The bundle carries canonical
+  `retrieval-plan.json`, `snapshot-references.json`, `terminal-gap-evidence.json`,
+  `representative-observation-links.jsonl`, and
+  `representative-snapshot-references.json` evidence.
+- The exact state-publication metadata schema, key set, field types, provider, and SHA-256
+  values are validated before any state-v3 payload is parsed.
+- Publication inventory checks account for every filesystem entry and reject unmanifested
+  regular files, FIFOs, sockets, devices, symlinks, and other non-regular objects.
+- Store creation descriptor-walks from the filesystem root and rejects a symlink in every
+  configured-root component before establishing the trusted-root identity. Storage reads and
+  mutations then use descriptor-relative, no-follow traversal through publication, object,
+  bucket, staging, and nested parent path components. Hard-link publication, staging cleanup,
+  fsync, and the atomic no-replace rename remain anchored, so a replaced symlink component
+  cannot receive or remove external bytes.
+
+Implementation and complete offline verification finished on 2026-08-30. The focused
+storage/provider/state-integrity suite passed 86 tests (34 storage, 25 GSG adapter/publication,
+and 27 state-integrity); the complete Phase 2 sentiment suite passed 202 tests; all 253 frozen
+Phase 1 tests passed with the same 12 expected single-class synthetic metric warnings; and the
+complete repository suite passed 455 tests with those same warnings. Diff validation,
+formatting (64 Python files unchanged), lint, bytecode compilation, dependency consistency,
+strict validation of both repository JSON files, Markdown/JSON reconciliation, historical
+reflog reconciliation, and the 49,972-value local-V8 RFC 8785 differential all passed.
+
+All tests used synthetic/captured fixtures and temporary storage under the repository-wide
+network guard. No provider, publisher, credential, paid-service, model, market-data, or
+holdout access occurred. The task performed no push. No acceptance claim is made until the
+single no-push corrective commit receives an independent read-only review. Milestone 3 and all
+later milestones remain incomplete.
+
+## Forward-only Git-history reconciliation
+
+The earlier history remains intact. Local reflogs record commit
+`3e31538e79be85002fc4f11633f22b189058a42a` updating
+`origin/codex/phase2-foundation` at `2026-08-16T16:59:32+07:00`, fast-forwarding local
+`main` at `2026-08-16T16:59:45+07:00`, and updating `origin/main` at
+`2026-08-16T16:59:50+07:00`.
+
+The same local evidence records `21e954d24f6639da8c4d902924ebf01ffba715d8`
+updating `origin/codex/phase2-foundation` at `2026-08-27T22:56:48+07:00`; merge commit
+`587e4475114db8b65fe47a7a8b2197952f2b9e75` being created through PR #2 at
+`2026-08-27T22:58:18+07:00`; and `origin/main` and local `main` later containing that merge,
+with the local pull recorded at `2026-08-27T23:17:12+07:00`. Local reflogs do not establish
+who performed those actions,
+and this protocol contains no matching push authorization. Recording these events does not
+retroactively authorize them. No reset, rebase, force-push, or other history rewrite is
+authorized or performed. The current final-integrity task separately authorizes no push, and
+no push has been performed during it.
 
 ## Remaining authorization boundary
 
@@ -256,10 +319,11 @@ scorer/model selection, model downloads, scoring, feature construction, numerica
 gates, training, backtests, and all holdout access/evaluation remain unapproved. Batch B is
 not authorized. Milestone 3 and later milestones are not complete.
 
-The exact next action is independent read-only review of the single five-finding
-acceptance-blocker corrective commit based on
-`3e31538e79be85002fc4f11633f22b189058a42a`, including reproduction of all five prior
-adversarial probes and verification of the governance reconciliation.
+The exact next action is independent read-only review of the single final-integrity corrective
+commit against base `587e4475114db8b65fe47a7a8b2197952f2b9e75`. The review must reproduce the
+coverage-forgery, normalization-provenance, pre-hydration metadata, unmanifested-object, and
+symlink-ancestor adversarial failures; reconcile the forward-only Git history; and confirm
+all 253 Phase 1 tests and frozen Phase 1 objects remain unchanged.
 Batch B is not authorized. A later bounded prospective GSG collection pilot would require a new
 authorization that explicitly:
 

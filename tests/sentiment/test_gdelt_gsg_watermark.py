@@ -409,25 +409,25 @@ def test_publication_failure_does_not_mutate_state_or_leave_partial_publication(
     unrelated = store.publications_root / ".staging-unrelated-preserve"
     unrelated.mkdir()
     (unrelated / "sentinel").write_bytes(b"preserve")
-    original_write = storage_module._write_fsynced
+    original_write = storage_module._write_fsynced_at
     original_rename = storage_module._atomic_rename_directory_no_replace
 
-    def fail_write(path: Path, data: bytes) -> None:
+    def fail_write(parent_descriptor: int, name: str, data: bytes) -> None:
         target = {
             "chronology": "chronology.json",
             "state": "state.json",
             "manifest": "manifest.json",
         }.get(failure_point)
-        if path.name == target:
+        if name == target:
             raise SentimentStorageError(f"simulated {failure_point} failure")
-        original_write(path, data)
+        original_write(parent_descriptor, name, data)
 
-    def fail_rename(source: Path, destination: Path) -> None:
+    def fail_rename(parent_descriptor: int, source_name: str, destination_name: str) -> None:
         if failure_point == "rename":
             raise SentimentStorageError("simulated rename failure")
-        original_rename(source, destination)
+        original_rename(parent_descriptor, source_name, destination_name)
 
-    monkeypatch.setattr(storage_module, "_write_fsynced", fail_write)
+    monkeypatch.setattr(storage_module, "_write_fsynced_at", fail_write)
     monkeypatch.setattr(storage_module, "_atomic_rename_directory_no_replace", fail_rename)
     state_name = f"failure-{failure_point}"
     with pytest.raises(SentimentStorageError, match="simulated"):

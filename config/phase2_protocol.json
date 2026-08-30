@@ -1,9 +1,9 @@
 {
   "protocol_id": "krypx-phase2-milestone0",
   "protocol_version": "0.1.0-draft",
-  "status": "batch_a_acceptance_blockers_corrected_pending_independent_review",
+  "status": "batch_a_final_integrity_correction_complete_pending_independent_review",
   "created_at": "2026-08-12T09:52:48Z",
-  "approval_state": "offline_batch_a_only_acceptance_blockers_corrected_pending_independent_review",
+  "approval_state": "offline_batch_a_only_final_integrity_correction_complete_pending_independent_review",
   "approved": false,
   "engineering_specification_approval": {
     "approved": true,
@@ -112,13 +112,51 @@
       "push"
     ]
   },
+  "final_integrity_corrective_authorization": {
+    "approved": true,
+    "approved_at": "2026-08-27",
+    "branch": "codex/phase2-batch-a-final-integrity",
+    "base_commit": "587e4475114db8b65fe47a7a8b2197952f2b9e75",
+    "triggering_reviewed_commit": "21e954d24f6639da8c4d902924ebf01ffba715d8",
+    "authorized_scope": [
+      "reopen_batch_a_for_one_final_offline_integrity_correction",
+      "bind_coverage_publication_to_verified_plan_snapshots_and_terminal_gap_evidence",
+      "enforce_closed_world_normalization_provenance",
+      "validate_exact_state_publication_metadata_before_state_v3_parsing",
+      "reject_all_unmanifested_regular_and_nonregular_publication_objects",
+      "prevent_symlink_traversal_through_all_storage_path_components",
+      "record_prior_push_and_merge_as_historical_facts_without_retroactive_authorization",
+      "add_offline_adversarial_regression_coverage",
+      "update_protocol_records",
+      "create_exactly_one_new_corrective_commit"
+    ],
+    "explicitly_not_approved": [
+      "batch_b_or_milestone3",
+      "real_gdelt_rights",
+      "network_or_provider_collection",
+      "publisher_access",
+      "credentials_accounts_or_paid_services",
+      "scorer_or_model_activity",
+      "feature_generation",
+      "training_or_backtesting",
+      "research_gates",
+      "future_collection",
+      "holdout_access_or_evaluation",
+      "history_rewrite",
+      "push"
+    ]
+  },
   "batch_a_corrective_review": {
-    "status": "acceptance_blocker_correction_implemented_pending_independent_review",
-    "corrected_at": "2026-08-27",
-    "branch": "codex/phase2-foundation",
+    "status": "final_integrity_correction_complete_pending_independent_review",
+    "prior_acceptance_blocker_corrected_at": "2026-08-27",
+    "final_integrity_corrective_authorized_at": "2026-08-27",
+    "final_integrity_corrected_at": "2026-08-30",
+    "branch": "codex/phase2-batch-a-final-integrity",
     "reviewed_commit": "3e31538e79be85002fc4f11633f22b189058a42a",
-    "milestone1_status": "acceptance_blockers_corrected_pending_independent_review",
-    "milestone2_status": "acceptance_blockers_corrected_pending_independent_review",
+    "triggering_reviewed_commit": "21e954d24f6639da8c4d902924ebf01ffba715d8",
+    "base_commit": "587e4475114db8b65fe47a7a8b2197952f2b9e75",
+    "milestone1_status": "final_integrity_corrected_offline_pending_independent_review",
+    "milestone2_status": "final_integrity_corrected_offline_pending_independent_review",
     "milestone3_or_later_complete": false,
     "real_gdelt_rights_approved": false,
     "batch_b_authorized": false,
@@ -129,6 +167,8 @@
     "current_corrective_push_authorized": false,
     "current_corrective_push_performed": false,
     "historical_push_observed": true,
+    "prior_corrective_push_observed": true,
+    "prior_corrective_merge_observed": true,
     "corrective_scope": [
       "single_read_exact_byte_verification",
       "canonical_immutable_normalizer_state_and_verified_hydration",
@@ -150,7 +190,13 @@
       "exact_outer_publication_manifest_schema_validation",
       "normalization_and_coverage_publication_boundary_validation",
       "semantic_identity_recomputation_before_publication",
-      "complete_manifest_collision_equality"
+      "complete_manifest_collision_equality",
+      "publication_bound_coverage_recomputation_from_verified_plan_snapshots_and_gap_evidence",
+      "closed_world_normalization_provenance_validation",
+      "pre_deserialization_exact_state_metadata_validation",
+      "complete_regular_and_nonregular_publication_inventory_validation",
+      "descriptor_anchored_no_symlink_storage_traversal",
+      "forward_only_prior_push_and_merge_reconciliation"
     ],
     "prior_global_watermark_contract": {
       "implementation_status": "complete_pending_independent_review",
@@ -298,7 +344,54 @@
       "holdout_access_authorized": false,
       "push_performed_during_corrective_task": false
     },
-    "exact_next_action": "independent_read_only_review_of_acceptance_blocker_corrective_commit_only"
+    "final_integrity_corrective_contract": {
+      "implementation_status": "complete_pending_independent_review",
+      "coverage_publication_authority": "recomputed_only_from_exact_validated_retrieval_plan_raw_replayed_snapshot_receipts_terminal_gap_evidence_canonical_as_of_protocol_identity_and_frozen_bounds",
+      "caller_supplied_coverage_authoritative": false,
+      "normalization_provenance": "full_chronological_raw_byte_replay_reproduces_exact_committed_state_and_current_batch_result_including_every_reused_link_and_exclusion_plus_one_exact_nonreused_representative_link_per_published_article",
+      "normalized_publication_evidence_files": [
+        "retrieval-plan.json",
+        "snapshot-references.json",
+        "terminal-gap-evidence.json",
+        "representative-observation-links.jsonl",
+        "representative-snapshot-references.json"
+      ],
+      "state_metadata_validation_order": "exact_typed_provider_and_sha256_metadata_before_any_state_v3_payload_parse",
+      "publication_inventory": "every_regular_directory_symlink_fifo_socket_device_and_other_entry_is_inventoried;_only_exact_manifest_files_and_required_parent_directories_are_accepted",
+      "storage_traversal": "filesystem_root_anchored_descriptor_walk_and_creation_rejects_every_configured_root_symlink_component_then_trusted_root_identity_and_descriptor_relative_no_follow_reads_writes_hard_links_cleanup_fsync_and_atomic_no_replace_rename",
+      "symlink_escape_writes_external_bytes": false,
+      "history_policy": "preserve_prior_commits_push_and_merge_as_facts_without_actor_attribution_retroactive_authorization_or_rewrite",
+      "current_corrective_push_authorized": false,
+      "current_corrective_push_performed": false
+    },
+    "final_integrity_corrective_verification": {
+      "status": "offline_verification_complete_pending_independent_review",
+      "focused_storage_provider_and_state_integrity_suite": "86_passed",
+      "immutable_storage_tests": "34_passed",
+      "gsg_adapter_and_publication_tests": "25_passed",
+      "normalizer_state_integrity_tests": "27_passed",
+      "phase2_sentiment_suite": "202_passed",
+      "phase1_suite": "253_passed_12_expected_single_class_metric_warnings",
+      "full_phase1_and_phase2_suite": "455_passed_12_expected_single_class_metric_warnings",
+      "git_diff_check_from_587e4475114db8b65fe47a7a8b2197952f2b9e75": "pass",
+      "black_check": "pass_64_files_unchanged",
+      "ruff_check": "pass",
+      "compileall": "pass",
+      "pip_check": "pass_no_broken_requirements",
+      "rfc8785_canonicalization": "pass_49972_binary64_values_matched_local_v8",
+      "json_validation": "pass_2_files",
+      "markdown_json_reconciliation": "pass",
+      "historical_reflog_reconciliation": "pass",
+      "phase1_tracked_sources_tests_data_reports_artifacts_and_dependencies_changed": false,
+      "fixtures": "synthetic_only_with_temporary_storage",
+      "network_access": "none",
+      "network_access_authorized": false,
+      "external_service_access_authorized": false,
+      "holdout_access_authorized": false,
+      "push_authorized": false,
+      "push_performed": false
+    },
+    "exact_next_action": "independent_read_only_review_of_single_final_integrity_corrective_commit_based_on_587e4475114db8b65fe47a7a8b2197952f2b9e75"
   },
   "verdict": "PROCEED_WITH_FORWARD_ONLY_COLLECTION",
   "article_contract_version": "article-contract-v1",
@@ -331,15 +424,31 @@
     "batch_a_commits_performed": true,
     "push_performed": true,
     "historical_push_reconciliation": {
-      "source": "local_git_reflog",
-      "commit": "3e31538e79be85002fc4f11633f22b189058a42a",
-      "origin_phase2_branch_updated_at": "2026-08-16T16:59:32+07:00",
-      "main_fast_forwarded_at": "2026-08-16T16:59:45+07:00",
-      "origin_main_updated_at": "2026-08-16T16:59:50+07:00",
+      "source": "local_git_reflogs_and_commit_graph",
       "authorization_evidence_in_protocol_record": "not_recorded",
       "actor_attribution": "not_established_by_local_reflog",
-      "current_corrective_task_push_authorized": false,
-      "current_corrective_task_push_performed": false
+      "history_preserved_without_reset_rebase_force_push_or_rewrite": true,
+      "events": [
+        {
+          "commit": "3e31538e79be85002fc4f11633f22b189058a42a",
+          "origin_phase2_branch_updated_at": "2026-08-16T16:59:32+07:00",
+          "main_fast_forwarded_at": "2026-08-16T16:59:45+07:00",
+          "origin_main_updated_at": "2026-08-16T16:59:50+07:00"
+        },
+        {
+          "commit": "21e954d24f6639da8c4d902924ebf01ffba715d8",
+          "origin_phase2_branch_updated_at": "2026-08-27T22:56:48+07:00",
+          "merge_commit": "587e4475114db8b65fe47a7a8b2197952f2b9e75",
+          "pull_request": 2,
+          "merge_commit_created_at": "2026-08-27T22:58:18+07:00",
+          "origin_main_contains_merge_commit": true,
+          "local_main_contains_merge_commit": true,
+          "local_main_pulled_at": "2026-08-27T23:17:12+07:00"
+        }
+      ],
+      "historical_facts_are_not_retroactive_authorization": true,
+      "current_final_integrity_task_push_authorized": false,
+      "current_final_integrity_task_push_performed": false
     }
   },
   "phase1_reference": {
@@ -1898,9 +2007,9 @@
     "future_holdout_evaluation": "separate_explicit_authorization_required"
   },
   "next_authorized_task": {
-    "status": "stop_pending_independent_review",
-    "prerequisite": "batch_a_acceptance_blocker_corrective_implementation_and_offline_verification_complete",
-    "exact_request": "Perform an independent read-only review of the single Batch A acceptance-blocker corrective commit based on 3e31538e79be85002fc4f11633f22b189058a42a. Reproduce all five prior adversarial failures and verify the governance reconciliation. Do not begin or authorize Batch B, Milestone 3, real GDELT rights, network collection, scorer or model activity, feature generation, training or backtesting, research gates, future collection, or holdout activity.",
+    "status": "final_integrity_correction_complete_then_stop_pending_independent_review",
+    "prerequisite": "single_batch_a_final_integrity_corrective_commit_created_and_complete_offline_verification_recorded",
+    "exact_request": "Perform an independent read-only review of the single Batch A final-integrity corrective commit based on 587e4475114db8b65fe47a7a8b2197952f2b9e75. Reproduce the coverage-forgery, normalization-provenance, pre-hydration metadata, unmanifested-object, and symlink-ancestor adversarial failures; verify the forward-only historical push and merge reconciliation; and confirm all Phase 1 semantics and 253 tests remain unchanged. Do not begin or authorize Batch B, Milestone 3, real GDELT rights, network collection, scorer or model activity, feature generation, training or backtesting, research gates, future collection, or holdout activity.",
     "batch_b_authorized": false
   },
   "source_references": [

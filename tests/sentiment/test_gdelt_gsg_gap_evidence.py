@@ -608,25 +608,25 @@ def test_gap_state_publication_failure_leaves_no_partial_publication(
     normalizer = empty_normalizer()
     normalize_gap(normalizer, 0, (gap_evidence(),))
     before = normalizer.export_state_files()
-    original_write = storage_module._write_fsynced
+    original_write = storage_module._write_fsynced_at
     original_rename = storage_module._atomic_rename_directory_no_replace
 
-    def fail_write(path: Path, data: bytes) -> None:
+    def fail_write(parent_descriptor: int, name: str, data: bytes) -> None:
         target = {
             "gap-evidence": "gap-evidence.json",
             "state": "state.json",
             "manifest": "manifest.json",
         }.get(failure_point)
-        if path.name == target:
+        if name == target:
             raise SentimentStorageError(f"simulated {failure_point} failure")
-        original_write(path, data)
+        original_write(parent_descriptor, name, data)
 
-    def fail_rename(source: Path, destination: Path) -> None:
+    def fail_rename(parent_descriptor: int, source_name: str, destination_name: str) -> None:
         if failure_point == "rename":
             raise SentimentStorageError("simulated rename failure")
-        original_rename(source, destination)
+        original_rename(parent_descriptor, source_name, destination_name)
 
-    monkeypatch.setattr(storage_module, "_write_fsynced", fail_write)
+    monkeypatch.setattr(storage_module, "_write_fsynced_at", fail_write)
     monkeypatch.setattr(storage_module, "_atomic_rename_directory_no_replace", fail_rename)
     state_name = f"gap-failure-{failure_point}"
 

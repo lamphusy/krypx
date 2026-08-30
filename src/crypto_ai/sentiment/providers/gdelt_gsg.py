@@ -1646,6 +1646,7 @@ class GSGNormalizer:
         expected_files = set(_STATE_DATA_FILES) | {"state.json"}
         if set(verified.files) != expected_files:
             raise NormalizationIntegrityError("normalizer state file inventory is incomplete")
+        _validate_state_publication_metadata(verified.manifest.get("metadata"))
         state_index = _parse_canonical_json_buffer(verified.files["state.json"], "state index")
         if not isinstance(state_index, dict):
             raise NormalizationIntegrityError("state index must be an object")
@@ -3124,15 +3125,85 @@ def publish_normalization(
     store: ContentAddressedStore,
     batch_id: str,
     result: NormalizationResult,
-    coverage: CoverageReport,
+    caller_coverage: object | None = None,
+    *,
+    normalizer: GSGNormalizer,
+    retrieval_plan: RetrievalPlan,
+    snapshots: Iterable[SnapshotResult],
+    as_of: str,
+    gap_evidence: Iterable[TerminalGapEvidence] = (),
 ) -> Path:
-    """Publish deterministic normalized records with no-overwrite/idempotent semantics."""
+    """Reconstruct and publish one evidence-bound normalized batch.
+
+    ``CoverageReport`` is deliberately not an input.  The publication boundary reloads
+    every supplied immutable raw receipt and object, reparses the exact bytes under the
+    receipt's snapshot-v2 parser bounds, verifies the committed normalizer state, and
+    derives coverage from those verified facts.
+    """
+    if caller_coverage is not None:
+        raise NormalizationIntegrityError(
+            "caller-supplied coverage reports are forbidden; coverage is recomputed"
+        )
     _validate_normalization_result_for_publication(result)
+    materialized_snapshots = tuple(snapshots)
+    raw_gap_evidence = tuple(gap_evidence)
+    if not all(
+        isinstance(evidence, TerminalGapEvidence)
+        and isinstance(evidence.interval_start, str)
+        and _is_sha256(evidence.evidence_id)
+        for evidence in raw_gap_evidence
+    ):
+        raise NormalizationIntegrityError(
+            "normalization publication gap evidence does not match its contract"
+        )
+    materialized_gap_evidence = tuple(
+        sorted(raw_gap_evidence, key=lambda item: (item.interval_start, item.evidence_id))
+    )
+    verified_snapshots = _verify_publication_snapshots(store, materialized_snapshots)
+    representative_links = _validate_normalization_publication_context(
+        normalizer,
+        result,
+        retrieval_plan,
+        verified_snapshots,
+        materialized_gap_evidence,
+        as_of=as_of,
+    )
+    _verify_deterministic_publication_replay(
+        store,
+        normalizer,
+        result,
+        retrieval_plan,
+        verified_snapshots,
+        as_of=as_of,
+    )
+    coverage = build_coverage_report(
+        retrieval_plan,
+        verified_snapshots,
+        as_of=as_of,
+        gap_evidence=materialized_gap_evidence,
+        protocol_config_sha256=normalizer.protocol_config_sha256,
+    )
     _validate_coverage_report_for_publication(coverage)
     if coverage.pending_intervals or coverage.unresolved_intervals:
         raise ProviderIngestionError(
             "cannot publish normalization with nonterminal coverage intervals"
         )
+    representative_snapshots = _verify_representative_publication_provenance(
+        store,
+        normalizer,
+        result,
+        representative_links,
+        verified_snapshots,
+    )
+    representative_snapshot_references = [
+        _snapshot_publication_reference(snapshot) for snapshot in representative_snapshots
+    ]
+    representative_provenance_sha256 = canonical_sha256(
+        {
+            "observation_links": [link.to_dict() for link in representative_links],
+            "snapshot_references": representative_snapshot_references,
+        }
+    )
     files = {
         "articles.jsonl": _canonical_json_lines(article.to_dict() for article in result.articles),
         "coverage.json": canonicalize(coverage.to_dict()),
@@ -3141,6 +3212,14 @@ def publish_normalization(
         ),
         "observation-links.jsonl": _canonical_json_lines(
             link.to_dict() for link in result.observation_links
+        ),
+        "representative-observation-links.jsonl": _canonical_json_lines(
+            link.to_dict() for link in representative_links
+        ),
+        "representative-snapshot-references.json": canonicalize(representative_snapshot_references),
+        "retrieval-plan.json": canonicalize(retrieval_plan.to_dict()),
+        "snapshot-references.json": canonicalize(
+            [_snapshot_publication_reference(snapshot) for snapshot in verified_snapshots]
         ),
         "summary.json": canonicalize(
             {
@@ -3152,8 +3231,14 @@ def publish_normalization(
                 "observation_link_count": len(result.observation_links),
                 "protocol_config_sha256": result.protocol_config_sha256,
                 "provider": PROVIDER_ID,
+                "representative_observation_link_count": len(representative_links),
+                "representative_provenance_sha256": representative_provenance_sha256,
+                "representative_snapshot_count": len(representative_snapshots),
                 "rights_approval_sha256": result.rights_approval_sha256,
             }
+        ),
+        "terminal-gap-evidence.json": canonicalize(
+            [evidence.to_dict() for evidence in materialized_gap_evidence]
         ),
     }
     publication_id = f"gsg-normalized-{batch_id}"
@@ -3162,6 +3247,7 @@ def publish_normalization(
         "normalization_semantic_sha256": result.semantic_sha256,
         "protocol_config_sha256": result.protocol_config_sha256,
         "provider": PROVIDER_ID,
+        "representative_provenance_sha256": representative_provenance_sha256,
         "rights_approval_sha256": result.rights_approval_sha256,
         "scope": "normalized_offline_adapter_batch",
     }
@@ -3186,6 +3272,488 @@ def publish_normalization(
         raise ProviderIngestionError(
             f"normalization batch ID collision with different bytes: {batch_id}"
         ) from exc
+
+
+def _verify_publication_snapshots(
+    store: ContentAddressedStore,
+    snapshots: Sequence[SnapshotResult],
+) -> tuple[SnapshotResult, ...]:
+    """Reload and reparse each supplied snapshot from the same immutable store."""
+    raw_object_cache: dict[str, bytes] = {}
+    verified: list[SnapshotResult] = []
+    seen_snapshot_ids: set[str] = set()
+    for supplied in snapshots:
+        if not isinstance(supplied, SnapshotResult) or not isinstance(
+            supplied.receipt, RawSnapshotReceipt
+        ):
+            raise NormalizationIntegrityError(
+                "normalization publication snapshot does not match its contract"
+            )
+        snapshot_id = supplied.receipt.snapshot_id
+        if snapshot_id in seen_snapshot_ids:
+            raise NormalizationIntegrityError(
+                "normalization publication contains a duplicate snapshot identity"
+            )
+        seen_snapshot_ids.add(snapshot_id)
+        receipt, raw_bytes = _load_verified_snapshot_receipt(
+            store,
+            snapshot_id,
+            raw_object_cache=raw_object_cache,
+        )
+        parser = GSGAdapter(
+            store,
+            clock=lambda: datetime(1970, 1, 1, tzinfo=UTC),
+            max_compressed_bytes=receipt.max_compressed_bytes,
+            max_decompressed_bytes=receipt.max_decompressed_bytes,
+            max_json_lines=receipt.max_json_lines,
+        )
+        reparsed = parser._parse_snapshot(receipt, raw_bytes)
+        if supplied != reparsed:
+            raise NormalizationIntegrityError(
+                "supplied snapshot does not match deterministic immutable raw-byte replay"
+            )
+        verified.append(reparsed)
+    return tuple(sorted(verified, key=lambda item: item.receipt.filename_timestamp))
+
+
+def _verify_deterministic_publication_replay(
+    store: ContentAddressedStore,
+    normalizer: GSGNormalizer,
+    result: NormalizationResult,
+    retrieval_plan: RetrievalPlan,
+    current_snapshots: Sequence[SnapshotResult],
+    *,
+    as_of: str,
+) -> None:
+    """Replay every committed raw observation and compare exact state plus latest result."""
+    current_interval_count = len(retrieval_plan.intervals)
+    prior_intervals = normalizer._terminal_intervals[:-current_interval_count]
+    current_intervals = normalizer._terminal_intervals[-current_interval_count:]
+    parsed_snapshots = {
+        snapshot.receipt.filename_timestamp: snapshot for snapshot in current_snapshots
+    }
+    if len(parsed_snapshots) != len(current_snapshots):
+        raise NormalizationIntegrityError(
+            "deterministic publication replay contains duplicate snapshot intervals"
+        )
+
+    raw_object_cache: dict[str, bytes] = {}
+    parsers: dict[tuple[int, int, int], GSGAdapter] = {}
+    for interval in normalizer._terminal_intervals:
+        if interval.snapshot_id is None:
+            continue
+        parsed_snapshot = parsed_snapshots.get(interval.start_at)
+        if parsed_snapshot is None:
+            receipt, raw_bytes = _load_verified_snapshot_receipt(
+                store,
+                interval.snapshot_id,
+                raw_object_cache=raw_object_cache,
+            )
+            parser_key = (
+                receipt.max_compressed_bytes,
+                receipt.max_decompressed_bytes,
+                receipt.max_json_lines,
+            )
+            parser = parsers.get(parser_key)
+            if parser is None:
+                parser = GSGAdapter(
+                    store,
+                    clock=lambda: datetime(1970, 1, 1, tzinfo=UTC),
+                    max_compressed_bytes=receipt.max_compressed_bytes,
+                    max_decompressed_bytes=receipt.max_decompressed_bytes,
+                    max_json_lines=receipt.max_json_lines,
+                )
+                parsers[parser_key] = parser
+            parsed_snapshot = parser._parse_snapshot(receipt, raw_bytes)
+            parsed_snapshots[interval.start_at] = parsed_snapshot
+        receipt = parsed_snapshot.receipt
+        if (
+            receipt.snapshot_id != interval.snapshot_id
+            or receipt.filename_timestamp != interval.start_at
+            or receipt.raw_snapshot_sha256 != interval.raw_snapshot_sha256
+            or receipt.ingested_at != interval.ingested_at
+            or receipt.raw_published_at != interval.raw_published_at
+            or receipt.collection_mode != interval.collection_mode
+            or receipt.input_class != interval.input_class
+        ):
+            raise NormalizationIntegrityError(
+                "deterministic publication replay receipt contradicts terminal state"
+            )
+        if interval.snapshot_state == "invalid":
+            evidence = normalizer._gap_evidence_by_id.get(interval.gap_evidence_id or "")
+            if evidence is None or evidence.expected_source_locator != receipt.source_locator:
+                raise NormalizationIntegrityError(
+                    "deterministic publication replay invalid receipt contradicts gap evidence"
+                )
+        if (
+            parsed_snapshot.state != interval.snapshot_state
+            or parsed_snapshot.json_line_count != interval.json_line_count
+            or parsed_snapshot.error_code
+            != (interval.terminal_reason if interval.snapshot_state == "invalid" else None)
+        ):
+            raise NormalizationIntegrityError(
+                "deterministic publication replay parse contradicts terminal state"
+            )
+
+    replay_batches = [
+        prior_intervals[offset : offset + MAX_PLAN_INTERVALS]
+        for offset in range(0, len(prior_intervals), MAX_PLAN_INTERVALS)
+    ]
+    replay_batches.append(current_intervals)
+    replayed = GSGNormalizer(
+        protocol_config_sha256=normalizer.protocol_config_sha256,
+        rights_approval=normalizer.rights_approval,
+    )
+    replayed_result: NormalizationResult | None = None
+    try:
+        for batch_index, replay_intervals in enumerate(replay_batches):
+            is_current_batch = batch_index == len(replay_batches) - 1
+            if is_current_batch:
+                plan = retrieval_plan
+                terminal_as_of = as_of
+            else:
+                first_interval = replay_intervals[0]
+                last_interval = replay_intervals[-1]
+                plan = plan_retrieval(
+                    first_interval.start_at,
+                    last_interval.end_at_exclusive,
+                )
+                terminal_time = _parse_chronology_instant(
+                    last_interval.terminal_at, "terminal interval terminal_at"
+                )
+                last_interval_start = _parse_chronology_minute(
+                    last_interval.start_at, "terminal interval start"
+                )
+                terminal_as_of = format_utc_timestamp(
+                    max(terminal_time, last_interval_start + PROVIDER_LAG)
+                )
+            replay_evidence = tuple(
+                normalizer._gap_evidence_by_id[interval.gap_evidence_id]
+                for interval in replay_intervals
+                if interval.gap_evidence_id is not None
+            )
+            replay_snapshots = tuple(
+                parsed_snapshots[interval.start_at]
+                for interval in replay_intervals
+                if interval.snapshot_id is not None
+            )
+            replayed_result = replayed.normalize(
+                replay_snapshots,
+                retrieval_plan=plan,
+                terminal_as_of=terminal_as_of,
+                gap_evidence=replay_evidence,
+            )
+    except ProviderIngestionError as exc:
+        raise NormalizationIntegrityError(
+            "committed normalizer state failed deterministic raw-byte replay"
+        ) from exc
+
+    if replayed.export_state_files() != normalizer.export_state_files():
+        raise NormalizationIntegrityError(
+            "committed normalizer state differs from deterministic raw-byte replay"
+        )
+    if replayed_result != result:
+        raise NormalizationIntegrityError(
+            "current normalization result differs from deterministic raw-byte replay"
+        )
+
+
+def _snapshot_publication_reference(snapshot: SnapshotResult) -> dict[str, Any]:
+    """Return a compact transitive reference to one exact deterministic parse result."""
+    return {
+        "error_code": snapshot.error_code,
+        "filename_timestamp": snapshot.receipt.filename_timestamp,
+        "json_line_count": snapshot.json_line_count,
+        "raw_snapshot_sha256": snapshot.receipt.raw_snapshot_sha256,
+        "snapshot_id": snapshot.receipt.snapshot_id,
+        "snapshot_publication_id": f"gsg-snapshot-{snapshot.receipt.snapshot_id}",
+        "snapshot_result_sha256": canonical_sha256(snapshot.to_dict()),
+        "state": snapshot.state,
+    }
+
+
+def _verify_representative_publication_provenance(
+    store: ContentAddressedStore,
+    normalizer: GSGNormalizer,
+    result: NormalizationResult,
+    representative_links: Sequence[ObservationLink],
+    batch_snapshots: Sequence[SnapshotResult],
+) -> tuple[SnapshotResult, ...]:
+    """Replay every raw snapshot needed by the published articles' first links."""
+    snapshot_by_provenance = {
+        (snapshot.receipt.filename_timestamp, snapshot.receipt.raw_snapshot_sha256): snapshot
+        for snapshot in batch_snapshots
+    }
+    terminal_by_provenance = {
+        (interval.start_at, interval.raw_snapshot_sha256): interval
+        for interval in normalizer.terminal_intervals
+        if interval.outcome == "retrieved_and_normalized"
+        and interval.raw_snapshot_sha256 is not None
+    }
+    raw_object_cache: dict[str, bytes] = {}
+    representative_snapshots: dict[str, SnapshotResult] = {}
+    representative_observations: dict[str, GSGObservation] = {}
+    for link in representative_links:
+        interval_start, raw_hash, _, _ = _observation_provenance(link.provider_observation_id)
+        provenance = (interval_start, raw_hash)
+        interval = terminal_by_provenance.get(provenance)
+        if interval is None or interval.snapshot_id is None:
+            raise NormalizationIntegrityError(
+                "representative observation has no complete terminal snapshot"
+            )
+        snapshot = snapshot_by_provenance.get(provenance)
+        if snapshot is None:
+            receipt, raw_bytes = _load_verified_snapshot_receipt(
+                store,
+                interval.snapshot_id,
+                raw_object_cache=raw_object_cache,
+            )
+            parser = GSGAdapter(
+                store,
+                clock=lambda: datetime(1970, 1, 1, tzinfo=UTC),
+                max_compressed_bytes=receipt.max_compressed_bytes,
+                max_decompressed_bytes=receipt.max_decompressed_bytes,
+                max_json_lines=receipt.max_json_lines,
+            )
+            snapshot = parser._parse_snapshot(receipt, raw_bytes)
+            _validate_snapshot_terminal_fact(snapshot, provenance[0])
+            snapshot_by_provenance[provenance] = snapshot
+        receipt = snapshot.receipt
+        if (
+            snapshot.state != "complete"
+            or snapshot.error_code is not None
+            or interval.snapshot_state != "complete"
+            or interval.snapshot_id != receipt.snapshot_id
+            or interval.raw_snapshot_sha256 != receipt.raw_snapshot_sha256
+            or interval.ingested_at != receipt.ingested_at
+            or interval.raw_published_at != receipt.raw_published_at
+            or interval.terminal_at != receipt.raw_published_at
+            or interval.json_line_count != snapshot.json_line_count
+            or interval.collection_mode != receipt.collection_mode
+            or interval.input_class != receipt.input_class
+        ):
+            raise NormalizationIntegrityError(
+                "representative snapshot does not match committed terminal chronology"
+            )
+        observation = next(
+            (
+                item
+                for item in snapshot.observations
+                if item.provider_observation_id == link.provider_observation_id
+            ),
+            None,
+        )
+        if (
+            observation is None
+            or observation.raw_snapshot_sha256 != link.raw_snapshot_sha256
+            or observation.input_class != link.input_class
+        ):
+            raise NormalizationIntegrityError(
+                "representative observation does not match exact raw-byte replay"
+            )
+        representative_snapshots[receipt.snapshot_id] = snapshot
+        representative_observations[link.provider_observation_id] = observation
+
+    article_by_observation = {
+        article.provider_observation_id: article for article in result.articles
+    }
+    if len(article_by_observation) != len(result.articles) or set(article_by_observation) != set(
+        representative_observations
+    ):
+        raise NormalizationIntegrityError(
+            "published articles and representative observations are not closed"
+        )
+    for observation_id, article in article_by_observation.items():
+        try:
+            candidate = normalizer._materialize_candidate(
+                representative_observations[observation_id]
+            )
+        except _ObservationExcluded as exc:
+            raise NormalizationIntegrityError(
+                "representative observation is no longer normalization-eligible"
+            ) from exc
+        if candidate.failures:
+            raise NormalizationIntegrityError(
+                "representative observation no longer satisfies publication eligibility"
+            )
+        expected_article = normalizer._article_from_candidate(
+            candidate,
+            article.duplicate_group_id or "",
+        )
+        if expected_article != article:
+            raise NormalizationIntegrityError(
+                "published article does not match representative raw observation"
+            )
+    return tuple(
+        sorted(
+            representative_snapshots.values(),
+            key=lambda item: item.receipt.filename_timestamp,
+        )
+    )
+
+
+def _validate_normalization_publication_context(
+    normalizer: object,
+    result: NormalizationResult,
+    retrieval_plan: RetrievalPlan,
+    snapshots: Sequence[SnapshotResult],
+    gap_evidence: Sequence[TerminalGapEvidence],
+    *,
+    as_of: str,
+) -> tuple[ObservationLink, ...]:
+    """Bind a batch result to exact committed state and terminal evidence."""
+    if not isinstance(normalizer, GSGNormalizer):
+        raise NormalizationIntegrityError(
+            "normalization publication requires a committed GSG normalizer"
+        )
+    _parse_chronology_instant(as_of, "normalization publication as_of")
+    _validate_retrieval_plan(retrieval_plan)
+    if len(retrieval_plan.intervals) > MAX_PLAN_INTERVALS:
+        raise NormalizationIntegrityError("normalization publication plan exceeds the frozen cap")
+    if (
+        result.protocol_config_sha256 != normalizer.protocol_config_sha256
+        or result.rights_approval_sha256 != normalizer.rights_approval_sha256
+    ):
+        raise NormalizationIntegrityError(
+            "normalization publication identity does not match committed state"
+        )
+
+    normalizer._validate_state_components(
+        normalizer._versions_by_id,
+        normalizer._versions_by_fingerprint,
+        normalizer._links,
+        normalizer._exclusions,
+        normalizer._groups_by_id,
+        normalizer._article_groups,
+    )
+    normalizer._validate_rights_bound_state(normalizer._versions_by_id, normalizer._links)
+    normalizer._validate_chronology(
+        normalizer._terminal_intervals,
+        normalizer._next_expected_interval_start,
+        normalizer._closed_availability_through,
+        normalizer._gap_evidence_by_id,
+    )
+    normalizer._validate_chronology_state_relationships(
+        normalizer._terminal_intervals,
+        normalizer._versions_by_id,
+        normalizer._links,
+        normalizer._exclusions,
+    )
+
+    interval_count = len(retrieval_plan.intervals)
+    if (
+        interval_count == 0
+        or interval_count > len(normalizer._terminal_intervals)
+        or normalizer.next_expected_interval_start != retrieval_plan.end_at_exclusive
+    ):
+        raise NormalizationIntegrityError(
+            "normalization publication plan is not the latest committed terminal batch"
+        )
+    prefix = normalizer._terminal_intervals[:-interval_count]
+    committed_suffix = normalizer._terminal_intervals[-interval_count:]
+    prior_boundary = None
+    if prefix:
+        prior_boundary = format_utc_timestamp(
+            _exclusive_boundary_after(
+                _parse_chronology_instant(prefix[-1].terminal_at, "terminal interval terminal_at")
+            )
+        )
+    expected_suffix, accepted_evidence, availability_boundary = _terminal_interval_facts(
+        retrieval_plan,
+        snapshots,
+        gap_evidence,
+        protocol_config_sha256=normalizer.protocol_config_sha256,
+        terminal_as_of=as_of,
+        prior_closed_availability_through=prior_boundary,
+    )
+    if (
+        expected_suffix != committed_suffix
+        or availability_boundary != normalizer.closed_availability_through
+    ):
+        raise NormalizationIntegrityError(
+            "normalization publication evidence does not match committed chronology"
+        )
+    for evidence in accepted_evidence:
+        if normalizer._gap_evidence_by_id.get(evidence.evidence_id) != evidence:
+            raise NormalizationIntegrityError(
+                "normalization publication gap evidence is not committed"
+            )
+
+    observations = {
+        observation.provider_observation_id: observation
+        for snapshot in snapshots
+        if snapshot.state == "complete"
+        for observation in snapshot.observations
+    }
+    if len(observations) != sum(
+        len(snapshot.observations) for snapshot in snapshots if snapshot.state == "complete"
+    ):
+        raise NormalizationIntegrityError(
+            "normalization publication contains duplicate observation identities"
+        )
+    links = {link.provider_observation_id: link for link in result.observation_links}
+    exclusions = {exclusion.provider_observation_id: exclusion for exclusion in result.exclusions}
+    if set(observations) != set(links) | set(exclusions) or set(links) & set(exclusions):
+        raise NormalizationIntegrityError(
+            "normalization publication does not exactly account for batch observations"
+        )
+
+    article_by_version = {article.article_version_id: article for article in result.articles}
+    if set(article_by_version) != {link.article_version_id for link in links.values()}:
+        raise NormalizationIntegrityError(
+            "normalization publication articles and links are not a closed batch"
+        )
+    for version_id, article in article_by_version.items():
+        if normalizer._versions_by_id.get(version_id) != article:
+            raise NormalizationIntegrityError(
+                "normalization publication article does not match committed state"
+            )
+    for observation_id, link in links.items():
+        observation = observations[observation_id]
+        article = article_by_version.get(link.article_version_id)
+        if (
+            normalizer._links.get(observation_id) != link
+            or link.raw_snapshot_sha256 != observation.raw_snapshot_sha256
+            or link.input_class != observation.input_class
+            or article is None
+            or link.reused_existing_version != (observation_id != article.provider_observation_id)
+        ):
+            raise NormalizationIntegrityError(
+                "normalization publication observation link provenance is invalid"
+            )
+    for observation_id, exclusion in exclusions.items():
+        observation = observations[observation_id]
+        if (
+            normalizer._exclusions.get(observation_id) != exclusion
+            or exclusion.raw_snapshot_sha256 != observation.raw_snapshot_sha256
+            or exclusion.input_class != observation.input_class
+        ):
+            raise NormalizationIntegrityError(
+                "normalization publication exclusion provenance is invalid"
+            )
+    representative_links: list[ObservationLink] = []
+    representative_observation_ids: set[str] = set()
+    for article in result.articles:
+        representative_link = normalizer._links.get(article.provider_observation_id)
+        if (
+            not isinstance(representative_link, ObservationLink)
+            or representative_link.provider_observation_id != article.provider_observation_id
+            or representative_link.article_version_id != article.article_version_id
+            or representative_link.raw_snapshot_sha256 != article.raw_snapshot_sha256
+            or representative_link.input_class
+            not in {
+                "provider_response",
+                "synthetic_fixture",
+            }
+            or representative_link.reused_existing_version
+            or representative_link.provider_observation_id in representative_observation_ids
+        ):
+            raise NormalizationIntegrityError(
+                "normalization publication representative link is invalid"
+            )
+        representative_observation_ids.add(representative_link.provider_observation_id)
+        representative_links.append(representative_link)
+    return tuple(sorted(representative_links, key=lambda item: item.provider_observation_id))
 
 
 def _validate_normalization_result_for_publication(result: object) -> None:
@@ -3774,6 +4342,31 @@ def _terminal_gap_evidence_from_payload(value: Any) -> TerminalGapEvidence:
         return TerminalGapEvidence(**{**value, "attempts": attempts})
     except TypeError as exc:
         raise NormalizationIntegrityError("persisted terminal gap evidence is invalid") from exc
+
+
+def _validate_state_publication_metadata(value: object) -> None:
+    """Reject malformed state-publication metadata before state-v3 parsing."""
+    required_fields = {
+        "protocol_config_sha256",
+        "provider",
+        "rights_approval_sha256",
+        "state_sha256",
+    }
+    if not isinstance(value, dict) or set(value) != required_fields:
+        raise NormalizationIntegrityError(
+            "normalizer state manifest metadata fields do not match the contract"
+        )
+    if value["provider"] != PROVIDER_ID or any(
+        not _is_sha256(value[field])
+        for field in (
+            "protocol_config_sha256",
+            "rights_approval_sha256",
+            "state_sha256",
+        )
+    ):
+        raise NormalizationIntegrityError(
+            "normalizer state manifest metadata types or identities are invalid"
+        )
 
 
 def _load_verified_snapshot_receipt(

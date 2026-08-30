@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import gzip
 import json
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -13,13 +13,18 @@ import pytest
 from crypto_ai.exceptions import ProviderIngestionError
 from crypto_ai.sentiment.canonical import canonical_sha256, canonicalize, sha256_bytes
 from crypto_ai.sentiment.providers.gdelt_gsg import (
+    MAX_PLAN_INTERVALS,
     CoverageReport,
+    ExcludedObservation,
+    GapAttempt,
     GSGAdapter,
     GSGNormalizer,
     GSGRetryPolicy,
     NormalizationResult,
-    ProviderGap,
+    RetrievalPlan,
     RightsApproval,
+    SnapshotResult,
+    TerminalGapEvidence,
     build_coverage_report,
     canonicalize_url,
     decisions_intersecting_gaps,
@@ -73,17 +78,66 @@ def approved_normalizer(*snapshots) -> GSGNormalizer:
     )
 
 
+@dataclass(frozen=True)
+class NormalizedPublicationInputs:
+    adapter: GSGAdapter
+    normalizer: GSGNormalizer
+    plan: RetrievalPlan
+    snapshots: tuple[SnapshotResult, ...]
+    as_of: str
+    result: NormalizationResult
+    coverage: CoverageReport
+
+
 def normalized_publication_inputs(
     tmp_path: Path,
-) -> tuple[GSGAdapter, NormalizationResult, CoverageReport]:
+) -> NormalizedPublicationInputs:
     adapter = adapter_at(tmp_path, datetime(2026, 8, 14, 1, 0, 31, tzinfo=UTC))
     snapshot = ingest(adapter, gzip_fixture("base.jsonl"), 0)
     plan = plan_retrieval("2026-08-14T01:00:00Z", "2026-08-14T01:01:00Z")
     coverage = build_coverage_report(plan, [snapshot], as_of="2026-08-14T01:30:00Z")
-    result = approved_normalizer(snapshot).normalize(
+    normalizer = approved_normalizer(snapshot)
+    result = normalizer.normalize(
         [snapshot], retrieval_plan=plan, terminal_as_of="2026-08-14T01:30:00Z"
     )
-    return adapter, result, coverage
+    return NormalizedPublicationInputs(
+        adapter=adapter,
+        normalizer=normalizer,
+        plan=plan,
+        snapshots=(snapshot,),
+        as_of="2026-08-14T01:30:00Z",
+        result=result,
+        coverage=coverage,
+    )
+
+
+def publish_inputs(
+    inputs: NormalizedPublicationInputs,
+    batch_id: str,
+    *,
+    result: NormalizationResult | None = None,
+    plan: RetrievalPlan | None = None,
+    snapshots: tuple[SnapshotResult, ...] | None = None,
+    as_of: str | None = None,
+    gap_evidence: tuple[TerminalGapEvidence, ...] = (),
+):
+    return publish_normalization(
+        inputs.adapter.store,
+        batch_id,
+        result if result is not None else inputs.result,
+        normalizer=inputs.normalizer,
+        retrieval_plan=plan if plan is not None else inputs.plan,
+        snapshots=snapshots if snapshots is not None else inputs.snapshots,
+        as_of=as_of if as_of is not None else inputs.as_of,
+        gap_evidence=gap_evidence,
+    )
+
+
+def rehash_result(result: NormalizationResult) -> NormalizationResult:
+    return replace(
+        result,
+        semantic_sha256=canonical_sha256(result.to_dict(include_hash=False)),
+    )
 
 
 def normalize_terminal(
@@ -199,6 +253,196 @@ def test_normalization_preserves_revisions_reuses_repeat_and_deduplicates(
     assert changed.first_seen_at == "2026-08-14T01:01:31Z"
 
 
+def test_latest_revision_batch_with_reused_links_remains_publishable(tmp_path: Path) -> None:
+    adapter = adapter_at(
+        tmp_path,
+        datetime(2026, 8, 14, 1, 0, 31, tzinfo=UTC),
+        datetime(2026, 8, 14, 1, 1, 31, tzinfo=UTC),
+    )
+    first = ingest(adapter, gzip_fixture("base.jsonl"), 0)
+    revision = ingest(adapter, gzip_fixture("revision.jsonl"), 1)
+    normalizer = approved_normalizer(first, revision)
+    first_plan = plan_retrieval("2026-08-14T01:00:00Z", "2026-08-14T01:01:00Z")
+    second_plan = plan_retrieval("2026-08-14T01:01:00Z", "2026-08-14T01:02:00Z")
+    normalizer.normalize(
+        (first,),
+        retrieval_plan=first_plan,
+        terminal_as_of="2026-08-14T01:30:00Z",
+    )
+    result = normalizer.normalize(
+        (revision,),
+        retrieval_plan=second_plan,
+        terminal_as_of="2026-08-14T01:31:31Z",
+    )
+
+    published = publish_normalization(
+        adapter.store,
+        "revision-and-reuse",
+        result,
+        normalizer=normalizer,
+        retrieval_plan=second_plan,
+        snapshots=(revision,),
+        as_of="2026-08-14T01:31:31Z",
+    )
+
+    assert published.name == "gsg-normalized-revision-and-reuse"
+    assert any(link.reused_existing_version for link in result.observation_links)
+    representative_links = [
+        json.loads(line)
+        for line in (published / "representative-observation-links.jsonl").read_bytes().splitlines()
+    ]
+    batch_observation_ids = {link.provider_observation_id for link in result.observation_links}
+    assert len(representative_links) == len(result.articles)
+    assert all(not link["reused_existing_version"] for link in representative_links)
+    assert any(
+        link["provider_observation_id"] not in batch_observation_ids
+        for link in representative_links
+    )
+    representative_snapshots = json.loads(
+        (published / "representative-snapshot-references.json").read_bytes()
+    )
+    assert {item["filename_timestamp"] for item in representative_snapshots} == {
+        "2026-08-14T01:00:00Z",
+        "2026-08-14T01:01:00Z",
+    }
+
+
+def test_publication_rejects_reused_link_retargeted_in_state_and_result(
+    tmp_path: Path,
+) -> None:
+    adapter = adapter_at(
+        tmp_path,
+        datetime(2026, 8, 14, 1, 0, 31, tzinfo=UTC),
+        datetime(2026, 8, 14, 1, 1, 31, tzinfo=UTC),
+    )
+    first = ingest(adapter, gzip_fixture("base.jsonl"), 0)
+    revision = ingest(adapter, gzip_fixture("revision.jsonl"), 1)
+    normalizer = approved_normalizer(first, revision)
+    normalizer.normalize(
+        (first,),
+        retrieval_plan=plan_retrieval("2026-08-14T01:00:00Z", "2026-08-14T01:01:00Z"),
+        terminal_as_of="2026-08-14T01:30:00Z",
+    )
+    plan = plan_retrieval("2026-08-14T01:01:00Z", "2026-08-14T01:02:00Z")
+    result = normalizer.normalize(
+        (revision,),
+        retrieval_plan=plan,
+        terminal_as_of="2026-08-14T01:31:31Z",
+    )
+    reused = next(link for link in result.observation_links if link.reused_existing_version)
+    wrong_version = next(
+        article.article_version_id
+        for article in result.articles
+        if article.article_version_id != reused.article_version_id
+    )
+    forged_link = replace(reused, article_version_id=wrong_version)
+    forged_links = tuple(
+        sorted(
+            (
+                (
+                    forged_link
+                    if link.provider_observation_id == reused.provider_observation_id
+                    else link
+                )
+                for link in result.observation_links
+            ),
+            key=lambda link: link.provider_observation_id,
+        )
+    )
+    normalizer._links[reused.provider_observation_id] = forged_link
+    referenced_versions = {link.article_version_id for link in forged_links}
+    forged = rehash_result(
+        replace(
+            result,
+            articles=tuple(
+                article
+                for article in result.articles
+                if article.article_version_id in referenced_versions
+            ),
+            observation_links=forged_links,
+        )
+    )
+
+    with pytest.raises(ProviderIngestionError, match="deterministic raw-byte replay"):
+        publish_normalization(
+            adapter.store,
+            "forged-reused-target",
+            forged,
+            normalizer=normalizer,
+            retrieval_plan=plan,
+            snapshots=(revision,),
+            as_of="2026-08-14T01:31:31Z",
+        )
+
+
+def test_publication_rejects_eligible_reused_observation_forged_as_excluded(
+    tmp_path: Path,
+) -> None:
+    adapter = adapter_at(
+        tmp_path,
+        datetime(2026, 8, 14, 1, 0, 31, tzinfo=UTC),
+        datetime(2026, 8, 14, 1, 1, 31, tzinfo=UTC),
+    )
+    first = ingest(adapter, gzip_fixture("base.jsonl"), 0)
+    revision = ingest(adapter, gzip_fixture("revision.jsonl"), 1)
+    normalizer = approved_normalizer(first, revision)
+    normalizer.normalize(
+        (first,),
+        retrieval_plan=plan_retrieval("2026-08-14T01:00:00Z", "2026-08-14T01:01:00Z"),
+        terminal_as_of="2026-08-14T01:30:00Z",
+    )
+    plan = plan_retrieval("2026-08-14T01:01:00Z", "2026-08-14T01:02:00Z")
+    result = normalizer.normalize(
+        (revision,),
+        retrieval_plan=plan,
+        terminal_as_of="2026-08-14T01:31:31Z",
+    )
+    reused = next(link for link in result.observation_links if link.reused_existing_version)
+    forged_exclusion = ExcludedObservation(
+        provider_observation_id=reused.provider_observation_id,
+        reason="asset_mismatch",
+        diagnostic="forged eligible-observation exclusion",
+        raw_snapshot_sha256=reused.raw_snapshot_sha256,
+        input_class=reused.input_class,
+    )
+    remaining_links = tuple(
+        link
+        for link in result.observation_links
+        if link.provider_observation_id != reused.provider_observation_id
+    )
+    referenced_versions = {link.article_version_id for link in remaining_links}
+    forged = rehash_result(
+        replace(
+            result,
+            articles=tuple(
+                article
+                for article in result.articles
+                if article.article_version_id in referenced_versions
+            ),
+            observation_links=remaining_links,
+            exclusions=tuple(
+                sorted(
+                    (*result.exclusions, forged_exclusion),
+                    key=lambda exclusion: exclusion.provider_observation_id,
+                )
+            ),
+        )
+    )
+    normalizer._links.pop(reused.provider_observation_id)
+    normalizer._exclusions[reused.provider_observation_id] = forged_exclusion
+
+    with pytest.raises(ProviderIngestionError, match="deterministic raw-byte replay"):
+        publish_normalization(
+            adapter.store,
+            "forged-eligible-exclusion",
+            forged,
+            normalizer=normalizer,
+            retrieval_plan=plan,
+            snapshots=(revision,),
+            as_of="2026-08-14T01:31:31Z",
+        )
+
+
 def test_historical_records_are_reported_but_never_normalized_as_eligible(tmp_path: Path) -> None:
     adapter = adapter_at(tmp_path, datetime(2026, 8, 14, 1, 0, 31, tzinfo=UTC))
     historical = ingest(adapter, gzip_fixture("base.jsonl"), 0, mode="historical_backfill")
@@ -273,121 +517,261 @@ def test_deterministic_rerun_produces_identical_semantic_bytes(tmp_path: Path) -
 
 
 def test_normalized_batch_publication_is_exact_and_idempotent(tmp_path: Path) -> None:
-    adapter, result, coverage = normalized_publication_inputs(tmp_path)
+    inputs = normalized_publication_inputs(tmp_path)
 
-    first = publish_normalization(adapter.store, "fixture-001", result, coverage)
-    second = publish_normalization(adapter.store, "fixture-001", result, coverage)
+    first = publish_inputs(inputs, "fixture-001")
+    second = publish_inputs(inputs, "fixture-001")
 
     assert first == second
-    adapter.store.verify_publication("gsg-normalized-fixture-001")
+    inputs.adapter.store.verify_publication("gsg-normalized-fixture-001")
     lines = (first / "articles.jsonl").read_bytes().splitlines()
     assert len(lines) == 2
     assert all(canonicalize(json.loads(line)) == line for line in lines)
+    assert json.loads((first / "coverage.json").read_bytes()) == inputs.coverage.to_dict()
+    assert json.loads((first / "retrieval-plan.json").read_bytes()) == inputs.plan.to_dict()
+    snapshot_references = json.loads((first / "snapshot-references.json").read_bytes())
+    assert snapshot_references == [
+        {
+            "error_code": snapshot.error_code,
+            "filename_timestamp": snapshot.receipt.filename_timestamp,
+            "json_line_count": snapshot.json_line_count,
+            "raw_snapshot_sha256": snapshot.receipt.raw_snapshot_sha256,
+            "snapshot_id": snapshot.receipt.snapshot_id,
+            "snapshot_publication_id": f"gsg-snapshot-{snapshot.receipt.snapshot_id}",
+            "snapshot_result_sha256": canonical_sha256(snapshot.to_dict()),
+            "state": snapshot.state,
+        }
+        for snapshot in inputs.snapshots
+    ]
+    assert json.loads((first / "terminal-gap-evidence.json").read_bytes()) == []
+    representative_links = [
+        json.loads(line)
+        for line in (first / "representative-observation-links.jsonl").read_bytes().splitlines()
+    ]
+    expected_representative_links = [
+        link.to_dict()
+        for link in inputs.result.observation_links
+        if not link.reused_existing_version
+    ]
+    assert representative_links == expected_representative_links
+    representative_snapshots = json.loads(
+        (first / "representative-snapshot-references.json").read_bytes()
+    )
+    assert representative_snapshots == snapshot_references
+    summary = json.loads((first / "summary.json").read_bytes())
+    assert summary["representative_observation_link_count"] == len(inputs.result.articles)
+    assert summary["representative_snapshot_count"] == 1
+    assert summary["representative_provenance_sha256"] == canonical_sha256(
+        {
+            "observation_links": representative_links,
+            "snapshot_references": representative_snapshots,
+        }
+    )
 
 
-@pytest.mark.parametrize(
-    ("field", "value", "message"),
-    [
-        ("complete_intervals", -1, "nonnegative integer"),
-        ("zero_line_intervals", -1, "nonnegative integer"),
-        ("gap_intervals", -1, "nonnegative integer"),
-        ("retrieval_rate", -0.1, "finite in"),
-        ("retrieval_rate", 1.1, "finite in"),
-        ("retrieval_rate", float("inf"), "finite in"),
-        ("as_of", "not-a-timestamp", "as_of timestamp"),
-        ("semantic_sha256", "0" * 64, "semantic hash mismatch"),
-    ],
-)
-def test_normalized_publication_rejects_forged_coverage_fields(
-    tmp_path: Path, field: str, value: object, message: str
+def test_normalized_publication_reconstructs_coverage_and_rejects_bad_as_of(
+    tmp_path: Path,
 ) -> None:
-    adapter, result, coverage = normalized_publication_inputs(tmp_path)
-    forged = replace(coverage, **{field: value})
+    inputs = normalized_publication_inputs(tmp_path)
 
-    with pytest.raises(ProviderIngestionError, match=message):
-        publish_normalization(adapter.store, "forged-coverage", result, forged)
-
-    assert not (adapter.store.publications_root / "gsg-normalized-forged-coverage").exists()
-
-
-def test_normalized_publication_recomputes_coverage_arithmetic(tmp_path: Path) -> None:
-    adapter, result, coverage = normalized_publication_inputs(tmp_path)
-    forged = replace(coverage, complete_intervals=coverage.complete_intervals + 1)
+    forged = replace(
+        inputs.coverage,
+        complete_intervals=999,
+        expected_due_intervals=999,
+        retrieval_rate=1.0,
+    )
     forged = replace(
         forged,
         semantic_sha256=canonical_sha256(forged.to_dict(include_hash=False)),
     )
+    with pytest.raises(ProviderIngestionError, match="caller-supplied coverage"):
+        publish_normalization(
+            inputs.adapter.store,
+            "counterfeit-coverage",
+            inputs.result,
+            forged,
+            normalizer=inputs.normalizer,
+            retrieval_plan=inputs.plan,
+            snapshots=inputs.snapshots,
+            as_of=inputs.as_of,
+        )
 
-    with pytest.raises(ProviderIngestionError, match="due interval arithmetic"):
-        publish_normalization(adapter.store, "forged-arithmetic", result, forged)
+    with pytest.raises(
+        ProviderIngestionError,
+        match="availability lies after|future receipt|latest committed",
+    ):
+        publish_inputs(inputs, "future-coverage", as_of="2026-08-14T01:00:30Z")
+    with pytest.raises(ProviderIngestionError, match="timestamp"):
+        publish_inputs(inputs, "malformed-as-of", as_of="not-a-timestamp")
+    with pytest.raises(ProviderIngestionError, match="canonical UTC"):
+        publish_inputs(
+            inputs,
+            "noncanonical-as-of",
+            as_of="2026-08-14T01:30:00.000000Z",
+        )
 
 
-def test_normalized_publication_rejects_forged_gap_bounds(tmp_path: Path) -> None:
-    adapter, result, coverage = normalized_publication_inputs(tmp_path)
-    forged_gap = ProviderGap(
-        start_at="2026-08-14T01:00:00Z",
-        end_at_exclusive="2026-08-14T01:01:00Z",
-        duration_minutes=2,
-        reasons=("synthetic_gap",),
-    )
-    forged = replace(coverage, gaps=(forged_gap,))
-    forged = replace(
-        forged,
-        semantic_sha256=canonical_sha256(forged.to_dict(include_hash=False)),
-    )
+def test_normalized_publication_rejects_missing_committed_representative_link(
+    tmp_path: Path,
+) -> None:
+    inputs = normalized_publication_inputs(tmp_path)
+    representative_id = inputs.result.articles[0].provider_observation_id
+    inputs.normalizer._links.pop(representative_id)
 
-    with pytest.raises(ProviderIngestionError, match="gap fields"):
-        publish_normalization(adapter.store, "forged-gap", result, forged)
+    with pytest.raises(
+        ProviderIngestionError,
+        match="first observation|representative link",
+    ):
+        publish_inputs(inputs, "missing-representative")
 
 
-def test_normalized_publication_rejects_adjacent_ungrouped_gaps(tmp_path: Path) -> None:
-    adapter, result, coverage = normalized_publication_inputs(tmp_path)
-    gaps = (
-        ProviderGap(
-            start_at="2026-08-14T01:00:00Z",
-            end_at_exclusive="2026-08-14T01:01:00Z",
-            duration_minutes=1,
-            reasons=("non_retryable",),
+def test_normalized_publication_rejects_out_of_plan_and_over_cap_evidence(
+    tmp_path: Path,
+) -> None:
+    inputs = normalized_publication_inputs(tmp_path)
+    out_of_plan = TerminalGapEvidence.create(
+        interval_start="2099-01-01T00:00:00Z",
+        interval_end_exclusive="2099-01-01T00:01:00Z",
+        expected_source_locator=(
+            "https://data.gdeltproject.org/gdeltv3/gsg/20990101000000.gsg.json.gz"
         ),
-        ProviderGap(
-            start_at="2026-08-14T01:01:00Z",
-            end_at_exclusive="2026-08-14T01:02:00Z",
-            duration_minutes=1,
-            reasons=("retry_exhausted",),
+        attempts=(
+            GapAttempt(
+                attempt_number=1,
+                attempted_at="2099-01-01T00:30:00Z",
+                http_status=404,
+                error_kind=None,
+                retry_after_seconds=None,
+                retry_disposition="gap",
+            ),
         ),
+        terminal_at="2099-01-01T00:30:00Z",
+        protocol_config_sha256=PROTOCOL_CONFIG_SHA256,
     )
-    forged = replace(
-        coverage,
-        complete_intervals=0,
-        expected_due_intervals=2,
-        gap_intervals=2,
-        gaps=gaps,
-        maximum_gap_minutes=1,
-        retrieval_rate=0.0,
-        zero_line_intervals=0,
+    with pytest.raises(ProviderIngestionError, match="outside the plan"):
+        publish_inputs(
+            inputs,
+            "future-out-of-plan",
+            as_of="2099-01-01T01:00:00Z",
+            gap_evidence=(out_of_plan,),
+        )
+
+    forged_over_cap = replace(
+        inputs.plan,
+        intervals=inputs.plan.intervals * (MAX_PLAN_INTERVALS + 1),
     )
-    forged = replace(
-        forged,
-        semantic_sha256=canonical_sha256(forged.to_dict(include_hash=False)),
+    with pytest.raises(
+        ProviderIngestionError,
+        match="retrieval plan is malformed|plan identity",
+    ):
+        publish_inputs(inputs, "over-cap", plan=forged_over_cap)
+
+
+def test_normalized_publication_persists_exact_committed_gap_evidence(
+    tmp_path: Path,
+) -> None:
+    store = ContentAddressedStore(tmp_path)
+    plan = plan_retrieval("2026-08-14T01:00:00Z", "2026-08-14T01:01:00Z")
+    evidence = TerminalGapEvidence.create(
+        interval_start="2026-08-14T01:00:00Z",
+        interval_end_exclusive="2026-08-14T01:01:00Z",
+        expected_source_locator=(
+            "https://data.gdeltproject.org/gdeltv3/gsg/20260814010000.gsg.json.gz"
+        ),
+        attempts=(
+            GapAttempt(
+                attempt_number=1,
+                attempted_at="2026-08-14T01:30:00Z",
+                http_status=404,
+                error_kind=None,
+                retry_after_seconds=None,
+                retry_disposition="gap",
+            ),
+        ),
+        terminal_at="2026-08-14T01:30:00Z",
+        protocol_config_sha256=PROTOCOL_CONFIG_SHA256,
+    )
+    normalizer = GSGNormalizer(protocol_config_sha256=PROTOCOL_CONFIG_SHA256)
+    result = normalizer.normalize(
+        (),
+        retrieval_plan=plan,
+        terminal_as_of="2026-08-14T01:30:00Z",
+        gap_evidence=(evidence,),
     )
 
-    with pytest.raises(ProviderIngestionError, match="not maximally grouped"):
-        publish_normalization(adapter.store, "ungrouped-gaps", result, forged)
+    published = publish_normalization(
+        store,
+        "committed-gap",
+        result,
+        normalizer=normalizer,
+        retrieval_plan=plan,
+        snapshots=(),
+        as_of="2026-08-14T01:30:00Z",
+        gap_evidence=(evidence,),
+    )
+
+    assert json.loads((published / "terminal-gap-evidence.json").read_bytes()) == [
+        evidence.to_dict()
+    ]
+    coverage = json.loads((published / "coverage.json").read_bytes())
+    assert coverage["gap_intervals"] == 1
+    assert coverage["terminal_gap_evidence_sha256"] == canonical_sha256(
+        [{"evidence_id": evidence.evidence_id, "evidence_sha256": evidence.evidence_sha256}]
+    )
+
+
+def test_normalized_publication_rejects_snapshot_not_equal_to_raw_replay(
+    tmp_path: Path,
+) -> None:
+    inputs = normalized_publication_inputs(tmp_path)
+    observation = inputs.snapshots[0].observations[0]
+    forged_observation = replace(observation, raw_title="Bitcoin forged after parsing")
+    forged_snapshot = replace(
+        inputs.snapshots[0],
+        observations=(forged_observation, *inputs.snapshots[0].observations[1:]),
+    )
+
+    with pytest.raises(ProviderIngestionError, match="immutable raw-byte replay"):
+        publish_inputs(inputs, "forged-snapshot", snapshots=(forged_snapshot,))
+
+
+@pytest.mark.parametrize("damage", ["linkless", "missing", "swapped", "forged"])
+def test_normalized_publication_rejects_incomplete_or_forged_provenance(
+    tmp_path: Path, damage: str
+) -> None:
+    inputs = normalized_publication_inputs(tmp_path)
+    links = list(inputs.result.observation_links)
+    if damage == "linkless":
+        forged = replace(inputs.result, observation_links=())
+    elif damage == "missing":
+        forged = replace(inputs.result, observation_links=tuple(links[:-1]))
+    elif damage == "swapped":
+        first, second = links
+        links[0] = replace(first, article_version_id=second.article_version_id)
+        links[1] = replace(second, article_version_id=first.article_version_id)
+        forged = replace(inputs.result, observation_links=tuple(links))
+    else:
+        links[0] = replace(links[0], raw_snapshot_sha256="0" * 64)
+        forged = replace(inputs.result, observation_links=tuple(links))
+    forged = rehash_result(forged)
+
+    with pytest.raises(ProviderIngestionError, match="closed batch|exactly account|provenance"):
+        publish_inputs(inputs, f"forged-{damage}", result=forged)
 
 
 def test_normalized_publication_rejects_forged_normalization_hash(tmp_path: Path) -> None:
-    adapter, result, coverage = normalized_publication_inputs(tmp_path)
-    forged = replace(result, semantic_sha256="0" * 64)
+    inputs = normalized_publication_inputs(tmp_path)
+    forged = replace(inputs.result, semantic_sha256="0" * 64)
 
     with pytest.raises(ProviderIngestionError, match="normalization semantic hash mismatch"):
-        publish_normalization(adapter.store, "forged-normalization", forged, coverage)
+        publish_inputs(inputs, "forged-normalization", result=forged)
 
 
 def test_normalized_publication_collision_rejects_altered_manifest_metadata(
     tmp_path: Path,
 ) -> None:
-    adapter, result, coverage = normalized_publication_inputs(tmp_path)
-    published = publish_normalization(adapter.store, "metadata-collision", result, coverage)
+    inputs = normalized_publication_inputs(tmp_path)
+    published = publish_inputs(inputs, "metadata-collision")
     manifest_path = published / "manifest.json"
     manifest = json.loads(manifest_path.read_bytes())
     manifest["metadata"]["provider"] = "forged-provider"
@@ -395,7 +779,7 @@ def test_normalized_publication_collision_rejects_altered_manifest_metadata(
     manifest_path.write_bytes(canonicalize(manifest))
 
     with pytest.raises(ProviderIngestionError, match="collision with different bytes"):
-        publish_normalization(adapter.store, "metadata-collision", result, coverage)
+        publish_inputs(inputs, "metadata-collision")
 
 
 def test_normalizer_refuses_a_nonterminal_expected_interval(tmp_path: Path) -> None:
