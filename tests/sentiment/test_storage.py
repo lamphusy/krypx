@@ -8,7 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from crypto_ai.exceptions import PublicationCollisionError, SentimentStorageError
+from crypto_ai.exceptions import (
+    PublicationCollisionError,
+    SentimentStorageError,
+    StorageIntegrityError,
+)
 from crypto_ai.sentiment import storage as storage_module
 from crypto_ai.sentiment.canonical import canonicalize, sha256_bytes
 from crypto_ai.sentiment.storage import ContentAddressedStore
@@ -481,6 +485,83 @@ def test_publication_rejects_manifested_fifo_without_blocking(tmp_path: Path) ->
 
     output = assert_publication_rejected_without_blocking(tmp_path, "manifested-fifo")
     assert "not a regular file or directory" in output
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="named pipes are unavailable")
+def test_publication_rejects_fifo_injected_during_payload_capture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ContentAddressedStore(tmp_path)
+    publication = store.publish_bundle("late-fifo", {"payload.bin": b"payload"})
+    read_regular_file = storage_module._read_regular_file_at_once
+    injected = False
+
+    def inject_fifo_before_payload_read(
+        parent_descriptor: int,
+        name: str,
+        *,
+        description: str,
+    ) -> tuple[bytes, os.stat_result]:
+        nonlocal injected
+        if name == "payload.bin" and not injected:
+            os.mkfifo(publication / "late.fifo")
+            injected = True
+        return read_regular_file(parent_descriptor, name, description=description)
+
+    monkeypatch.setattr(
+        storage_module,
+        "_read_regular_file_at_once",
+        inject_fifo_before_payload_read,
+    )
+
+    with pytest.raises(StorageIntegrityError, match="changed during verification"):
+        store.verify_publication("late-fifo")
+    assert injected is True
+    assert (publication / "late.fifo").is_fifo()
+
+
+@pytest.mark.skipif(not hasattr(os, "symlink"), reason="symlinks are unavailable")
+def test_publication_rejects_directory_replaced_during_payload_capture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ContentAddressedStore(tmp_path / "store")
+    publication = store.publish_bundle(
+        "late-directory-symlink",
+        {"nested/payload.bin": b"payload"},
+    )
+    nested = publication / "nested"
+    relocated = tmp_path / "relocated-nested"
+    external = tmp_path / "external"
+    external.mkdir()
+    read_regular_file = storage_module._read_regular_file_at_once
+    injected = False
+
+    def replace_directory_before_payload_read(
+        parent_descriptor: int,
+        name: str,
+        *,
+        description: str,
+    ) -> tuple[bytes, os.stat_result]:
+        nonlocal injected
+        if name == "payload.bin" and not injected:
+            nested.rename(relocated)
+            nested.symlink_to(external, target_is_directory=True)
+            injected = True
+        return read_regular_file(parent_descriptor, name, description=description)
+
+    monkeypatch.setattr(
+        storage_module,
+        "_read_regular_file_at_once",
+        replace_directory_before_payload_read,
+    )
+
+    with pytest.raises(StorageIntegrityError, match="changed during verification"):
+        store.verify_publication("late-directory-symlink")
+    assert injected is True
+    assert nested.is_symlink()
+    assert list(external.iterdir()) == []
 
 
 def test_publication_rejects_unmanifested_empty_directory(tmp_path: Path) -> None:

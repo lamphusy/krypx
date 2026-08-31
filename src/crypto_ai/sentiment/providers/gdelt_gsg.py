@@ -1638,7 +1638,10 @@ class GSGNormalizer:
     def hydrate(cls, store: ContentAddressedStore, publication_id: str) -> GSGNormalizer:
         """Construct state only from one-read buffers verified by the publication manifest."""
         try:
-            verified = store.read_publication(publication_id)
+            verified = store.read_publication(
+                publication_id,
+                metadata_prevalidator=_validate_state_publication_metadata,
+            )
         except SentimentStorageError as exc:
             raise NormalizationIntegrityError(
                 f"normalizer state publication failed verification: {publication_id}"

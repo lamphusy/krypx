@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -22,7 +23,6 @@ from crypto_ai.sentiment.contracts import (
     derive_content_hash,
     derive_duplicate_group_id,
 )
-from crypto_ai.sentiment.providers import gdelt_gsg as gdelt_module
 from crypto_ai.sentiment.providers.gdelt_gsg import (
     PROVIDER_ID,
     RIGHTS_SCOPE,
@@ -31,7 +31,7 @@ from crypto_ai.sentiment.providers.gdelt_gsg import (
     RightsApproval,
     plan_retrieval,
 )
-from crypto_ai.sentiment.storage import ContentAddressedStore, VerifiedPublication
+from crypto_ai.sentiment.storage import ContentAddressedStore
 
 PROJECT_ROOT = Path(__file__).parents[2]
 PROTOCOL_HASH = sha256_bytes((PROJECT_ROOT / "config" / "phase2_protocol.json").read_bytes())
@@ -341,10 +341,16 @@ def test_state_hydration_rejects_invalid_outer_publication_manifest(
             "unexpected": "field",
         },
         {
-            "protocol_config_sha256": 7,
+            "protocol_config_sha256": PROTOCOL_HASH,
             "provider": PROVIDER_ID,
             "rights_approval_sha256": canonical_sha256(None),
-            "state_sha256": "0" * 64,
+            "state_sha256": 7,
+        },
+        {
+            "protocol_config_sha256": PROTOCOL_HASH,
+            "provider": PROVIDER_ID,
+            "rights_approval_sha256": canonical_sha256(None),
+            "state_sha256": "g" * 64,
         },
         {
             "protocol_config_sha256": PROTOCOL_HASH,
@@ -352,6 +358,12 @@ def test_state_hydration_rejects_invalid_outer_publication_manifest(
             "rights_approval_sha256": canonical_sha256(None),
             "state_sha256": "0" * 64,
         },
+    ],
+    ids=[
+        "unexpected-key",
+        "non-string-state-sha256",
+        "non-hex-state-sha256",
+        "wrong-provider",
     ],
 )
 def test_hydration_rejects_malformed_metadata_before_state_v3_parser(
@@ -361,28 +373,32 @@ def test_hydration_rejects_malformed_metadata_before_state_v3_parser(
 ) -> None:
     store = ContentAddressedStore(tmp_path)
     publication_id = "gsg-normalizer-state-metadata-order"
-    GSGNormalizer(protocol_config_sha256=PROTOCOL_HASH).publish_state(store, "metadata-order")
-    read_publication = store.read_publication
+    publication = GSGNormalizer(protocol_config_sha256=PROTOCOL_HASH).publish_state(
+        store, "metadata-order"
+    )
+    manifest_path = publication / "manifest.json"
+    manifest = json.loads(manifest_path.read_bytes())
+    manifest["metadata"] = metadata
+    manifest_path.write_bytes(canonicalize(manifest))
+    read_regular_file = storage_module._read_regular_file_at_once
+    opened_names: list[str] = []
 
-    def forged_read(requested_id: str) -> VerifiedPublication:
-        verified = read_publication(requested_id)
-        manifest = dict(verified.manifest)
-        manifest["metadata"] = metadata
-        return VerifiedPublication(manifest=manifest, files=verified.files)
+    def payload_open_sentinel(
+        parent_descriptor: int,
+        name: str,
+        *,
+        description: str,
+    ) -> tuple[bytes, os.stat_result]:
+        opened_names.append(name)
+        if name != "manifest.json":
+            raise AssertionError(f"payload opened before metadata validation: {name}")
+        return read_regular_file(parent_descriptor, name, description=description)
 
-    parser_called = False
-
-    def parser_sentinel(*_args: object, **_kwargs: object) -> object:
-        nonlocal parser_called
-        parser_called = True
-        raise AssertionError("state-v3 parser must not see malformed metadata")
-
-    monkeypatch.setattr(store, "read_publication", forged_read)
-    monkeypatch.setattr(gdelt_module, "_parse_canonical_json_buffer", parser_sentinel)
+    monkeypatch.setattr(storage_module, "_read_regular_file_at_once", payload_open_sentinel)
 
     with pytest.raises(NormalizationIntegrityError, match="manifest metadata"):
         GSGNormalizer.hydrate(store, publication_id)
-    assert parser_called is False
+    assert opened_names == ["manifest.json"]
 
 
 @pytest.mark.parametrize("damage", ["corrupt", "missing"])

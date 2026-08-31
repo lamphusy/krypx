@@ -9,13 +9,18 @@ import os
 import stat
 import sys
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from contextlib import ExitStack
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from crypto_ai.exceptions import PublicationCollisionError, SentimentStorageError
+from crypto_ai.exceptions import (
+    PublicationCollisionError,
+    SentimentStorageError,
+    StorageIntegrityError,
+)
 from crypto_ai.sentiment.canonical import canonicalize, sha256_bytes
 
 SHA256_LENGTH = 64
@@ -37,6 +42,26 @@ class VerifiedPublication:
 
     manifest: dict[str, Any]
     files: dict[str, bytes]
+
+
+_TreeStatFingerprint = tuple[int, int, int, int, int, int, int, int, int]
+
+
+@dataclass(frozen=True, slots=True)
+class _PublicationEntrySnapshot:
+    """One descriptor-relative lstat captured before payload reads."""
+
+    fingerprint: _TreeStatFingerprint
+    is_directory: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _PublicationDirectorySnapshot:
+    """One stable directory inventory held open through payload verification."""
+
+    descriptor: int
+    fingerprint: _TreeStatFingerprint
+    entries: dict[str, _PublicationEntrySnapshot]
 
 
 class ContentAddressedStore:
@@ -288,8 +313,13 @@ class ContentAddressedStore:
         """Load and verify every byte referenced by a publication manifest."""
         return self.read_publication(publication_id).manifest
 
-    def read_publication(self, publication_id: str) -> VerifiedPublication:
-        """Capture each publication file once and return those exact verified buffers."""
+    def read_publication(
+        self,
+        publication_id: str,
+        *,
+        metadata_prevalidator: Callable[[Mapping[str, Any]], None] | None = None,
+    ) -> VerifiedPublication:
+        """Validate metadata, then capture each payload once from one anchored directory."""
         _validate_publication_id(publication_id)
         publication_descriptor = _open_store_directory(
             self.root,
@@ -351,6 +381,9 @@ class ContentAddressedStore:
                     or size_bytes < 0
                 ):
                     raise SentimentStorageError(f"invalid manifest size for {name}")
+
+            if metadata_prevalidator is not None:
+                metadata_prevalidator(deepcopy(manifest["metadata"]))
 
             captured_files, actual_directories = _capture_publication_tree(
                 publication_descriptor,
@@ -472,6 +505,21 @@ def _stat_content_fingerprint(value: os.stat_result) -> tuple[int, int, int, int
     return (
         value.st_dev,
         value.st_ino,
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+    )
+
+
+def _stat_tree_fingerprint(value: os.stat_result) -> _TreeStatFingerprint:
+    """Fingerprint identity, kind, ownership, links, and mutation-relevant metadata."""
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_mode,
+        value.st_nlink,
+        value.st_uid,
+        value.st_gid,
         value.st_size,
         value.st_mtime_ns,
         value.st_ctime_ns,
@@ -785,68 +833,209 @@ def _capture_publication_tree(
     manifest_stat: os.stat_result,
     publication_id: str,
 ) -> tuple[dict[str, bytes], set[str]]:
-    """Capture all regular members and reject every other filesystem object."""
+    """Inventory twice around single-read capture and reject every tree mutation."""
     captured_files = {"manifest.json": manifest_data}
     directories: set[str] = set()
+    snapshots: dict[PurePosixPath, _PublicationDirectorySnapshot] = {}
 
-    def capture_directory(directory_descriptor: int, prefix: PurePosixPath) -> None:
+    def changed_during_verification(relative_name: str | None = None) -> None:
+        suffix = f": {relative_name}" if relative_name else ""
+        raise StorageIntegrityError(
+            f"publication {publication_id} changed during verification{suffix}"
+        )
+
+    def directory_names(
+        directory_descriptor: int,
+        *,
+        changed_is_integrity_failure: bool,
+    ) -> tuple[str, ...]:
         try:
             names = sorted(os.listdir(directory_descriptor))
         except OSError as exc:
+            if changed_is_integrity_failure:
+                changed_during_verification()
             raise SentimentStorageError(
                 f"unable to inventory publication {publication_id}: {exc}"
             ) from exc
         for name in names:
             if not isinstance(name, str) or name in {"", ".", ".."} or "/" in name:
                 raise SentimentStorageError("publication contains an unsafe directory entry")
-            relative_path = prefix / name
-            relative_name = relative_path.as_posix()
-            try:
-                entry_stat = os.stat(
+        return tuple(names)
+
+    def entry_stat(
+        directory_descriptor: int,
+        name: str,
+        relative_name: str,
+        *,
+        changed_is_integrity_failure: bool,
+    ) -> os.stat_result:
+        try:
+            return os.stat(
+                name,
+                dir_fd=directory_descriptor,
+                follow_symlinks=False,
+            )
+        except OSError as exc:
+            if changed_is_integrity_failure:
+                changed_during_verification(relative_name)
+            raise SentimentStorageError(
+                f"unable to inspect publication entry {relative_name}: {exc}"
+            ) from exc
+
+    def assert_entry_kind(
+        value: os.stat_result,
+        relative_name: str,
+        *,
+        changed_is_integrity_failure: bool,
+    ) -> bool:
+        if stat.S_ISLNK(value.st_mode):
+            if changed_is_integrity_failure:
+                changed_during_verification(relative_name)
+            raise SentimentStorageError(f"publication entry {relative_name} must not be a symlink")
+        if stat.S_ISDIR(value.st_mode):
+            return True
+        if stat.S_ISREG(value.st_mode):
+            return False
+        if changed_is_integrity_failure:
+            changed_during_verification(relative_name)
+        raise SentimentStorageError(
+            f"publication entry {relative_name} is not a regular file or directory"
+        )
+
+    with ExitStack() as directory_descriptors:
+
+        def inventory_directory(
+            directory_descriptor: int,
+            prefix: PurePosixPath,
+        ) -> None:
+            initial_directory_fingerprint = _stat_tree_fingerprint(os.fstat(directory_descriptor))
+            names = directory_names(
+                directory_descriptor,
+                changed_is_integrity_failure=False,
+            )
+            entries: dict[str, _PublicationEntrySnapshot] = {}
+            for name in names:
+                relative_path = prefix / name
+                relative_name = relative_path.as_posix()
+                initial_stat = entry_stat(
+                    directory_descriptor,
                     name,
-                    dir_fd=directory_descriptor,
-                    follow_symlinks=False,
+                    relative_name,
+                    changed_is_integrity_failure=False,
                 )
-            except OSError as exc:
-                raise SentimentStorageError(
-                    f"unable to inspect publication entry {relative_name}: {exc}"
-                ) from exc
-            if stat.S_ISLNK(entry_stat.st_mode):
-                raise SentimentStorageError(
-                    f"publication entry {relative_name} must not be a symlink"
+                is_directory = assert_entry_kind(
+                    initial_stat,
+                    relative_name,
+                    changed_is_integrity_failure=False,
                 )
-            if stat.S_ISDIR(entry_stat.st_mode):
+                initial_fingerprint = _stat_tree_fingerprint(initial_stat)
+                entries[name] = _PublicationEntrySnapshot(
+                    fingerprint=initial_fingerprint,
+                    is_directory=is_directory,
+                )
+                if not is_directory:
+                    continue
                 directories.add(relative_name)
                 child_descriptor = _open_directory_at(
                     directory_descriptor,
                     name,
                     description=f"publication directory {relative_name}",
                 )
-                try:
-                    capture_directory(child_descriptor, relative_path)
-                finally:
-                    os.close(child_descriptor)
-                continue
-            if not stat.S_ISREG(entry_stat.st_mode):
-                raise SentimentStorageError(
-                    f"publication entry {relative_name} is not a regular file or directory"
+                directory_descriptors.callback(os.close, child_descriptor)
+                if _stat_tree_fingerprint(os.fstat(child_descriptor)) != initial_fingerprint:
+                    changed_during_verification(relative_name)
+                inventory_directory(child_descriptor, relative_path)
+                final_entry_stat = entry_stat(
+                    directory_descriptor,
+                    name,
+                    relative_name,
+                    changed_is_integrity_failure=True,
                 )
-            if relative_name == "manifest.json":
-                if _stat_content_fingerprint(entry_stat) != _stat_content_fingerprint(
-                    manifest_stat
-                ):
-                    raise SentimentStorageError(
-                        f"publication manifest {publication_id} changed during verification"
-                    )
-                continue
-            data, _ = _read_regular_file_at_once(
-                directory_descriptor,
-                name,
-                description=f"publication member {relative_name}",
-            )
-            captured_files[relative_name] = data
+                if _stat_tree_fingerprint(final_entry_stat) != initial_fingerprint:
+                    changed_during_verification(relative_name)
 
-    capture_directory(publication_descriptor, PurePosixPath())
+            if (
+                directory_names(
+                    directory_descriptor,
+                    changed_is_integrity_failure=True,
+                )
+                != names
+                or _stat_tree_fingerprint(os.fstat(directory_descriptor))
+                != initial_directory_fingerprint
+            ):
+                changed_during_verification(prefix.as_posix() if prefix.parts else None)
+            snapshots[prefix] = _PublicationDirectorySnapshot(
+                descriptor=directory_descriptor,
+                fingerprint=initial_directory_fingerprint,
+                entries=entries,
+            )
+
+        def capture_directory(prefix: PurePosixPath) -> None:
+            snapshot = snapshots[prefix]
+            for name, entry in snapshot.entries.items():
+                relative_path = prefix / name
+                relative_name = relative_path.as_posix()
+                if entry.is_directory:
+                    capture_directory(relative_path)
+                    continue
+                if relative_name == "manifest.json":
+                    if entry.fingerprint != _stat_tree_fingerprint(manifest_stat):
+                        changed_during_verification(relative_name)
+                    continue
+                data, opened_stat = _read_regular_file_at_once(
+                    snapshot.descriptor,
+                    name,
+                    description=f"publication member {relative_name}",
+                )
+                if _stat_tree_fingerprint(opened_stat) != entry.fingerprint:
+                    changed_during_verification(relative_name)
+                final_entry_stat = entry_stat(
+                    snapshot.descriptor,
+                    name,
+                    relative_name,
+                    changed_is_integrity_failure=True,
+                )
+                if _stat_tree_fingerprint(final_entry_stat) != entry.fingerprint:
+                    changed_during_verification(relative_name)
+                captured_files[relative_name] = data
+
+        def verify_directory(prefix: PurePosixPath) -> None:
+            snapshot = snapshots[prefix]
+            for name, expected_entry in snapshot.entries.items():
+                if expected_entry.is_directory:
+                    verify_directory(prefix / name)
+
+            names = directory_names(
+                snapshot.descriptor,
+                changed_is_integrity_failure=True,
+            )
+            current_entries: dict[str, _PublicationEntrySnapshot] = {}
+            for name in names:
+                relative_path = prefix / name
+                relative_name = relative_path.as_posix()
+                current_stat = entry_stat(
+                    snapshot.descriptor,
+                    name,
+                    relative_name,
+                    changed_is_integrity_failure=True,
+                )
+                current_entries[name] = _PublicationEntrySnapshot(
+                    fingerprint=_stat_tree_fingerprint(current_stat),
+                    is_directory=assert_entry_kind(
+                        current_stat,
+                        relative_name,
+                        changed_is_integrity_failure=True,
+                    ),
+                )
+            if (
+                current_entries != snapshot.entries
+                or _stat_tree_fingerprint(os.fstat(snapshot.descriptor)) != snapshot.fingerprint
+            ):
+                changed_during_verification(prefix.as_posix() if prefix.parts else None)
+
+        inventory_directory(publication_descriptor, PurePosixPath())
+        capture_directory(PurePosixPath())
+        verify_directory(PurePosixPath())
     return captured_files, directories
 
 
