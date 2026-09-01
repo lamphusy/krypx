@@ -1,6 +1,6 @@
 # KrypX Phase 2 — Milestone 0 Research Protocol and News-Source Feasibility
 
-**Protocol status:** Batch A final-integrity correction completed offline; Milestones 1 and 2 remain pending a new independent review
+**Protocol status:** Batch A acceptance-reconciliation correction complete and verified offline; Milestones 1 and 2 remain pending independent review
 
 **Research decision:** `PROCEED_WITH_FORWARD_ONLY_COLLECTION`
 
@@ -9,10 +9,10 @@
 **Research asset / interval:** BTC/USDT, 1 hour
 
 **Prepared:** 2026-08-12
-**Latest offline correction:** 2026-08-30
+**Latest offline corrective authorization:** 2026-09-02
 **Companion machine-readable draft:** `config/phase2_protocol.json`
 
-**Approval boundary:** Batch A authorizes synthetic-fixture implementation and explicitly bounded offline corrective hardening. The final-integrity task completed local verification and authorizes exactly one no-push corrective commit on `codex/phase2-batch-a-final-integrity`, pending independent review. It does not approve real GDELT title-use rights, Batch B or Milestone 3, GDELT network collection, provider/API access, scorer selection, model downloads, research gates, real feature generation, training/backtesting, forward collection, holdout access/evaluation, history rewriting, or a push.
+**Approval boundary:** Batch A authorizes synthetic-fixture implementation and explicitly bounded offline corrective hardening. The 2026-09-02 acceptance-reconciliation task authorizes exactly one additional local no-push corrective commit based on `cc7531c9efd893b6608dd9ad0d6e8756783fc9c6`; its implementation and complete offline verification are finished, and it remains pending independent review. It does not approve real GDELT title-use rights, Batch B or Milestone 3, GDELT network collection, provider/API access, scorer selection, model downloads, research gates, real feature generation, training/backtesting, forward collection, holdout access/evaluation, history rewriting, or a push.
 
 ## Executive decision
 
@@ -23,7 +23,7 @@ This recommendation is deliberately title-only. It does not authorize fetching p
 | Decision item | Milestone 0 result |
 |---|---|
 | Exact verdict | `PROCEED_WITH_FORWARD_ONLY_COLLECTION` |
-| Engineering-specification approval | Approved for offline Milestones 1 and 2 only; final-integrity correction is complete and pending a new independent review, and all research/external-access approvals remain false |
+| Engineering-specification approval | Approved for offline Milestones 1 and 2 only; acceptance-reconciliation correction is complete offline pending independent review, and all research/external-access approvals remain false |
 | Recommended provider | GDELT GSG, title-only, with KrypX receipt time and exact raw-byte hashes; human approval still required |
 | Historical feasibility | `REJECTED`: no retrospective news scoring/backtest for the Phase 1 period |
 | Main blocker to outcomes | A newly collected development corpus does not yet exist; scorer, gates, budget, and later holdout are unapproved |
@@ -702,7 +702,7 @@ Batch A approval is deliberately narrower than research approval. The article/sc
 | Start future-holdout collection | Not authorized; requires approved frozen protocol/generation |
 | Claim or evaluate the future holdout | Separate explicit authorization required after readiness |
 
-### Batch A final-integrity correction — complete, pending new independent review
+### Batch A acceptance-reconciliation correction — complete offline, pending independent review
 
 The user authorized the following offline work on 2026-08-14:
 
@@ -726,8 +726,9 @@ normalization provenance, state-v3 parsing before field-level metadata validatio
 unmanifested non-regular objects omitted from publication inventory, and symlinked storage
 ancestor traversal.
 
-The final offline corrective task authorized on 2026-08-27 is based on merge commit
-`587e4475114db8b65fe47a7a8b2197952f2b9e75`. Its implementation contract binds coverage
+The final-integrity task authorized on 2026-08-27 was based on merge commit
+`587e4475114db8b65fe47a7a8b2197952f2b9e75` and produced local no-push commit
+`cd8ce02c2e16c3c87bf831cd3b739f6a3e1abd10`. Its implementation contract binds coverage
 publication to a verified retrieval plan, exact snapshots, terminal-gap evidence, canonical
 `as_of`, protocol identity, and frozen interval bounds; enforces closed-world representative
 observation and raw-hash provenance; validates exact typed state-publication metadata before
@@ -748,15 +749,57 @@ cleanup, fsync, and atomic
 no-replace rename all remain descriptor-relative, so symlinked publication, object, bucket,
 staging, or nested parents cannot redirect external writes.
 
-Implementation and complete offline verification finished on 2026-08-30: 86 focused
+Implementation and complete offline verification for `cd8ce02` finished on 2026-08-30: 86 focused
 storage/provider/state-integrity tests passed (34 storage, 25 GSG adapter/publication, and 27
 state-integrity), the Phase 2 sentiment suite passed 202 tests, all 253 frozen Phase 1 tests
 passed with the same 12 expected single-class synthetic metric warnings, and the complete
 repository suite passed 455 tests with those same warnings. Diff, formatting (64 files
 unchanged), lint, compilation, dependency, strict two-file JSON, Markdown/JSON, historical
 reflog, and 49,972-value local-V8 RFC 8785 checks passed. All execution was fixture-only and
-offline; no push occurred. The correction does not become accepted until its single no-push
-commit passes a new independent read-only review.
+offline. These are historical results, not acceptance. Independent review found two remaining
+publication-verification races: a FIFO could appear after inventory but before payload
+capture, and an inventoried directory could be replaced during payload capture.
+
+On 2026-08-31 the user authorized one additional offline final-polish correction based on
+`cd8ce02`. It produced local no-push commit
+`cc7531c9efd893b6608dd9ad0d6e8756783fc9c6`, which retains descriptor-anchored storage and
+rejects both late publication-tree mutations. The forward-only graph
+`587e447..cc7531c` therefore contains two commits: `cd8ce02` followed by `cc7531c`.
+
+The independent acceptance review of `cc7531c` returned **NOT ACCEPTED** on 2026-09-02.
+The post-order tree confirmation accepted a FIFO or deep symlink inserted into an already-scanned
+descendant while a later sibling was checked; the last tree scan preceded payload hashing and
+therefore accepted a FIFO injected during SHA-256 validation; and a post-inventory payload
+disappearance raised `SentimentStorageError` rather than `StorageIntegrityError`. Separately, the
+governance record still described one commit and the historical 34 / 202 / 455 test totals, while
+the collected inventory at `cc7531c` was 36 storage, 25 GSG adapter/publication, 28
+state-integrity, 205 Phase 2 sentiment, and 458 repository tests. Those figures were collection
+facts, not complete revised-suite execution claims. Finally, `cc7531c` changed shared
+`src/crypto_ai/exceptions.py` by adding `StorageIntegrityError`, so the exact Phase 1
+source-byte-identity requirement failed even though all 253 Phase 1 tests passed with the same 12
+warnings and all 17 Phase 1 manifest hash checks passed.
+
+On 2026-09-02 the user authorized exactly one additional offline, local, no-push
+acceptance-reconciliation correction based on `cc7531c`. It must preserve `cd8ce02`,
+`cc7531c`, and its descriptor-anchored defenses; validate payload sizes and hashes before two
+opposite-order tree-confirmation sweeps; translate post-inventory read failures to the Phase 2
+`StorageIntegrityError`; and reject unmanifested members before payload reads. It must restore
+`src/crypto_ai/exceptions.py` to its exact `587e447` blob; relocate `StorageIntegrityError` to the
+Phase 2-only `src/crypto_ai/sentiment/exceptions.py` module as a `SentimentStorageError` subclass;
+update only required offline tests and governance records; execute complete offline verification;
+create one additional local no-push commit; and stop for a new independent read-only review.
+
+This is a bounded POSIX stability contract, not an atomic recursive-snapshot claim against an
+uncooperative principal that already has write authority. Successful verification means the
+returned payloads were read exactly once from anchored regular-file descriptors, matched the
+manifest size and SHA-256, and survived forward and reverse descriptor-only tree sweeps with no
+later content callback. Complete offline verification passed 44 storage, 25 GSG
+adapter/publication, 28 state-integrity, 97 focused aggregate, 213 Phase 2 sentiment, 253 Phase 1,
+and 466 repository tests; the Phase 1 and full runs retained the same 12 expected single-class
+synthetic metric warnings. Diff, formatting (65 Python files unchanged), lint, compilation,
+dependency consistency, strict two-file JSON, Markdown/JSON reconciliation, 60-of-60 selected
+Phase 1 tracked-blob identity, and the 49,972-value local-V8 RFC 8785 differential checks passed.
+The resulting commit identity is intentionally not self-embedded and is reported after creation.
 
 The governance record preserves history and states only what local Git evidence supports.
 Commit `3e31538e79be85002fc4f11633f22b189058a42a` updated
@@ -770,16 +813,22 @@ fast-forwarded at `2026-08-16T16:59:45+07:00`; and `origin/main` was updated at
 the local pull recorded at `2026-08-27T23:17:12+07:00`. Local reflogs do not establish the
 actor, and no matching push
 authorization is recorded. These are historical facts, not retroactive authorization. No
-reset, rebase, force-push, or other history rewrite is authorized or performed. The current
-final-integrity task separately authorizes no push, and no push has been performed during it.
+reset, rebase, force-push, or other history rewrite is authorized or performed.
 
-Milestones 1 and 2 remain pending a new independent review. Milestone 3 and every later
-milestone remain incomplete. The exact next action is independent read-only review of the
-single final-integrity commit against base
-`587e4475114db8b65fe47a7a8b2197952f2b9e75`, including
-reproduction of the five latest adversarial failures, review of the forward-only Git-history
-reconciliation, and confirmation that all 253 Phase 1 tests and frozen Phase 1 objects remain
-unchanged. Batch B is not authorized. Real GDELT rights, network or provider
+The later local-only corrective history is separate. Commit `cd8ce02` was created from
+`587e447` at `2026-08-30T23:04:10+07:00`, and `cc7531c` was created from `cd8ce02` at
+`2026-08-31T23:11:16+07:00`. Local evidence checked through 2026-09-02 shows `origin/main`
+at `587e447`, no cached remote-tracking ref containing either later commit, no local reflog
+push entry for either commit, and no configured upstream for
+`codex/phase2-batch-a-final-integrity`. That establishes only local unpushed evidence; no live
+remote query was performed. The current acceptance-reconciliation task authorizes no push, and
+no push was performed.
+
+Milestones 1 and 2 remain pending independent review. Milestone 3 and every later milestone
+remain incomplete. The exact next action is independent read-only review of the single local
+no-push acceptance-reconciliation commit based on `cc7531c`, reproducing all five blockers and
+the complete offline matrix. Its identity is reported externally because a Git commit cannot
+contain its own hash. Batch B is not authorized. Real GDELT rights, network or provider
 collection, publisher access, accounts, credentials, paid services, scoring, models,
 features, training, backtests, research gates, future collection, and holdout
 access/evaluation all remain unauthorized. Before any Batch B pilot, a later user instruction

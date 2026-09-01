@@ -65,10 +65,6 @@ class SentimentStorageError(SentimentError):
     """Immutable sentiment storage failed an integrity check or write."""
 
 
-class StorageIntegrityError(SentimentStorageError):
-    """A previously inventoried immutable storage tree changed during verification."""
-
-
 class PublicationCollisionError(SentimentStorageError):
     """An immutable publication identifier already exists."""
 

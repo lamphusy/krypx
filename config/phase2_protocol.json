@@ -1,9 +1,9 @@
 {
   "protocol_id": "krypx-phase2-milestone0",
   "protocol_version": "0.1.0-draft",
-  "status": "batch_a_final_integrity_correction_complete_pending_independent_review",
+  "status": "batch_a_acceptance_reconciliation_corrected_and_offline_verified_pending_independent_review",
   "created_at": "2026-08-12T09:52:48Z",
-  "approval_state": "offline_batch_a_only_final_integrity_correction_complete_pending_independent_review",
+  "approval_state": "offline_batch_a_only_acceptance_reconciliation_correction_complete_pending_independent_review",
   "approved": false,
   "engineering_specification_approval": {
     "approved": true,
@@ -146,17 +146,100 @@
       "push"
     ]
   },
+  "final_polish_corrective_authorization": {
+    "approved": true,
+    "approved_at": "2026-08-31",
+    "branch": "codex/phase2-batch-a-final-integrity",
+    "base_commit": "cd8ce02c2e16c3c87bf831cd3b739f6a3e1abd10",
+    "resulting_commit": "cc7531c9efd893b6608dd9ad0d6e8756783fc9c6",
+    "authorized_scope": [
+      "reopen_batch_a_for_one_offline_publication_verification_race_correction",
+      "reject_publication_tree_mutation_between_inventory_and_payload_capture",
+      "preserve_descriptor_anchored_no_symlink_storage_traversal",
+      "add_offline_fifo_and_directory_replacement_regressions",
+      "preserve_prior_history_without_reset_rebase_force_push_or_rewrite",
+      "create_exactly_one_additional_local_no_push_corrective_commit"
+    ],
+    "explicitly_not_approved": [
+      "batch_b_or_milestone3",
+      "real_gdelt_rights",
+      "network_or_provider_collection",
+      "publisher_access",
+      "credentials_accounts_or_paid_services",
+      "scorer_or_model_activity",
+      "feature_generation",
+      "training_or_backtesting",
+      "research_gates",
+      "future_collection",
+      "holdout_access_or_evaluation",
+      "history_rewrite",
+      "push"
+    ],
+    "push_authorized": false,
+    "push_performed_according_to_local_refs_and_reflogs": false
+  },
+  "acceptance_reconciliation_corrective_authorization": {
+    "approved": true,
+    "approved_at": "2026-09-02",
+    "branch": "codex/phase2-batch-a-final-integrity",
+    "base_commit": "cc7531c9efd893b6608dd9ad0d6e8756783fc9c6",
+    "triggering_review_outcome": "not_accepted",
+    "resulting_commit": null,
+    "resulting_commit_status": "this_record_is_part_of_the_resulting_commit_reported_externally_after_creation",
+    "authorized_scope": [
+      "preserve_cd8ce02_and_cc7531c_as_forward_only_historical_commits",
+      "retain_the_cc7531c_publication_verification_race_defenses",
+      "reject_late_descendant_fifo_and_directory_symlink_mutations_with_opposite_order_confirmation_sweeps",
+      "validate_payload_sizes_and_sha256_hashes_before_the_final_tree_confirmation_sweeps",
+      "translate_post_inventory_payload_read_failures_to_storage_integrity_error",
+      "reject_unmanifested_members_before_opening_any_non_manifest_payload",
+      "restore_src_crypto_ai_exceptions_py_to_its_exact_587e447_blob",
+      "relocate_storage_integrity_error_to_the_phase2_only_src_crypto_ai_sentiment_exceptions_py_module_as_a_sentiment_storage_error_subclass",
+      "record_the_bounded_posix_recursive_snapshot_limitation_without_claiming_writer_exclusion",
+      "update_only_the_required_offline_regression_tests_and_governance_records",
+      "run_complete_offline_verification_with_exact_results_recorded_after_execution",
+      "create_exactly_one_additional_local_no_push_corrective_commit"
+    ],
+    "explicitly_not_approved": [
+      "batch_b_or_milestone3",
+      "real_gdelt_rights",
+      "network_or_provider_collection",
+      "publisher_access",
+      "credentials_accounts_or_paid_services",
+      "scorer_or_model_activity",
+      "feature_generation",
+      "training_or_backtesting",
+      "research_gates",
+      "future_collection",
+      "holdout_access_or_evaluation",
+      "history_rewrite",
+      "push"
+    ],
+    "push_authorized": false,
+    "push_performed_at_record_time": false
+  },
   "batch_a_corrective_review": {
-    "status": "final_integrity_correction_complete_pending_independent_review",
+    "status": "acceptance_reconciliation_correction_offline_verified_pending_independent_review",
     "prior_acceptance_blocker_corrected_at": "2026-08-27",
     "final_integrity_corrective_authorized_at": "2026-08-27",
     "final_integrity_corrected_at": "2026-08-30",
+    "final_integrity_resulting_commit": "cd8ce02c2e16c3c87bf831cd3b739f6a3e1abd10",
+    "final_polish_corrective_authorized_at": "2026-08-31",
+    "final_polish_corrected_at": "2026-08-31",
+    "final_polish_base_commit": "cd8ce02c2e16c3c87bf831cd3b739f6a3e1abd10",
+    "final_polish_resulting_commit": "cc7531c9efd893b6608dd9ad0d6e8756783fc9c6",
+    "final_polish_acceptance_reviewed_at": "2026-09-02",
+    "final_polish_acceptance_outcome": "not_accepted",
+    "acceptance_reconciliation_corrective_authorized_at": "2026-09-02",
+    "acceptance_reconciliation_base_commit": "cc7531c9efd893b6608dd9ad0d6e8756783fc9c6",
+    "acceptance_reconciliation_resulting_commit": null,
+    "acceptance_reconciliation_resulting_commit_status": "self_identity_not_embedded_report_externally_after_commit_creation",
     "branch": "codex/phase2-batch-a-final-integrity",
     "reviewed_commit": "3e31538e79be85002fc4f11633f22b189058a42a",
     "triggering_reviewed_commit": "21e954d24f6639da8c4d902924ebf01ffba715d8",
     "base_commit": "587e4475114db8b65fe47a7a8b2197952f2b9e75",
-    "milestone1_status": "final_integrity_corrected_offline_pending_independent_review",
-    "milestone2_status": "final_integrity_corrected_offline_pending_independent_review",
+    "milestone1_status": "acceptance_reconciliation_corrected_offline_pending_independent_review",
+    "milestone2_status": "acceptance_reconciliation_corrected_offline_pending_independent_review",
     "milestone3_or_later_complete": false,
     "real_gdelt_rights_approved": false,
     "batch_b_authorized": false,
@@ -196,7 +279,13 @@
       "pre_deserialization_exact_state_metadata_validation",
       "complete_regular_and_nonregular_publication_inventory_validation",
       "descriptor_anchored_no_symlink_storage_traversal",
-      "forward_only_prior_push_and_merge_reconciliation"
+      "forward_only_prior_push_and_merge_reconciliation",
+      "stable_publication_tree_verification_across_inventory_and_payload_capture",
+      "manifest_hash_validation_before_opposite_order_tree_confirmation_sweeps",
+      "post_inventory_read_failure_storage_integrity_subtyping",
+      "bounded_posix_tree_stability_contract_without_uncooperative_writer_exclusion",
+      "phase1_exception_module_exact_blob_restoration",
+      "forward_only_two_commit_final_integrity_history_reconciliation"
     ],
     "prior_global_watermark_contract": {
       "implementation_status": "complete_pending_independent_review",
@@ -365,7 +454,8 @@
       "current_corrective_push_performed": false
     },
     "final_integrity_corrective_verification": {
-      "status": "offline_verification_complete_pending_independent_review",
+      "status": "historical_offline_verification_for_cd8ce02_later_not_accepted",
+      "resulting_commit": "cd8ce02c2e16c3c87bf831cd3b739f6a3e1abd10",
       "focused_storage_provider_and_state_integrity_suite": "86_passed",
       "immutable_storage_tests": "34_passed",
       "gsg_adapter_and_publication_tests": "25_passed",
@@ -391,7 +481,103 @@
       "push_authorized": false,
       "push_performed": false
     },
-    "exact_next_action": "independent_read_only_review_of_single_final_integrity_corrective_commit_based_on_587e4475114db8b65fe47a7a8b2197952f2b9e75"
+    "final_polish_outcome": {
+      "status": "implemented_in_cc7531c_then_not_accepted",
+      "authorized_at": "2026-08-31",
+      "base_commit": "cd8ce02c2e16c3c87bf831cd3b739f6a3e1abd10",
+      "resulting_commit": "cc7531c9efd893b6608dd9ad0d6e8756783fc9c6",
+      "base_587e447_to_resulting_commit_count": 2,
+      "implemented_scope": [
+        "reject_fifo_injected_after_publication_inventory_before_payload_capture",
+        "reject_directory_replacement_during_publication_payload_capture",
+        "retain_descriptor_anchored_external_write_protection",
+        "add_offline_adversarial_regressions"
+      ],
+      "local_branch": "codex/phase2-batch-a-final-integrity",
+      "push_authorized": false,
+      "cached_remote_tracking_ref_contains_resulting_commit": false,
+      "local_reflog_records_push_of_resulting_commit": false,
+      "live_remote_query_performed": false
+    },
+    "final_polish_acceptance_review": {
+      "reviewed_at": "2026-09-02",
+      "reviewed_commit": "cc7531c9efd893b6608dd9ad0d6e8756783fc9c6",
+      "outcome": "NOT_ACCEPTED",
+      "blocking_findings": [
+        "postorder_tree_verification_accepted_a_fifo_or_deep_symlink_injected_into_an_already_scanned_descendant_while_a_later_sibling_was_scanned",
+        "the_last_tree_inventory_completed_before_captured_payload_hash_validation_so_a_fifo_injected_during_sha256_was_accepted",
+        "a_post_inventory_payload_disappearance_raised_sentiment_storage_error_instead_of_storage_integrity_error",
+        "governance_records_still_described_one_corrective_commit_and_stale_verification_totals_while_587e447_through_cc7531c_contains_two_commits",
+        "src_crypto_ai_exceptions_py_changed_from_the_exact_587e447_blob_so_phase1_source_byte_identity_failed"
+      ],
+      "nonblocking_confirmations": {
+        "phase1_suite": "253_passed_12_expected_single_class_metric_warnings",
+        "phase1_manifest_hash_checks": "17_of_17_passed",
+        "market_snapshot_sha256": "a271933f39eeb453fefc356eb0dc645508ce6cd56b3d7a832b81259cd2a6cc78",
+        "git_diff_check_from_587e447": "pass",
+        "working_tree_at_review": "clean",
+        "local_unpushed_evidence": "no_cached_remote_tracking_ref_contained_cc7531c_and_no_local_reflog_push_entry_was_present"
+      },
+      "collected_test_inventory_not_execution_results": {
+        "immutable_storage_tests": 36,
+        "gsg_adapter_and_publication_tests": 25,
+        "normalizer_state_integrity_tests": 28,
+        "focused_storage_provider_and_state_integrity_tests": 89,
+        "phase2_sentiment_tests": 205,
+        "phase1_tests": 253,
+        "full_repository_tests": 458
+      }
+    },
+    "acceptance_reconciliation_corrective_contract": {
+      "publication_manifest_inventory_checked_before_non_manifest_payload_open": true,
+      "payloads_read_from_anchored_regular_file_descriptors_exactly_once": true,
+      "payload_size_and_sha256_validation_precedes_final_tree_confirmation": true,
+      "tree_confirmation_sweeps": 2,
+      "tree_confirmation_order": "deterministic_forward_then_exact_reverse",
+      "post_inventory_payload_read_failure_exception": "crypto_ai.sentiment.exceptions.StorageIntegrityError",
+      "storage_integrity_error_inherits_crypto_ai_error": true,
+      "phase1_shared_exception_module_blob_restored": "e4529de13945d476f1eabb177ae82cca880896f1",
+      "atomic_recursive_snapshot_against_uncooperative_same_authority_writer_claimed": false,
+      "posix_limitation": "ordinary_descriptor_relative_listdir_and_lstat_sweeps_cannot_exclude_an_uncooperative_writer_that_already_has_filesystem_write_authority;_the_supported_contract_is_anchored_exact_byte_capture_manifest_hash_verification_and_two_opposite_order_stability_sweeps"
+    },
+    "acceptance_reconciliation_corrective_verification": {
+      "status": "offline_verification_complete_pending_independent_review",
+      "base_commit": "cc7531c9efd893b6608dd9ad0d6e8756783fc9c6",
+      "resulting_commit": null,
+      "resulting_commit_status": "self_identity_intentionally_not_embedded_and_reported_externally_after_creation",
+      "collected_test_inventory": {
+        "immutable_storage_tests": 44,
+        "gsg_adapter_and_publication_tests": 25,
+        "normalizer_state_integrity_tests": 28,
+        "focused_storage_provider_and_state_integrity_tests": 97,
+        "phase2_sentiment_tests": 213,
+        "phase1_tests": 253,
+        "full_repository_tests": 466
+      },
+      "focused_storage_provider_and_state_integrity_suite": "97_passed",
+      "focused_new_storage_adversarial_regressions": "8_passed_36_deselected",
+      "phase2_sentiment_suite": "213_passed",
+      "phase1_suite": "253_passed_12_expected_single_class_metric_warnings",
+      "full_phase1_and_phase2_suite": "466_passed_12_expected_single_class_metric_warnings",
+      "git_diff_check": "pass",
+      "black_check": "pass_65_files_unchanged",
+      "ruff_check": "pass",
+      "compileall": "pass",
+      "pip_check": "pass_no_broken_requirements",
+      "rfc8785_canonicalization": "pass_49972_of_49972_finite_binary64_values_matched_local_v8_18_20_8",
+      "json_validation": "pass_2_of_2_tracked_json_files",
+      "markdown_json_reconciliation": "pass",
+      "phase1_exact_blob_inventory": "pass_60_of_60_selected_tracked_phase1_source_test_data_artifact_report_and_dependency_blobs",
+      "phase1_shared_exceptions_blob": "e4529de13945d476f1eabb177ae82cca880896f1",
+      "fixtures": "synthetic_only_with_temporary_storage",
+      "network_access": "none",
+      "network_access_authorized": false,
+      "external_service_access_authorized": false,
+      "holdout_access_authorized": false,
+      "push_authorized": false,
+      "push_performed": false
+    },
+    "exact_next_action": "create_the_single_local_no_push_corrective_commit_from_this_verified_payload_then_stop_for_independent_read_only_review"
   },
   "verdict": "PROCEED_WITH_FORWARD_ONLY_COLLECTION",
   "article_contract_version": "article-contract-v1",
@@ -424,7 +610,9 @@
     "batch_a_commits_performed": true,
     "push_performed": true,
     "historical_push_reconciliation": {
-      "source": "local_git_reflogs_and_commit_graph",
+      "source": "local_git_reflogs_commit_graph_and_cached_remote_tracking_refs",
+      "evidence_checked_through": "2026-09-02",
+      "live_remote_query_performed": false,
       "authorization_evidence_in_protocol_record": "not_recorded",
       "actor_attribution": "not_established_by_local_reflog",
       "history_preserved_without_reset_rebase_force_push_or_rewrite": true,
@@ -446,9 +634,36 @@
           "local_main_pulled_at": "2026-08-27T23:17:12+07:00"
         }
       ],
+      "local_no_push_corrective_history": {
+        "base_commit": "587e4475114db8b65fe47a7a8b2197952f2b9e75",
+        "reviewed_tip": "cc7531c9efd893b6608dd9ad0d6e8756783fc9c6",
+        "commit_count_from_base_exclusive_through_reviewed_tip": 2,
+        "branch": "codex/phase2-batch-a-final-integrity",
+        "branch_upstream_configured": false,
+        "commits": [
+          {
+            "commit": "cd8ce02c2e16c3c87bf831cd3b739f6a3e1abd10",
+            "parent": "587e4475114db8b65fe47a7a8b2197952f2b9e75",
+            "committed_at": "2026-08-30T23:04:10+07:00",
+            "cached_remote_tracking_ref_contains_commit": false,
+            "local_reflog_push_entry_present": false
+          },
+          {
+            "commit": "cc7531c9efd893b6608dd9ad0d6e8756783fc9c6",
+            "parent": "cd8ce02c2e16c3c87bf831cd3b739f6a3e1abd10",
+            "committed_at": "2026-08-31T23:11:16+07:00",
+            "cached_remote_tracking_ref_contains_commit": false,
+            "local_reflog_push_entry_present": false
+          }
+        ],
+        "unpushed_status_is_local_evidence_only": true
+      },
       "historical_facts_are_not_retroactive_authorization": true,
       "current_final_integrity_task_push_authorized": false,
-      "current_final_integrity_task_push_performed": false
+      "current_final_integrity_task_push_performed": false,
+      "current_acceptance_reconciliation_task_push_authorized": false,
+      "current_acceptance_reconciliation_task_push_performed_at_record_time": false,
+      "current_acceptance_reconciliation_resulting_commit": null
     }
   },
   "phase1_reference": {
@@ -2007,9 +2222,12 @@
     "future_holdout_evaluation": "separate_explicit_authorization_required"
   },
   "next_authorized_task": {
-    "status": "final_integrity_correction_complete_then_stop_pending_independent_review",
-    "prerequisite": "single_batch_a_final_integrity_corrective_commit_created_and_complete_offline_verification_recorded",
-    "exact_request": "Perform an independent read-only review of the single Batch A final-integrity corrective commit based on 587e4475114db8b65fe47a7a8b2197952f2b9e75. Reproduce the coverage-forgery, normalization-provenance, pre-hydration metadata, unmanifested-object, and symlink-ancestor adversarial failures; verify the forward-only historical push and merge reconciliation; and confirm all Phase 1 semantics and 253 tests remain unchanged. Do not begin or authorize Batch B, Milestone 3, real GDELT rights, network collection, scorer or model activity, feature generation, training or backtesting, research gates, future collection, or holdout activity.",
+    "status": "acceptance_reconciliation_corrective_payload_offline_verified_pending_independent_review",
+    "prerequisite": "cc7531c_acceptance_review_completed_not_accepted_with_three_storage_integrity_plus_governance_and_phase1_byte_identity_blockers",
+    "base_commit": "cc7531c9efd893b6608dd9ad0d6e8756783fc9c6",
+    "resulting_commit": null,
+    "resulting_commit_status": "self_identity_intentionally_not_embedded_report_externally_after_creation",
+    "exact_request": "Complete only the authorized 2026-09-02 offline Batch A acceptance-reconciliation correction based on cc7531c9efd893b6608dd9ad0d6e8756783fc9c6: close the reproduced late-descendant and post-capture/hash publication-verification windows with pre-confirmation payload hashing and deterministic opposite-order tree sweeps; translate post-inventory payload read failures to StorageIntegrityError; reject unmanifested members before payload reads; retain descriptor-anchored exact-byte and no-symlink defenses; restore src/crypto_ai/exceptions.py to the exact 587e447 blob; relocate StorageIntegrityError to the Phase 2-only src/crypto_ai/sentiment/exceptions.py module as a SentimentStorageError subclass; record the bounded POSIX same-authority-writer limitation without an atomic-snapshot overclaim; update required offline tests and forward-only governance records; execute and record the complete offline verification; create exactly one additional local no-push corrective commit; and stop for a new independent read-only review. Do not begin or authorize Batch B, Milestone 3, real GDELT rights, network collection, scorer or model activity, feature generation, training or backtesting, research gates, future collection, or holdout activity.",
     "batch_b_authorized": false
   },
   "source_references": [

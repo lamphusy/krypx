@@ -8,13 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from crypto_ai.exceptions import (
-    PublicationCollisionError,
-    SentimentStorageError,
-    StorageIntegrityError,
-)
+from crypto_ai.exceptions import PublicationCollisionError, SentimentStorageError
 from crypto_ai.sentiment import storage as storage_module
 from crypto_ai.sentiment.canonical import canonicalize, sha256_bytes
+from crypto_ai.sentiment.exceptions import StorageIntegrityError
 from crypto_ai.sentiment.storage import ContentAddressedStore
 
 
@@ -562,6 +559,217 @@ def test_publication_rejects_directory_replaced_during_payload_capture(
     assert injected is True
     assert nested.is_symlink()
     assert list(external.iterdir()) == []
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="named pipes are unavailable")
+def test_publication_rejects_fifo_injected_into_earlier_grandchild_during_later_scan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ContentAddressedStore(tmp_path)
+    publication = store.publish_bundle(
+        "late-grandchild-fifo",
+        {
+            "a/deep/payload.bin": b"early payload",
+            "z/payload.bin": b"later payload",
+        },
+    )
+    deep = publication / "a" / "deep"
+    later_stat = os.stat(publication / "z", follow_symlinks=False)
+    later_identity = (later_stat.st_dev, later_stat.st_ino)
+    real_listdir = storage_module.os.listdir
+    later_inventory_count = 0
+    injected = False
+
+    def inject_into_earlier_grandchild(path: int | str | os.PathLike[str]) -> list[str]:
+        nonlocal later_inventory_count, injected
+        if isinstance(path, int):
+            current = os.fstat(path)
+            if (current.st_dev, current.st_ino) == later_identity:
+                later_inventory_count += 1
+                if later_inventory_count == 3 and not injected:
+                    os.mkfifo(deep / "late.fifo")
+                    injected = True
+        return real_listdir(path)
+
+    monkeypatch.setattr(storage_module.os, "listdir", inject_into_earlier_grandchild)
+
+    with pytest.raises(StorageIntegrityError, match="changed during verification"):
+        store.verify_publication("late-grandchild-fifo")
+    assert later_inventory_count >= 3
+    assert injected is True
+    assert (deep / "late.fifo").is_fifo()
+
+
+@pytest.mark.skipif(not hasattr(os, "symlink"), reason="symlinks are unavailable")
+def test_publication_rejects_deep_symlink_replacement_during_later_scan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ContentAddressedStore(tmp_path / "store")
+    publication = store.publish_bundle(
+        "late-deep-symlink",
+        {
+            "a/deep/inner/payload.bin": b"early payload",
+            "z/payload.bin": b"later payload",
+        },
+    )
+    inner = publication / "a" / "deep" / "inner"
+    relocated = tmp_path / "relocated-inner"
+    external = tmp_path / "external"
+    external.mkdir()
+    later_stat = os.stat(publication / "z", follow_symlinks=False)
+    later_identity = (later_stat.st_dev, later_stat.st_ino)
+    real_listdir = storage_module.os.listdir
+    later_inventory_count = 0
+    injected = False
+
+    def replace_earlier_grandchild(path: int | str | os.PathLike[str]) -> list[str]:
+        nonlocal later_inventory_count, injected
+        if isinstance(path, int):
+            current = os.fstat(path)
+            if (current.st_dev, current.st_ino) == later_identity:
+                later_inventory_count += 1
+                if later_inventory_count == 3 and not injected:
+                    inner.rename(relocated)
+                    inner.symlink_to(external, target_is_directory=True)
+                    injected = True
+        return real_listdir(path)
+
+    monkeypatch.setattr(storage_module.os, "listdir", replace_earlier_grandchild)
+
+    with pytest.raises(StorageIntegrityError, match="changed during verification"):
+        store.verify_publication("late-deep-symlink")
+    assert later_inventory_count >= 3
+    assert injected is True
+    assert inner.is_symlink()
+    assert list(external.iterdir()) == []
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="named pipes are unavailable")
+def test_publication_rejects_fifo_injected_during_payload_hash_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ContentAddressedStore(tmp_path)
+    publication = store.publish_bundle("hash-window-fifo", {"payload.bin": b"payload"})
+    fifo = publication / "late.fifo"
+    real_sha256 = storage_module.sha256_bytes
+    injected = False
+
+    def inject_during_hash(data: bytes) -> str:
+        nonlocal injected
+        if data == b"payload" and not injected:
+            os.mkfifo(fifo)
+            injected = True
+        return real_sha256(data)
+
+    monkeypatch.setattr(storage_module, "sha256_bytes", inject_during_hash)
+
+    with pytest.raises(StorageIntegrityError, match="changed during verification"):
+        store.read_publication("hash-window-fifo")
+    assert injected is True
+    assert fifo.is_fifo()
+
+
+@pytest.mark.parametrize("damage", ["missing", "fifo", "symlink"])
+def test_publication_translates_post_inventory_payload_replacement(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    damage: str,
+) -> None:
+    store = ContentAddressedStore(tmp_path)
+    publication_id = f"replaced-after-inventory-{damage}"
+    publication = store.publish_bundle(publication_id, {"payload.bin": b"payload"})
+    payload = publication / "payload.bin"
+    external = tmp_path / "external-payload.bin"
+    external.write_bytes(b"external")
+    real_read = storage_module._read_regular_file_at_once
+    injected = False
+
+    def replace_before_read(
+        parent_descriptor: int,
+        name: str,
+        *,
+        description: str,
+    ) -> tuple[bytes, os.stat_result]:
+        nonlocal injected
+        if name == "payload.bin" and not injected:
+            payload.unlink()
+            if damage == "fifo":
+                if not hasattr(os, "mkfifo"):
+                    pytest.skip("named pipes are unavailable")
+                os.mkfifo(payload)
+            elif damage == "symlink":
+                if not hasattr(os, "symlink"):
+                    pytest.skip("symlinks are unavailable")
+                payload.symlink_to(external)
+            injected = True
+        return real_read(parent_descriptor, name, description=description)
+
+    monkeypatch.setattr(storage_module, "_read_regular_file_at_once", replace_before_read)
+
+    with pytest.raises(StorageIntegrityError, match="changed during verification") as captured:
+        store.verify_publication(publication_id)
+    assert isinstance(captured.value.__cause__, SentimentStorageError)
+    assert injected is True
+    assert external.read_bytes() == b"external"
+
+
+def test_publication_rejects_unmanifested_file_before_opening_payloads(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ContentAddressedStore(tmp_path)
+    publication = store.publish_bundle("pre-read-inventory", {"payload.bin": b"payload"})
+    (publication / "unexpected.bin").write_bytes(b"must not be opened")
+    real_read = storage_module._read_regular_file_at_once
+    opened_names: list[str] = []
+
+    def record_open(
+        parent_descriptor: int,
+        name: str,
+        *,
+        description: str,
+    ) -> tuple[bytes, os.stat_result]:
+        opened_names.append(name)
+        return real_read(parent_descriptor, name, description=description)
+
+    monkeypatch.setattr(storage_module, "_read_regular_file_at_once", record_open)
+
+    with pytest.raises(SentimentStorageError, match="unmanifested or missing"):
+        store.verify_publication("pre-read-inventory")
+    assert opened_names == ["manifest.json"]
+
+
+def test_publication_reads_manifest_and_each_payload_exactly_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ContentAddressedStore(tmp_path)
+    store.publish_bundle(
+        "single-read-tree",
+        {"a.bin": b"a", "nested/b.bin": b"b"},
+    )
+    real_read = storage_module._read_regular_file_at_once
+    opened_names: list[str] = []
+
+    def record_open(
+        parent_descriptor: int,
+        name: str,
+        *,
+        description: str,
+    ) -> tuple[bytes, os.stat_result]:
+        opened_names.append(name)
+        return real_read(parent_descriptor, name, description=description)
+
+    monkeypatch.setattr(storage_module, "_read_regular_file_at_once", record_open)
+
+    verified = store.read_publication("single-read-tree")
+
+    assert verified.files == {"a.bin": b"a", "nested/b.bin": b"b"}
+    assert sorted(opened_names) == ["a.bin", "b.bin", "manifest.json"]
+    assert len(opened_names) == 3
 
 
 def test_publication_rejects_unmanifested_empty_directory(tmp_path: Path) -> None:

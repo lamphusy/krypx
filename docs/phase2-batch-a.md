@@ -5,14 +5,16 @@ the global-watermark corrective task authorized on 2026-08-15, plus the causal-
 availability and terminal-gap-evidence corrective task authorized on 2026-08-16 and
 the five-finding acceptance-blocker correction authorized on 2026-08-25 and completed
 offline on 2026-08-27, plus the final-integrity correction authorized on 2026-08-27 and
-completed offline on 2026-08-30 on `codex/phase2-batch-a-final-integrity`, pending a new
-independent read-only review.
+completed offline on 2026-08-30, the final-polish correction authorized and committed locally
+on 2026-08-31, and the acceptance-reconciliation correction authorized on 2026-09-02 on
+`codex/phase2-batch-a-final-integrity`. The latest correction is implemented and completely
+verified offline; it remains pending independent read-only review.
 Milestone 0 is approved only as the engineering specification for offline Milestones 1
 and 2. It does not approve provider network access, historical or forward collection,
 scorer selection, model or tokenizer downloads, research-gate execution, feature
 generation, model training, backtesting, future-holdout collection, or holdout access.
 
-## Milestone 1 — final integrity corrected offline, pending independent review
+## Milestone 1 — acceptance-reconciliation corrected offline, pending independent review
 
 Milestone 1 provides strict article and score envelopes, UTC-only timestamp validation,
 dependency-free RFC 8785/JCS canonical serialization, exact-byte SHA-256 hashing,
@@ -28,7 +30,7 @@ Original Batch A evidence before corrective review:
 - Lint: passed for all `src` and `tests` Python files.
 - Tests are protected by the repository-wide real-network connection guard.
 
-## Milestone 2 — final integrity corrected offline, pending independent review
+## Milestone 2 — acceptance-reconciliation corrected offline, pending independent review
 
 Milestone 2 provides one offline GDELT GSG adapter. It creates bounded one-minute
 retrieval schedules and pure retry decisions but contains no HTTP client. Caller-supplied
@@ -246,11 +248,12 @@ claims, incomplete normalization provenance, state-v3 parsing before field-level
 validation, incomplete detection of unmanifested non-regular objects, and symlinked ancestor
 traversal in storage paths.
 
-## Final-integrity corrective implementation — complete, pending independent review
+## Final-integrity commit `cd8ce02` — historical result, not accepted
 
 The final offline corrective task was authorized on 2026-08-27, based on merge commit
-`587e4475114db8b65fe47a7a8b2197952f2b9e75`, without rewriting prior history. Its frozen
-implementation boundary is:
+`587e4475114db8b65fe47a7a8b2197952f2b9e75`, and produced local no-push commit
+`cd8ce02c2e16c3c87bf831cd3b739f6a3e1abd10` without rewriting prior history. Its frozen
+implementation boundary was:
 
 - Normalized coverage publication is derived from and bound to a verified retrieval plan,
   exact raw snapshots, terminal-gap evidence, canonical `as_of`, protocol identity, and the
@@ -277,7 +280,7 @@ implementation boundary is:
   fsync, and the atomic no-replace rename remain anchored, so a replaced symlink component
   cannot receive or remove external bytes.
 
-Implementation and complete offline verification finished on 2026-08-30. The focused
+Implementation and complete offline verification for `cd8ce02` finished on 2026-08-30. The focused
 storage/provider/state-integrity suite passed 86 tests (34 storage, 25 GSG adapter/publication,
 and 27 state-integrity); the complete Phase 2 sentiment suite passed 202 tests; all 253 frozen
 Phase 1 tests passed with the same 12 expected single-class synthetic metric warnings; and the
@@ -288,9 +291,72 @@ reflog reconciliation, and the 49,972-value local-V8 RFC 8785 differential all p
 
 All tests used synthetic/captured fixtures and temporary storage under the repository-wide
 network guard. No provider, publisher, credential, paid-service, model, market-data, or
-holdout access occurred. The task performed no push. No acceptance claim is made until the
-single no-push corrective commit receives an independent read-only review. Milestone 3 and all
-later milestones remain incomplete.
+holdout access occurred, and local refs and reflogs recorded no push of `cd8ce02`. These are
+historical verification results, not acceptance. Independent review found two remaining
+publication-verification races: a FIFO could appear after inventory but before payload
+capture, and a previously inventoried directory could be replaced during payload capture.
+
+## Final-polish commit `cc7531c` — implemented, then not accepted
+
+On 2026-08-31 the user authorized one additional offline final-polish correction based on
+`cd8ce02`. The resulting local no-push commit
+`cc7531c9efd893b6608dd9ad0d6e8756783fc9c6` rejects publication-tree mutation across inventory
+and payload capture and adds offline FIFO-injection and directory-replacement regressions.
+The forward-only graph from `587e447` through `cc7531c` therefore contains exactly two commits:
+`cd8ce02` followed by `cc7531c`.
+
+The independent acceptance review of `cc7531c` returned **NOT ACCEPTED** on 2026-09-02 for
+five reasons:
+
+1. Its post-order confirmation could finish an early descendant and then accept a FIFO or deep
+   directory-to-symlink replacement injected there while a later sibling was scanned.
+2. Its last tree inventory finished before captured payload SHA-256 validation, so a FIFO
+   injected during that hash callback could be present when verification returned successfully.
+3. Removing a previously inventoried payload immediately before its single read raised the base
+   `SentimentStorageError`, not the required Phase 2 `StorageIntegrityError` subtype.
+4. The governance records still described one corrective commit and the prior 34 / 202 / 455
+   verification totals even though the reviewed graph contained two commits and the collected
+   test inventory had become 36 storage, 25 GSG adapter/publication, 28 state-integrity, 205
+   Phase 2 sentiment, and 458 repository tests. Those inventory counts were collection facts,
+   not claims that every revised suite had been executed successfully.
+5. `cc7531c` added `StorageIntegrityError` to shared `src/crypto_ai/exceptions.py`, changing its
+   Git blob from the exact `587e447` value. All 253 Phase 1 tests still passed with the same 12
+   expected warnings and all 17 manifest hash checks passed, but the stricter Phase 1
+   source-byte-identity requirement failed.
+
+Local evidence checked through 2026-09-02 shows neither `cd8ce02` nor `cc7531c` in a cached
+remote-tracking ref and contains no reflog push entry for either commit. The branch has no
+configured upstream. This is local-only evidence; no live remote query was performed because
+network access remains prohibited.
+
+## Acceptance-reconciliation correction — complete offline, pending independent review
+
+On 2026-09-02 the user authorized exactly one additional offline, local, no-push correction
+based on `cc7531c`. It must preserve both earlier commits and the publication-verification race
+defenses; move size/hash validation before the final tree checks; use deterministic forward and
+reverse descriptor-only confirmation sweeps to revisit an earlier subtree after later siblings;
+translate every post-inventory payload-read failure to `StorageIntegrityError`; and reject an
+unmanifested member before opening any non-manifest payload. It must also restore
+`src/crypto_ai/exceptions.py` to its exact `587e447` blob; relocate `StorageIntegrityError` to the
+Phase 2-only `src/crypto_ai/sentiment/exceptions.py` module as a `SentimentStorageError` subclass;
+update only the required offline tests and forward-only governance records; execute complete
+offline verification; create one additional local no-push commit; and stop for a new independent
+read-only review.
+
+The storage guarantee is deliberately bounded rather than overstated. Ordinary POSIX
+descriptor-relative `listdir`/`lstat` traversal cannot provide an atomic recursive snapshot
+against an uncooperative principal that already has filesystem write authority. The supported
+contract is exact single-read capture from anchored regular-file descriptors, manifest size/hash
+verification, and two opposite-order tree-stability sweeps with no content callback afterward.
+
+Complete offline verification passed 44 storage, 25 GSG adapter/publication, 28 state-integrity,
+97 focused aggregate, 213 Phase 2 sentiment, 253 Phase 1, and 466 repository tests. The Phase 1
+and full runs retained the same 12 expected single-class synthetic metric warnings. Diff,
+formatting (65 Python files unchanged), lint, compilation, dependency, strict two-file JSON,
+Markdown/JSON reconciliation, 60-of-60 selected Phase 1 blob identity, and the 49,972-value
+local-V8 RFC 8785 differential checks passed. The resulting commit identity is intentionally not
+self-embedded in this record and is reported after commit creation. No acceptance claim is made,
+and Milestone 3 and all later milestones remain incomplete.
 
 ## Forward-only Git-history reconciliation
 
@@ -308,8 +374,17 @@ with the local pull recorded at `2026-08-27T23:17:12+07:00`. Local reflogs do no
 who performed those actions,
 and this protocol contains no matching push authorization. Recording these events does not
 retroactively authorize them. No reset, rebase, force-push, or other history rewrite is
-authorized or performed. The current final-integrity task separately authorizes no push, and
-no push has been performed during it.
+authorized or performed.
+
+The later local-only corrective history is separate. Commit `cd8ce02` was created from
+`587e447` at `2026-08-30T23:04:10+07:00`, and `cc7531c` was created from `cd8ce02` at
+`2026-08-31T23:11:16+07:00`. Thus `587e447..cc7531c` contains two commits. As of the
+2026-09-02 local inspection, `origin/main` remained at `587e447`, no cached remote-tracking ref
+contained either later commit, neither commit had a local reflog push entry, and
+`codex/phase2-batch-a-final-integrity` had no configured upstream. Those facts support only a
+local unpushed-status statement; no live remote query occurred. The current
+acceptance-reconciliation task also authorizes no push, and its resulting commit remains
+pending.
 
 ## Remaining authorization boundary
 
@@ -319,11 +394,10 @@ scorer/model selection, model downloads, scoring, feature construction, numerica
 gates, training, backtests, and all holdout access/evaluation remain unapproved. Batch B is
 not authorized. Milestone 3 and later milestones are not complete.
 
-The exact next action is independent read-only review of the single final-integrity corrective
-commit against base `587e4475114db8b65fe47a7a8b2197952f2b9e75`. The review must reproduce the
-coverage-forgery, normalization-provenance, pre-hydration metadata, unmanifested-object, and
-symlink-ancestor adversarial failures; reconcile the forward-only Git history; and confirm
-all 253 Phase 1 tests and frozen Phase 1 objects remain unchanged.
+The exact next action is a new independent read-only review of the single local no-push
+acceptance-reconciliation commit based on `cc7531c`, including reproduction of all five prior
+blockers and the complete offline matrix. The commit identity is reported externally after its
+creation because a Git commit cannot contain its own hash.
 Batch B is not authorized. A later bounded prospective GSG collection pilot would require a new
 authorization that explicitly:
 

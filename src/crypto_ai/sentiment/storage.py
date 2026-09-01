@@ -16,12 +16,9 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from crypto_ai.exceptions import (
-    PublicationCollisionError,
-    SentimentStorageError,
-    StorageIntegrityError,
-)
+from crypto_ai.exceptions import PublicationCollisionError, SentimentStorageError
 from crypto_ai.sentiment.canonical import canonicalize, sha256_bytes
+from crypto_ai.sentiment.exceptions import StorageIntegrityError
 
 SHA256_LENGTH = 64
 PUBLICATION_SCHEMA_VERSION = "immutable-publication-v1"
@@ -390,19 +387,15 @@ class ContentAddressedStore:
                 manifest_data=raw_manifest,
                 manifest_stat=manifest_stat,
                 publication_id=publication_id,
+                manifest_files=files,
+                expected_paths=expected_paths,
+                expected_directories=expected_directories,
             )
-            if set(captured_files) != expected_paths or actual_directories != expected_directories:
-                raise SentimentStorageError(
-                    "publication contains unmanifested or missing files or directories"
+            if actual_directories != expected_directories:  # pragma: no cover - checked inside
+                raise StorageIntegrityError(
+                    f"publication {publication_id} changed during verification"
                 )
-            verified_files: dict[str, bytes] = {}
-            for name, descriptor in files.items():
-                data = captured_files[name]
-                if descriptor["size_bytes"] != len(data) or descriptor["sha256"] != sha256_bytes(
-                    data
-                ):
-                    raise SentimentStorageError(f"publication member hash mismatch: {name}")
-                verified_files[name] = data
+            verified_files = {name: captured_files[name] for name in files}
             return VerifiedPublication(manifest=manifest, files=verified_files)
         finally:
             os.close(publication_descriptor)
@@ -832,17 +825,33 @@ def _capture_publication_tree(
     manifest_data: bytes,
     manifest_stat: os.stat_result,
     publication_id: str,
+    manifest_files: Mapping[str, Mapping[str, Any]],
+    expected_paths: set[str],
+    expected_directories: set[str],
 ) -> tuple[dict[str, bytes], set[str]]:
-    """Inventory twice around single-read capture and reject every tree mutation."""
+    """Verify one anchored tree with baseline, capture, and bounded stability sweeps.
+
+    POSIX traversal cannot create an atomic recursive snapshot against an uncooperative
+    writer that already has filesystem authority. Returned buffers are descriptor-anchored,
+    manifest-verified, and survive two opposite-order confirmation sweeps without another
+    content callback after the final sweep.
+    """
     captured_files = {"manifest.json": manifest_data}
     directories: set[str] = set()
     snapshots: dict[PurePosixPath, _PublicationDirectorySnapshot] = {}
 
-    def changed_during_verification(relative_name: str | None = None) -> None:
+    def changed_during_verification(
+        relative_name: str | None = None,
+        *,
+        cause: BaseException | None = None,
+    ) -> None:
         suffix = f": {relative_name}" if relative_name else ""
-        raise StorageIntegrityError(
+        error = StorageIntegrityError(
             f"publication {publication_id} changed during verification{suffix}"
         )
+        if cause is None:
+            raise error
+        raise error from cause
 
     def directory_names(
         directory_descriptor: int,
@@ -982,11 +991,14 @@ def _capture_publication_tree(
                     if entry.fingerprint != _stat_tree_fingerprint(manifest_stat):
                         changed_during_verification(relative_name)
                     continue
-                data, opened_stat = _read_regular_file_at_once(
-                    snapshot.descriptor,
-                    name,
-                    description=f"publication member {relative_name}",
-                )
+                try:
+                    data, opened_stat = _read_regular_file_at_once(
+                        snapshot.descriptor,
+                        name,
+                        description=f"publication member {relative_name}",
+                    )
+                except SentimentStorageError as exc:
+                    changed_during_verification(relative_name, cause=exc)
                 if _stat_tree_fingerprint(opened_stat) != entry.fingerprint:
                     changed_during_verification(relative_name)
                 final_entry_stat = entry_stat(
@@ -1001,10 +1013,6 @@ def _capture_publication_tree(
 
         def verify_directory(prefix: PurePosixPath) -> None:
             snapshot = snapshots[prefix]
-            for name, expected_entry in snapshot.entries.items():
-                if expected_entry.is_directory:
-                    verify_directory(prefix / name)
-
             names = directory_names(
                 snapshot.descriptor,
                 changed_is_integrity_failure=True,
@@ -1034,8 +1042,32 @@ def _capture_publication_tree(
                 changed_during_verification(prefix.as_posix() if prefix.parts else None)
 
         inventory_directory(publication_descriptor, PurePosixPath())
+
+        inventoried_paths = {
+            (prefix / name).as_posix()
+            for prefix, snapshot in snapshots.items()
+            for name, entry in snapshot.entries.items()
+            if not entry.is_directory
+        }
+        if inventoried_paths != expected_paths or directories != expected_directories:
+            raise SentimentStorageError(
+                "publication contains unmanifested or missing files or directories"
+            )
+
         capture_directory(PurePosixPath())
-        verify_directory(PurePosixPath())
+
+        for name, descriptor in manifest_files.items():
+            data = captured_files[name]
+            if descriptor["size_bytes"] != len(data) or descriptor["sha256"] != sha256_bytes(data):
+                raise SentimentStorageError(f"publication member hash mismatch: {name}")
+
+        verification_order = tuple(sorted(snapshots, key=lambda path: path.as_posix()))
+        for prefix in verification_order:
+            verify_directory(prefix)
+        # Reverse order ensures a mutation injected into an already-confirmed subtree
+        # while a later sibling is checked is visited again before any buffers escape.
+        for prefix in reversed(verification_order):
+            verify_directory(prefix)
     return captured_files, directories
 
 
