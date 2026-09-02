@@ -7,14 +7,19 @@ the five-finding acceptance-blocker correction authorized on 2026-08-25 and comp
 offline on 2026-08-27, plus the final-integrity correction authorized on 2026-08-27 and
 completed offline on 2026-08-30, the final-polish correction authorized and committed locally
 on 2026-08-31, and the acceptance-reconciliation correction authorized on 2026-09-02 on
-`codex/phase2-batch-a-final-integrity`. The latest correction is implemented and completely
-verified offline; it remains pending independent read-only review.
-Milestone 0 is approved only as the engineering specification for offline Milestones 1
-and 2. It does not approve provider network access, historical or forward collection,
+`codex/phase2-batch-a-final-integrity`. All corrective work is now on `main`. The human
+authority formally accepted and completed Phase 2 Batch A on 2026-09-02 at canonical
+engineering completion commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`; local `main`
+matched cached `origin/main`, and the worktree was clean immediately before this governance
+finalization.
+
+Milestone 0 is **APPROVED** as the frozen engineering specification for offline Milestones 1
+and 2. Milestones 1 and 2 are **ACCEPTED**. This sign-off does not approve provider network
+access, historical or forward collection,
 scorer selection, model or tokenizer downloads, research-gate execution, feature
 generation, model training, backtesting, future-holdout collection, or holdout access.
 
-## Milestone 1 — acceptance-reconciliation corrected offline, pending independent review
+## Milestone 1 — ACCEPTED
 
 Milestone 1 provides strict article and score envelopes, UTC-only timestamp validation,
 dependency-free RFC 8785/JCS canonical serialization, exact-byte SHA-256 hashing,
@@ -30,7 +35,7 @@ Original Batch A evidence before corrective review:
 - Lint: passed for all `src` and `tests` Python files.
 - Tests are protected by the repository-wide real-network connection guard.
 
-## Milestone 2 — acceptance-reconciliation corrected offline, pending independent review
+## Milestone 2 — ACCEPTED
 
 Milestone 2 provides one offline GDELT GSG adapter. It creates bounded one-minute
 retrieval schedules and pure retry decisions but contains no HTTP client. Caller-supplied
@@ -74,8 +79,9 @@ commits. The corrective implementation adds:
   `license_restricted`; no real GDELT rights approval is recorded; and
 - deterministic primary exclusion selection from the frozen precedence table.
 
-Milestones 1 and 2 are presented for independent review rather than marked finally accepted.
-Milestone 3 and all later milestones remain incomplete.
+At that first corrective review stage, Milestones 1 and 2 were presented for independent
+review rather than marked finally accepted. Milestone 3 and all later milestones remained
+incomplete.
 
 First corrective verification evidence:
 
@@ -126,14 +132,15 @@ Global-watermark corrective verification evidence:
 - All tests used synthetic fixtures and temporary storage under the repository-wide
   real-network guard; no network or external service was accessed.
 
-Milestone 2 remains pending independent review. This correction does not approve real
-GDELT rights, network collection, Batch B, or any scorer/research/holdout activity.
+At that historical review stage, Milestone 2 remained pending independent review. The later
+formal sign-off does not approve real GDELT rights, network collection, Batch B, or any
+scorer/research/holdout activity.
 
 ## Causal-availability and terminal-gap-evidence corrective implementation
 
-The filename watermark and minute ledger from `8bd1050` remain intact. The current isolated
-correction advances the normalizer to state v3 and chronology v2 while adding a separate
-causal-availability invariant and immutable synthetic gap evidence.
+The filename watermark and minute ledger from `8bd1050` remain intact. That historical
+isolated correction advanced the normalizer to state v3 and chronology v2 while adding a
+separate causal-availability invariant and immutable synthetic gap evidence.
 
 The correction freezes these contracts:
 
@@ -180,7 +187,8 @@ The correction freezes these contracts:
 - Any normalization or publication failure leaves articles, groups, exclusions, links,
   ledger, gap evidence, and both boundaries unchanged and publishes no partial generation.
 
-Current causal-availability and terminal-gap-evidence corrective verification evidence:
+Historical causal-availability and terminal-gap-evidence corrective verification evidence at
+that stage:
 
 - Focused causal-availability regressions: 17 passed.
 - Focused terminal-gap-evidence regressions: 44 passed.
@@ -324,12 +332,12 @@ five reasons:
    expected warnings and all 17 manifest hash checks passed, but the stricter Phase 1
    source-byte-identity requirement failed.
 
-Local evidence checked through 2026-09-02 shows neither `cd8ce02` nor `cc7531c` in a cached
-remote-tracking ref and contains no reflog push entry for either commit. The branch has no
-configured upstream. This is local-only evidence; no live remote query was performed because
-network access remains prohibited.
+At the pre-completion local inspection on 2026-09-02, neither `cd8ce02` nor `cc7531c`
+appeared in a cached remote-tracking ref, no reflog push entry existed for either commit, and
+the branch had no configured upstream. This was local-only evidence; no live remote query was
+performed because network access remained prohibited.
 
-## Acceptance-reconciliation correction — complete offline, pending independent review
+## Acceptance-reconciliation correction — ACCEPTED
 
 On 2026-09-02 the user authorized exactly one additional offline, local, no-push correction
 based on `cc7531c`. It must preserve both earlier commits and the publication-verification race
@@ -355,8 +363,21 @@ and full runs retained the same 12 expected single-class synthetic metric warnin
 formatting (65 Python files unchanged), lint, compilation, dependency, strict two-file JSON,
 Markdown/JSON reconciliation, 60-of-60 selected Phase 1 blob identity, and the 49,972-value
 local-V8 RFC 8785 differential checks passed. The resulting commit identity is intentionally not
-self-embedded in this record and is reported after commit creation. No acceptance claim is made,
-and Milestone 3 and all later milestones remain incomplete.
+self-embedded in the corrective commit and was reported after creation as
+`bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`.
+
+The human authority formally signs off that canonical engineering commit on `main`: Phase 2 Batch A is
+**ACCEPTED** and **COMPLETED**; Milestone 0 is **APPROVED** as the frozen research
+specification; Milestone 1 is **ACCEPTED** for immutable CAS, schema contracts, fail-closed
+state hydration, and two-pass directory verification; and Milestone 2 is **ACCEPTED** for
+fixture-only GDELT GSG normalization, coverage recomputation, terminal gap evidence, and
+bidirectional link provenance. Milestone 3 and Batch B are **NOT AUTHORIZED**.
+The forward-only corrective chain is `587e447` → `cd8ce02` → `cc7531c` → `bb6d4d`.
+
+Final accepted evidence is 466 passing repository tests: 213 Phase 2 sentiment tests and all
+253 Phase 1 tests. The non-Phase-2 tracked tree is byte-identical for 69 of 69 blobs, all 32
+targeted adversarial probes passed, and the RFC 8785 differential matched 49,972 of 49,972
+finite binary64 values.
 
 ## Forward-only Git-history reconciliation
 
@@ -376,29 +397,38 @@ and this protocol contains no matching push authorization. Recording these event
 retroactively authorize them. No reset, rebase, force-push, or other history rewrite is
 authorized or performed.
 
-The later local-only corrective history is separate. Commit `cd8ce02` was created from
+The later corrective history was local-only at the time of its original inspection. Commit `cd8ce02` was created from
 `587e447` at `2026-08-30T23:04:10+07:00`, and `cc7531c` was created from `cd8ce02` at
 `2026-08-31T23:11:16+07:00`. Thus `587e447..cc7531c` contains two commits. As of the
-2026-09-02 local inspection, `origin/main` remained at `587e447`, no cached remote-tracking ref
+pre-completion 2026-09-02 local inspection, `origin/main` remained at `587e447`, no cached remote-tracking ref
 contained either later commit, neither commit had a local reflog push entry, and
 `codex/phase2-batch-a-final-integrity` had no configured upstream. Those facts support only a
 local unpushed-status statement; no live remote query occurred. The current
-acceptance-reconciliation task also authorizes no push, and its resulting commit remains
-pending.
+acceptance-reconciliation task authorized no push, and no push was performed during that
+task.
+
+Commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`, whose parent is `cc7531c`, was then
+created at `2026-09-02T00:41:45+07:00`. Local reflogs record the corrective branch update at
+`00:43:57+07:00`, the local `main` fast-forward at `00:45:01+07:00`, and the cached
+`origin/main` update at `00:45:05+07:00`. The reflogs do not establish the actor, and no
+matching prior push authorization is recorded; these facts and the present human acceptance
+do not retroactively authorize those earlier pushes. At human sign-off immediately before this
+governance finalization, local `main` and cached `origin/main` both identified `bb6d4d` as the
+canonical Batch A engineering completion commit. The requested governance commit is a
+forward-only successor whose identity is reported after creation.
 
 ## Remaining authorization boundary
 
-Real GDELT retrieval, GDELT title-only/right-use acceptance, all network/provider and
+Phase 2 Batch A is **ACCEPTED** and **COMPLETED**. Real GDELT retrieval, GDELT
+title-only/right-use acceptance, all network/provider and
 publisher access, accounts, credentials, paid services, historical or prospective collection,
 scorer/model selection, model downloads, scoring, feature construction, numerical research
 gates, training, backtests, and all holdout access/evaluation remain unapproved. Batch B is
-not authorized. Milestone 3 and later milestones are not complete.
+**NOT AUTHORIZED**. Milestone 3 is **NOT AUTHORIZED**.
 
-The exact next action is a new independent read-only review of the single local no-push
-acceptance-reconciliation commit based on `cc7531c`, including reproduction of all five prior
-blockers and the complete offline matrix. The commit identity is reported externally after its
-creation because a Git commit cannot contain its own hash.
-Batch B is not authorized. A later bounded prospective GSG collection pilot would require a new
+The exact next machine-readable action is `prepare_batch_b_specification`. This permits only
+preparation of a proposal for later human review; it does not authorize Batch B execution,
+Milestone 3, external access, or collection. A later bounded prospective GSG collection pilot would require a new
 authorization that explicitly:
 
 1. approves GDELT GSG title-only use and the documented-use interpretation;

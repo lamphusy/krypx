@@ -1,10 +1,13 @@
 {
   "protocol_id": "krypx-phase2-milestone0",
-  "protocol_version": "0.1.0-draft",
-  "status": "batch_a_acceptance_reconciliation_corrected_and_offline_verified_pending_independent_review",
+  "protocol_version": "0.1.0",
+  "status": "phase2_batch_a_accepted_completed",
   "created_at": "2026-08-12T09:52:48Z",
-  "approval_state": "offline_batch_a_only_acceptance_reconciliation_correction_complete_pending_independent_review",
-  "approved": false,
+  "approval_state": "milestone0_approved_milestones1_and2_accepted_batch_b_not_authorized",
+  "approved": true,
+  "approval_scope": "milestone0_frozen_research_specification_and_phase2_batch_a_offline_engineering_only",
+  "milestone0_frozen_engineering_specification_approved": true,
+  "phase2_batch_a_accepted": true,
   "engineering_specification_approval": {
     "approved": true,
     "approved_at": "2026-08-14",
@@ -176,7 +179,8 @@
       "push"
     ],
     "push_authorized": false,
-    "push_performed_according_to_local_refs_and_reflogs": false
+    "push_performed_during_final_polish_task": false,
+    "resulting_commit_later_reached_remote_as_ancestor_of_canonical_completion": true
   },
   "acceptance_reconciliation_corrective_authorization": {
     "approved": true,
@@ -184,8 +188,8 @@
     "branch": "codex/phase2-batch-a-final-integrity",
     "base_commit": "cc7531c9efd893b6608dd9ad0d6e8756783fc9c6",
     "triggering_review_outcome": "not_accepted",
-    "resulting_commit": null,
-    "resulting_commit_status": "this_record_is_part_of_the_resulting_commit_reported_externally_after_creation",
+    "resulting_commit": "bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5",
+    "resulting_commit_status": "canonical_batch_a_engineering_completion_commit_on_main",
     "authorized_scope": [
       "preserve_cd8ce02_and_cc7531c_as_forward_only_historical_commits",
       "retain_the_cc7531c_publication_verification_race_defenses",
@@ -216,10 +220,61 @@
       "push"
     ],
     "push_authorized": false,
-    "push_performed_at_record_time": false
+    "push_performed_at_record_time": false,
+    "subsequent_corrective_branch_push_observed_at": "2026-09-02T00:43:57+07:00",
+    "subsequent_main_fast_forward_observed_at": "2026-09-02T00:45:01+07:00",
+    "subsequent_origin_main_push_observed_at": "2026-09-02T00:45:05+07:00",
+    "subsequent_actor_attribution": "not_established_by_local_reflog",
+    "current_main_state_formally_accepted_by_human_authority": true
+  },
+  "formal_batch_a_signoff": {
+    "signed_off": true,
+    "signed_off_at": "2026-09-02",
+    "signoff_authority": "human_authority",
+    "batch_a_status": "ACCEPTED",
+    "batch_a_completion_status": "COMPLETED",
+    "canonical_branch": "main",
+    "canonical_batch_a_completion_commit": "bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5",
+    "all_corrective_work_merged_to_main": true,
+    "worktree_clean_at_signoff": true,
+    "milestones": {
+      "milestone_0": {
+        "status": "APPROVED",
+        "scope": "frozen_research_specification"
+      },
+      "milestone_1": {
+        "status": "ACCEPTED",
+        "scope": "immutable_cas_schema_contracts_fail_closed_state_hydration_and_two_pass_directory_verification"
+      },
+      "milestone_2": {
+        "status": "ACCEPTED",
+        "scope": "fixture_only_gdelt_gsg_normalization_coverage_recomputation_terminal_gap_evidence_and_bidirectional_link_provenance"
+      },
+      "milestone_3": {
+        "status": "NOT_AUTHORIZED"
+      }
+    },
+    "batch_b_status": "NOT_AUTHORIZED",
+    "verification": {
+      "full_repository_tests": "466_passed_12_expected_single_class_metric_warnings",
+      "phase2_sentiment_tests": "213_passed",
+      "phase1_tests": "253_passed_12_expected_single_class_metric_warnings",
+      "targeted_adversarial_probes": "32_passed",
+      "non_phase2_tracked_tree_identity": "69_of_69_byte_identical",
+      "rfc8785_differential": "49972_of_49972_finite_binary64_values_matched_local_v8_18_20_8"
+    },
+    "authorization_boundary": {
+      "real_gdelt_rights_approved": false,
+      "network_collection_authorized": false,
+      "scorer_or_model_authorized": false,
+      "research_gates_authorized": false,
+      "future_collection_authorized": false,
+      "holdout_access_or_evaluation_authorized": false,
+      "batch_b_authorized": false
+    }
   },
   "batch_a_corrective_review": {
-    "status": "acceptance_reconciliation_correction_offline_verified_pending_independent_review",
+    "status": "ACCEPTED_COMPLETED",
     "prior_acceptance_blocker_corrected_at": "2026-08-27",
     "final_integrity_corrective_authorized_at": "2026-08-27",
     "final_integrity_corrected_at": "2026-08-30",
@@ -232,14 +287,23 @@
     "final_polish_acceptance_outcome": "not_accepted",
     "acceptance_reconciliation_corrective_authorized_at": "2026-09-02",
     "acceptance_reconciliation_base_commit": "cc7531c9efd893b6608dd9ad0d6e8756783fc9c6",
-    "acceptance_reconciliation_resulting_commit": null,
-    "acceptance_reconciliation_resulting_commit_status": "self_identity_not_embedded_report_externally_after_commit_creation",
-    "branch": "codex/phase2-batch-a-final-integrity",
+    "acceptance_reconciliation_resulting_commit": "bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5",
+    "acceptance_reconciliation_resulting_commit_status": "canonical_batch_a_engineering_completion_commit_on_main",
+    "branch": "main",
+    "source_corrective_branch": "codex/phase2-batch-a-final-integrity",
+    "canonical_batch_a_completion_commit": "bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5",
+    "formal_human_signoff_at": "2026-09-02",
+    "formal_acceptance_reviewed_commit": "bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5",
+    "formal_acceptance_outcome": "ACCEPTED",
+    "commit_count_from_base_exclusive_through_completion": 3,
+    "all_corrective_work_merged_to_main": true,
+    "worktree_clean_immediately_before_governance_finalization": true,
+    "milestone0_status": "APPROVED",
     "reviewed_commit": "3e31538e79be85002fc4f11633f22b189058a42a",
     "triggering_reviewed_commit": "21e954d24f6639da8c4d902924ebf01ffba715d8",
     "base_commit": "587e4475114db8b65fe47a7a8b2197952f2b9e75",
-    "milestone1_status": "acceptance_reconciliation_corrected_offline_pending_independent_review",
-    "milestone2_status": "acceptance_reconciliation_corrected_offline_pending_independent_review",
+    "milestone1_status": "ACCEPTED",
+    "milestone2_status": "ACCEPTED",
     "milestone3_or_later_complete": false,
     "real_gdelt_rights_approved": false,
     "batch_b_authorized": false,
@@ -247,8 +311,9 @@
     "scorer_or_model_authorized": false,
     "research_gates_authorized": false,
     "future_collection_or_holdout_authorized": false,
-    "current_corrective_push_authorized": false,
-    "current_corrective_push_performed": false,
+    "acceptance_reconciliation_push_authorized": false,
+    "acceptance_reconciliation_push_performed_at_record_time": false,
+    "subsequent_push_and_main_fast_forward_observed": true,
     "historical_push_observed": true,
     "prior_corrective_push_observed": true,
     "prior_corrective_merge_observed": true,
@@ -288,7 +353,7 @@
       "forward_only_two_commit_final_integrity_history_reconciliation"
     ],
     "prior_global_watermark_contract": {
-      "implementation_status": "complete_pending_independent_review",
+      "historical_implementation_status_at_that_stage": "complete_pending_independent_review",
       "normalizer_version": "gdelt-gsg-normalizer-v2",
       "state_version": "gdelt-gsg-normalizer-state-v2",
       "chronology_version": "gdelt-gsg-terminal-chronology-v1",
@@ -318,7 +383,7 @@
       "network_access": "none"
     },
     "causal_availability_and_gap_evidence_contract": {
-      "implementation_status": "complete_pending_independent_review",
+      "historical_implementation_status_at_that_stage": "complete_pending_independent_review",
       "normalizer_version": "gdelt-gsg-normalizer-v3",
       "state_version": "gdelt-gsg-normalizer-state-v3",
       "chronology_version": "gdelt-gsg-terminal-chronology-v2",
@@ -390,7 +455,7 @@
       "silent_migration_inference_or_repair": false
     },
     "causal_availability_and_gap_evidence_verification": {
-      "status": "offline_verification_complete_pending_independent_review",
+      "historical_status_at_that_stage": "offline_verification_complete_pending_independent_review",
       "focused_causal_availability_regressions": "17_passed",
       "focused_terminal_gap_evidence_regressions": "44_passed",
       "focused_gsg_suite": "117_passed",
@@ -410,7 +475,7 @@
       "holdout_access_authorized": false
     },
     "acceptance_blocker_corrective_verification": {
-      "status": "offline_verification_complete_pending_independent_review",
+      "historical_status_at_that_stage": "offline_verification_complete_pending_independent_review",
       "strict_article_contract_tests": "27_passed",
       "immutable_storage_tests": "15_passed",
       "gsg_adapter_and_publication_tests": "24_passed",
@@ -434,7 +499,7 @@
       "push_performed_during_corrective_task": false
     },
     "final_integrity_corrective_contract": {
-      "implementation_status": "complete_pending_independent_review",
+      "historical_implementation_status_at_that_stage": "complete_pending_independent_review",
       "coverage_publication_authority": "recomputed_only_from_exact_validated_retrieval_plan_raw_replayed_snapshot_receipts_terminal_gap_evidence_canonical_as_of_protocol_identity_and_frozen_bounds",
       "caller_supplied_coverage_authoritative": false,
       "normalization_provenance": "full_chronological_raw_byte_replay_reproduces_exact_committed_state_and_current_batch_result_including_every_reused_link_and_exclusion_plus_one_exact_nonreused_representative_link_per_published_article",
@@ -450,8 +515,8 @@
       "storage_traversal": "filesystem_root_anchored_descriptor_walk_and_creation_rejects_every_configured_root_symlink_component_then_trusted_root_identity_and_descriptor_relative_no_follow_reads_writes_hard_links_cleanup_fsync_and_atomic_no_replace_rename",
       "symlink_escape_writes_external_bytes": false,
       "history_policy": "preserve_prior_commits_push_and_merge_as_facts_without_actor_attribution_retroactive_authorization_or_rewrite",
-      "current_corrective_push_authorized": false,
-      "current_corrective_push_performed": false
+      "push_authorized_during_final_integrity_task": false,
+      "push_performed_during_final_integrity_task": false
     },
     "final_integrity_corrective_verification": {
       "status": "historical_offline_verification_for_cd8ce02_later_not_accepted",
@@ -495,8 +560,8 @@
       ],
       "local_branch": "codex/phase2-batch-a-final-integrity",
       "push_authorized": false,
-      "cached_remote_tracking_ref_contains_resulting_commit": false,
-      "local_reflog_records_push_of_resulting_commit": false,
+      "cached_remote_tracking_ref_contained_resulting_commit_at_review_time": false,
+      "local_reflog_recorded_push_of_resulting_commit_at_review_time": false,
       "live_remote_query_performed": false
     },
     "final_polish_acceptance_review": {
@@ -541,10 +606,10 @@
       "posix_limitation": "ordinary_descriptor_relative_listdir_and_lstat_sweeps_cannot_exclude_an_uncooperative_writer_that_already_has_filesystem_write_authority;_the_supported_contract_is_anchored_exact_byte_capture_manifest_hash_verification_and_two_opposite_order_stability_sweeps"
     },
     "acceptance_reconciliation_corrective_verification": {
-      "status": "offline_verification_complete_pending_independent_review",
+      "status": "ACCEPTED_AS_FINAL_BATCH_A_VERIFICATION",
       "base_commit": "cc7531c9efd893b6608dd9ad0d6e8756783fc9c6",
-      "resulting_commit": null,
-      "resulting_commit_status": "self_identity_intentionally_not_embedded_and_reported_externally_after_creation",
+      "resulting_commit": "bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5",
+      "resulting_commit_status": "canonical_batch_a_engineering_completion_commit_on_main",
       "collected_test_inventory": {
         "immutable_storage_tests": 44,
         "gsg_adapter_and_publication_tests": 25,
@@ -574,12 +639,15 @@
       "network_access_authorized": false,
       "external_service_access_authorized": false,
       "holdout_access_authorized": false,
-      "push_authorized": false,
-      "push_performed": false
+      "push_authorized_during_corrective_implementation": false,
+      "push_performed_during_corrective_implementation": false,
+      "subsequent_push_and_main_fast_forward_observed": true,
+      "formal_human_signoff_of_current_main_state": true
     },
-    "exact_next_action": "create_the_single_local_no_push_corrective_commit_from_this_verified_payload_then_stop_for_independent_read_only_review"
+    "exact_next_action": "prepare_batch_b_specification"
   },
   "verdict": "PROCEED_WITH_FORWARD_ONLY_COLLECTION",
+  "next_action": "prepare_batch_b_specification",
   "article_contract_version": "article-contract-v1",
   "contract_versions": {
     "article_contract": "article-contract-v1",
@@ -595,6 +663,13 @@
     "market": "BTC/USDT",
     "interval": "1h",
     "milestone": 0,
+    "batch_a_status": "ACCEPTED",
+    "batch_a_completion_status": "COMPLETED",
+    "milestone0_status": "APPROVED",
+    "milestone1_status": "ACCEPTED",
+    "milestone2_status": "ACCEPTED",
+    "milestone3_status": "NOT_AUTHORIZED",
+    "batch_b_status": "NOT_AUTHORIZED",
     "documentation_only": true,
     "provider_api_called": false,
     "provider_data_downloaded": false,
@@ -611,7 +686,7 @@
     "push_performed": true,
     "historical_push_reconciliation": {
       "source": "local_git_reflogs_commit_graph_and_cached_remote_tracking_refs",
-      "evidence_checked_through": "2026-09-02",
+      "evidence_checked_through": "2026-09-02T00:45:05+07:00",
       "live_remote_query_performed": false,
       "authorization_evidence_in_protocol_record": "not_recorded",
       "actor_attribution": "not_established_by_local_reflog",
@@ -632,9 +707,20 @@
           "origin_main_contains_merge_commit": true,
           "local_main_contains_merge_commit": true,
           "local_main_pulled_at": "2026-08-27T23:17:12+07:00"
+        },
+        {
+          "commit": "bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5",
+          "parent": "cc7531c9efd893b6608dd9ad0d6e8756783fc9c6",
+          "committed_at": "2026-09-02T00:41:45+07:00",
+          "origin_corrective_branch_updated_at": "2026-09-02T00:43:57+07:00",
+          "local_main_fast_forwarded_at": "2026-09-02T00:45:01+07:00",
+          "origin_main_updated_at": "2026-09-02T00:45:05+07:00",
+          "current_main_contains_commit": true,
+          "cached_origin_main_contains_commit": true
         }
       ],
-      "local_no_push_corrective_history": {
+      "pre_completion_local_no_push_corrective_history": {
+        "evidence_scope": "state_observed_before_bb6d4d_creation_and_later_pushes",
         "base_commit": "587e4475114db8b65fe47a7a8b2197952f2b9e75",
         "reviewed_tip": "cc7531c9efd893b6608dd9ad0d6e8756783fc9c6",
         "commit_count_from_base_exclusive_through_reviewed_tip": 2,
@@ -658,12 +744,23 @@
         ],
         "unpushed_status_is_local_evidence_only": true
       },
+      "canonical_batch_a_completion_state": {
+        "commit": "bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5",
+        "branch": "main",
+        "upstream": "origin/main",
+        "local_main_matched_cached_origin_main_at_human_signoff": true,
+        "all_corrective_work_merged_to_main": true,
+        "worktree_clean_at_human_signoff": true,
+        "formal_human_signoff_at": "2026-09-02"
+      },
       "historical_facts_are_not_retroactive_authorization": true,
-      "current_final_integrity_task_push_authorized": false,
-      "current_final_integrity_task_push_performed": false,
-      "current_acceptance_reconciliation_task_push_authorized": false,
-      "current_acceptance_reconciliation_task_push_performed_at_record_time": false,
-      "current_acceptance_reconciliation_resulting_commit": null
+      "final_integrity_task_push_authorized_at_record_time": false,
+      "final_integrity_task_push_performed_at_record_time": false,
+      "acceptance_reconciliation_task_push_authorized_at_record_time": false,
+      "acceptance_reconciliation_task_push_performed_at_record_time": false,
+      "acceptance_reconciliation_resulting_commit": "bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5",
+      "subsequent_push_and_main_fast_forward_observed": true,
+      "formal_human_acceptance_of_current_main_state": true
     }
   },
   "phase1_reference": {
@@ -2222,12 +2319,12 @@
     "future_holdout_evaluation": "separate_explicit_authorization_required"
   },
   "next_authorized_task": {
-    "status": "acceptance_reconciliation_corrective_payload_offline_verified_pending_independent_review",
-    "prerequisite": "cc7531c_acceptance_review_completed_not_accepted_with_three_storage_integrity_plus_governance_and_phase1_byte_identity_blockers",
-    "base_commit": "cc7531c9efd893b6608dd9ad0d6e8756783fc9c6",
-    "resulting_commit": null,
-    "resulting_commit_status": "self_identity_intentionally_not_embedded_report_externally_after_creation",
-    "exact_request": "Complete only the authorized 2026-09-02 offline Batch A acceptance-reconciliation correction based on cc7531c9efd893b6608dd9ad0d6e8756783fc9c6: close the reproduced late-descendant and post-capture/hash publication-verification windows with pre-confirmation payload hashing and deterministic opposite-order tree sweeps; translate post-inventory payload read failures to StorageIntegrityError; reject unmanifested members before payload reads; retain descriptor-anchored exact-byte and no-symlink defenses; restore src/crypto_ai/exceptions.py to the exact 587e447 blob; relocate StorageIntegrityError to the Phase 2-only src/crypto_ai/sentiment/exceptions.py module as a SentimentStorageError subclass; record the bounded POSIX same-authority-writer limitation without an atomic-snapshot overclaim; update required offline tests and forward-only governance records; execute and record the complete offline verification; create exactly one additional local no-push corrective commit; and stop for a new independent read-only review. Do not begin or authorize Batch B, Milestone 3, real GDELT rights, network collection, scorer or model activity, feature generation, training or backtesting, research gates, future collection, or holdout activity.",
+    "status": "SPECIFICATION_PREPARATION_ONLY",
+    "action": "prepare_batch_b_specification",
+    "canonical_batch_a_completion_commit": "bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5",
+    "batch_a_status": "ACCEPTED_COMPLETED",
+    "description": "Prepare a proposed Batch B rights and network specification for later human review; this does not authorize Batch B execution or any external access.",
+    "milestone3_authorized": false,
     "batch_b_authorized": false
   },
   "source_references": [

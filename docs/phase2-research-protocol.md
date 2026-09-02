@@ -1,6 +1,6 @@
 # KrypX Phase 2 — Milestone 0 Research Protocol and News-Source Feasibility
 
-**Protocol status:** Batch A acceptance-reconciliation correction complete and verified offline; Milestones 1 and 2 remain pending independent review
+**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Milestone 3 and Batch B **NOT AUTHORIZED**
 
 **Research decision:** `PROCEED_WITH_FORWARD_ONLY_COLLECTION`
 
@@ -10,9 +10,10 @@
 
 **Prepared:** 2026-08-12
 **Latest offline corrective authorization:** 2026-09-02
-**Companion machine-readable draft:** `config/phase2_protocol.json`
+**Formal Batch A sign-off:** 2026-09-02
+**Companion machine-readable protocol:** `config/phase2_protocol.json`
 
-**Approval boundary:** Batch A authorizes synthetic-fixture implementation and explicitly bounded offline corrective hardening. The 2026-09-02 acceptance-reconciliation task authorizes exactly one additional local no-push corrective commit based on `cc7531c9efd893b6608dd9ad0d6e8756783fc9c6`; its implementation and complete offline verification are finished, and it remains pending independent review. It does not approve real GDELT title-use rights, Batch B or Milestone 3, GDELT network collection, provider/API access, scorer selection, model downloads, research gates, real feature generation, training/backtesting, forward collection, holdout access/evaluation, history rewriting, or a push.
+**Approval boundary:** The human authority has accepted the completed offline Batch A engineering work at canonical `main` commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`. This freezes Milestone 0 and accepts Milestones 1 and 2; it does not approve real GDELT title-use rights, Batch B or Milestone 3, GDELT network collection, provider/API access, scorer selection, model downloads, research gates, real feature generation, training/backtesting, forward collection, or holdout access/evaluation.
 
 ## Executive decision
 
@@ -23,13 +24,13 @@ This recommendation is deliberately title-only. It does not authorize fetching p
 | Decision item | Milestone 0 result |
 |---|---|
 | Exact verdict | `PROCEED_WITH_FORWARD_ONLY_COLLECTION` |
-| Engineering-specification approval | Approved for offline Milestones 1 and 2 only; acceptance-reconciliation correction is complete offline pending independent review, and all research/external-access approvals remain false |
+| Engineering-specification approval | Milestone 0 approved as the frozen research specification; offline Milestones 1 and 2 accepted at `bb6d4d`; all research/external-access approvals remain false |
 | Recommended provider | GDELT GSG, title-only, with KrypX receipt time and exact raw-byte hashes; human approval still required |
 | Historical feasibility | `REJECTED`: no retrospective news scoring/backtest for the Phase 1 period |
 | Main blocker to outcomes | A newly collected development corpus does not yet exist; scorer, gates, budget, and later holdout are unapproved |
 | Provider fee | GDELT datasets: $0; query infrastructure may cost money |
 | Planning cost | GDELT provider fee: $0. Low / expected / high remote-price scoring proxy: about $0.79 / $3.17 / $15.84; direct-archive storage, network, local compute, engineering, legal review, and hardware remain **UNVERIFIED** |
-| Required human decisions | Approve the GSG title-only scope, the article/score contracts for synthetic Milestone 1, the scorer, numerical gates, and future-holdout policy; later authorize any prospective network pilot |
+| Required human decisions | Approve a future Batch B rights/network specification, the scorer, numerical gates, and future-holdout policy before separately authorizing any prospective network pilot |
 
 The decision is not an empirical claim that news improves BTC trading. It authorizes nothing by itself and requires a long forward research sequence: collect development data, freeze/evaluate the four-cell ablation, then begin a separate future holdout.
 
@@ -681,7 +682,7 @@ For the rolling 30-day gate, align the augmented and control ledgers on the sort
 ### Unresolved decisions that remain human-owned
 
 1. Approve or reject GDELT GSG title-only for forward collection and its documented-use interpretation.
-2. Approve the frozen article/score contracts for synthetic Milestone 1 implementation; separately, later approve any prospective network/storage pilot budget.
+2. Review and approve a future Batch B rights/network specification; separately, later approve any prospective network/storage pilot budget and execution.
 3. Approve the scorer. The recommendation is gated Llama 2 subject to Meta license/account approval and deterministic validation; FinBERT is the financial-news alternative, CryptoBERT the crypto benchmark, and VADER a lexicon sanity baseline.
 4. Approve or revise the proposed engineering, coverage, development, concentration, and final gates before any outcomes.
 5. Approve the $100 third-party compute ceiling or a lower ceiling.
@@ -689,7 +690,7 @@ For the rolling 30-day gate, align the augmented and control ledgers on the sort
 
 ### Required authorizations
 
-Batch A approval is deliberately narrower than research approval. The article/score schemas and storage/provider-fixture contracts may now be implemented and tested offline. The provider recommendation, scorer/model choice, numerical gates, real collection, and future-holdout policy remain proposals requiring their own later approvals.
+Batch A approval is deliberately narrower than research approval. The article/score schemas and storage/provider-fixture contracts have been implemented, verified offline, and accepted. The provider recommendation, scorer/model choice, numerical gates, real collection, and future-holdout policy remain proposals requiring their own later approvals.
 
 | Action | Current state |
 |---|---|
@@ -702,7 +703,7 @@ Batch A approval is deliberately narrower than research approval. The article/sc
 | Start future-holdout collection | Not authorized; requires approved frozen protocol/generation |
 | Claim or evaluate the future holdout | Separate explicit authorization required after readiness |
 
-### Batch A acceptance-reconciliation correction — complete offline, pending independent review
+### Batch A acceptance-reconciliation correction — ACCEPTED
 
 The user authorized the following offline work on 2026-08-14:
 
@@ -799,7 +800,20 @@ and 466 repository tests; the Phase 1 and full runs retained the same 12 expecte
 synthetic metric warnings. Diff, formatting (65 Python files unchanged), lint, compilation,
 dependency consistency, strict two-file JSON, Markdown/JSON reconciliation, 60-of-60 selected
 Phase 1 tracked-blob identity, and the 49,972-value local-V8 RFC 8785 differential checks passed.
-The resulting commit identity is intentionally not self-embedded and is reported after creation.
+The resulting commit identity was reported after creation as
+`bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`; a commit cannot embed its own identity.
+
+On 2026-09-02 the human authority formally accepted and completed Phase 2 Batch A at that
+canonical engineering commit on `main`. Milestone 0 is **APPROVED** as the frozen research
+specification. Milestone 1 is **ACCEPTED** for immutable CAS, schema contracts, fail-closed
+state hydration, and two-pass directory verification. Milestone 2 is **ACCEPTED** for
+fixture-only GDELT GSG normalization, coverage recomputation, terminal gap evidence, and
+bidirectional link provenance. Milestone 3 and Batch B are **NOT AUTHORIZED**.
+
+Final accepted verification comprises 466 passing repository tests: 213 Phase 2 sentiment
+tests and all 253 Phase 1 tests. All 32 targeted adversarial probes passed, the non-Phase-2
+tracked tree remained byte-identical for 69 of 69 blobs, and the RFC 8785 differential matched
+49,972 of 49,972 finite binary64 values.
 
 The governance record preserves history and states only what local Git evidence supports.
 Commit `3e31538e79be85002fc4f11633f22b189058a42a` updated
@@ -815,20 +829,30 @@ actor, and no matching push
 authorization is recorded. These are historical facts, not retroactive authorization. No
 reset, rebase, force-push, or other history rewrite is authorized or performed.
 
-The later local-only corrective history is separate. Commit `cd8ce02` was created from
+The later corrective history was local-only at the time of its original inspection. Commit `cd8ce02` was created from
 `587e447` at `2026-08-30T23:04:10+07:00`, and `cc7531c` was created from `cd8ce02` at
-`2026-08-31T23:11:16+07:00`. Local evidence checked through 2026-09-02 shows `origin/main`
+`2026-08-31T23:11:16+07:00`. Pre-completion local evidence checked on 2026-09-02 showed `origin/main`
 at `587e447`, no cached remote-tracking ref containing either later commit, no local reflog
 push entry for either commit, and no configured upstream for
 `codex/phase2-batch-a-final-integrity`. That establishes only local unpushed evidence; no live
-remote query was performed. The current acceptance-reconciliation task authorizes no push, and
-no push was performed.
+remote query was performed. The acceptance-reconciliation task authorized no push, and no push
+was performed during that task.
 
-Milestones 1 and 2 remain pending independent review. Milestone 3 and every later milestone
-remain incomplete. The exact next action is independent read-only review of the single local
-no-push acceptance-reconciliation commit based on `cc7531c`, reproducing all five blockers and
-the complete offline matrix. Its identity is reported externally because a Git commit cannot
-contain its own hash. Batch B is not authorized. Real GDELT rights, network or provider
+Commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`, with parent `cc7531c`, was created at
+`2026-09-02T00:41:45+07:00`. Local reflogs record a later update of
+`origin/codex/phase2-batch-a-final-integrity` at `00:43:57+07:00`, a local `main`
+fast-forward at `00:45:01+07:00`, and an `origin/main` update at `00:45:05+07:00`. They do
+not establish the actor, and the protocol contains no matching prior push authorization.
+Recording these events and accepting the present `main` state does not retroactively authorize
+the earlier pushes. At human sign-off immediately before this governance finalization, local
+`main` and cached `origin/main` both identified `bb6d4d` as the canonical Batch A engineering
+completion commit, and the worktree was clean. The requested governance commit is a
+forward-only successor whose identity is reported after creation.
+
+Phase 2 Batch A is **ACCEPTED** and **COMPLETED**. Milestones 1 and 2 are **ACCEPTED**.
+Milestone 3 and Batch B are **NOT AUTHORIZED**. The exact next action is
+`prepare_batch_b_specification`, meaning preparation of a proposal for later human review only;
+it does not authorize Batch B execution. Real GDELT rights, network or provider
 collection, publisher access, accounts, credentials, paid services, scoring, models,
 features, training, backtests, research gates, future collection, and holdout
 access/evaluation all remain unauthorized. Before any Batch B pilot, a later user instruction
@@ -890,4 +914,5 @@ Every claim in the provider/scorer sections is either tied to a source below or 
 - [x] The four-cell ablation holds all non-news mechanics constant.
 - [x] Development/final gates and future holdout duration, coverage, trade count, freeze, inspection, and claim rules are numerical and explicit.
 - [x] The outcome is exactly `PROCEED_WITH_FORWARD_ONLY_COLLECTION`.
-- [ ] Human approvals are recorded. No approval is implied by this draft.
+- [x] Human approval of Milestone 0 as the frozen research specification and formal acceptance
+  of offline Batch A Milestones 1 and 2 are recorded; all later execution gates remain explicit.
