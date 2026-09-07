@@ -1,6 +1,6 @@
 # KrypX Phase 2 — Milestone 0 Research Protocol and News-Source Feasibility
 
-**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Milestone 3 and Batch B **NOT AUTHORIZED**
+**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B `SPECIFICATION_FROZEN`; its network pilot and Milestone 3 scoring **NOT AUTHORIZED**
 
 **Research decision:** `PROCEED_WITH_FORWARD_ONLY_COLLECTION`
 
@@ -11,9 +11,16 @@
 **Prepared:** 2026-08-12
 **Latest offline corrective authorization:** 2026-09-02
 **Formal Batch A sign-off:** 2026-09-02
+**Batch B specification freeze:** 2026-09-07; [prospective ingestion specification](phase2-batch-b.md)
 **Companion machine-readable protocol:** `config/phase2_protocol.json`
 
 **Approval boundary:** The human authority has accepted the completed offline Batch A engineering work at canonical `main` commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`. This freezes Milestone 0 and accepts Milestones 1 and 2; it does not approve real GDELT title-use rights, Batch B or Milestone 3, GDELT network collection, provider/API access, scorer selection, model downloads, research gates, real feature generation, training/backtesting, forward collection, or holdout access/evaluation.
+
+The Batch A governance sign-off commit is `e7c189bf180c9b3fd72892544fa72805998f765d`.
+The 2026-09-07 instruction authorizes Batch B documentation/configuration only.
+Current fields are `batch_b_status: SPECIFICATION_FROZEN`,
+`network_pilot_authorized: false`, `milestone_3_scoring_authorized: false`, and
+`next_action: await_human_network_pilot_authorization`. No pilot or scheduler is started.
 
 ## Executive decision
 
@@ -30,7 +37,7 @@ This recommendation is deliberately title-only. It does not authorize fetching p
 | Main blocker to outcomes | A newly collected development corpus does not yet exist; scorer, gates, budget, and later holdout are unapproved |
 | Provider fee | GDELT datasets: $0; query infrastructure may cost money |
 | Planning cost | GDELT provider fee: $0. Low / expected / high remote-price scoring proxy: about $0.79 / $3.17 / $15.84; direct-archive storage, network, local compute, engineering, legal review, and hardware remain **UNVERIFIED** |
-| Required human decisions | Approve a future Batch B rights/network specification, the scorer, numerical gates, and future-holdout policy before separately authorizing any prospective network pilot |
+| Required human decisions | Resolve the frozen Batch B DOC/GSG compatibility prerequisites and explicitly authorize its rights scope and bounded network pilot; scorer, research gates, and future-holdout decisions remain separate and unapproved |
 
 The decision is not an empirical claim that news improves BTC trading. It authorizes nothing by itself and requires a long forward research sequence: collect development data, freeze/evaluate the four-cell ablation, then begin a separate future holdout.
 
@@ -228,7 +235,10 @@ For rejected/forward-only comparisons, the same 25,000 / 100,000 / 500,000 resul
 
 At one scoring call per unique eligible title version, the remote price proxy adds $0.79 / $3.17 / $15.84 for low/expected/high. The recommended local Llama 2 API fee is $0, but gated weight transfer, hardware, energy, runtime, and staff cost are **UNVERIFIED**.
 
-Proposed hard budget controls, all requiring human approval:
+Historical Milestone 0 proposed hard budget controls, all requiring human approval.
+The one-GiB/seven-day raw-pilot proposal below is superseded for Batch B by the frozen
+500 MB download, 2.0 GB storage, 900-second process, 24-hour/96-interval specification.
+The unrelated scoring/query/research proposals remain unapproved:
 
 - any later prospective raw-collection pilot: 1 GiB downloaded, seven elapsed days, and $0 provider/query spend;
 - any optional hosted query: separately authorized Google Cloud project/credentials, 0.5 TiB dry-run cap, and $0 billed;
@@ -682,7 +692,9 @@ For the rolling 30-day gate, align the augmented and control ledgers on the sort
 ### Unresolved decisions that remain human-owned
 
 1. Approve or reject GDELT GSG title-only for forward collection and its documented-use interpretation.
-2. Review and approve a future Batch B rights/network specification; separately, later approve any prospective network/storage pilot budget and execution.
+2. Resolve the frozen Batch B specification's DOC/GSG endpoint, parser, schedule, signing,
+   and live gap-evidence prerequisites; separately authorize the bounded prospective pilot
+   before its frozen anchor, or approve a successor specification if that anchor is missed.
 3. Approve the scorer. The recommendation is gated Llama 2 subject to Meta license/account approval and deterministic validation; FinBERT is the financial-news alternative, CryptoBERT the crypto benchmark, and VADER a lexicon sanity baseline.
 4. Approve or revise the proposed engineering, coverage, development, concentration, and final gates before any outcomes.
 5. Approve the $100 third-party compute ceiling or a lower ceiling.
@@ -694,6 +706,9 @@ Batch A approval is deliberately narrower than research approval. The article/sc
 
 | Action | Current state |
 |---|---|
+| Batch B specification | `SPECIFICATION_FROZEN`; requirements only; launch prerequisites unresolved |
+| Batch B network pilot | `network_pilot_authorized: false` |
+| Milestone 3 sentiment scoring | `milestone_3_scoring_authorized: false` |
 | Download/query GDELT or any provider data | Not authorized |
 | Call a provider API or fetch a publisher page | Not authorized |
 | Fetch or alter market data | Not authorized |
@@ -849,16 +864,57 @@ the earlier pushes. At human sign-off immediately before this governance finaliz
 completion commit, and the worktree was clean. The requested governance commit is a
 forward-only successor whose identity is reported after creation.
 
-Phase 2 Batch A is **ACCEPTED** and **COMPLETED**. Milestones 1 and 2 are **ACCEPTED**.
-Milestone 3 and Batch B are **NOT AUTHORIZED**. The exact next action is
-`prepare_batch_b_specification`, meaning preparation of a proposal for later human review only;
-it does not authorize Batch B execution. Real GDELT rights, network or provider
-collection, publisher access, accounts, credentials, paid services, scoring, models,
-features, training, backtests, research gates, future collection, and holdout
-access/evaluation all remain unauthorized. Before any Batch B pilot, a later user instruction
-must separately approve the GDELT GSG English-BTC-title rights interpretation and provide
-explicit network endpoint, prospective start, request/interval, retry, byte, retained-storage,
-elapsed-time, and cost caps.
+### Batch B specification — frozen, pilot unauthorized
+
+Phase 2 Batch A remains **ACCEPTED** and **COMPLETED**. The Batch B requirements are frozen
+in [phase2-batch-b.md](phase2-batch-b.md) and `batch_b_specification` in the companion JSON.
+The current action is `await_human_network_pilot_authorization`. This supersedes the
+historical `prepare_batch_b_specification` action in the 2026-09-02 Batch A record without
+changing its acceptance history.
+
+The sole candidate endpoint is `https://api.gdeltproject.org/api/v2/doc/doc`, with prospective
+anchor `2026-09-08T00:00:00Z` and exclusive end `2026-09-09T00:00:00Z`. The requested
+scope is English Bitcoin title metadata, with no publisher scraping or article bodies.
+Freeze 96 half-open, 15-minute reporting intervals. A missed anchor cannot be backfilled,
+automatically shifted, or evaluated against a smaller denominator.
+
+| Pilot requirement | Frozen value |
+|---|---|
+| Aggregate download | 500 MB = 500,000,000 bytes, including partial/error/retried responses |
+| Total pilot storage | 2.0 GB = 2,000,000,000 bytes, including staging and all evidence |
+| Process duration | 900 seconds per invocation including waits and publication; at most 96 non-overlapping scheduled workers, each bounded by its slot end |
+| Global request rate | 0.2 Hz maximum, no bursts, one in-flight request; retries included |
+| Retry ceiling | Three retries after the initial request, four attempts total; persistent counters |
+| Incremental billed cost | $0.00; positive, unknown, or unenforceable charges block execution |
+| Pilot coverage | At least 92/96 fully verified reporting intervals, satisfying >=95%; gaps and local stops remain in the denominator |
+
+The document specifies exact raw-response CAS retention, Ed25519 collector-signed receipt
+metadata with a human-pinned public key, authenticated `TerminalGapEvidence` semantics,
+signed closeout and independently pinned final inventory/chain checkpoint, durable budget
+counters, immutable chronology/revisions, deterministic replay, credential
+redaction, circuit breakers, and fixture-to-live acceptance. Keys and a collector are not
+created here. Intended internal use/retention rights are specified, but an actual-product
+rights record remains required; the 2026-08-12 source register was not refreshed offline.
+
+Implementation readiness is `BLOCKED_ON_COMPATIBILITY_AND_IMPLEMENTATION`. The supplied
+endpoint serves DOC, whereas Batch A implements GSG gzip/JSONL with one-minute intervals,
+a 30-minute arrival lag, three total attempts, unsigned receipts, and synthetic-only gap
+evidence. The 96 reporting slots cannot replace the GSG 1,440-minute ledger. A future
+human decision must reconcile the product/endpoint and schedule; a separately authorized
+offline implementation must freeze query/parser/completeness semantics, signed receipts,
+live evidence, and budget enforcement. No DOC response may masquerade as a GSG snapshot,
+and no archive fallback or unapproved late-arrival tail is allowed. The >=95% pilot
+criterion does not change or approve the existing 99.5% research coverage gate.
+
+`batch_b_status: SPECIFICATION_FROZEN` records requirements, not execution approval.
+`network_pilot_authorized: false` and `milestone_3_scoring_authorized: false` remain in force.
+Before any request, later human authorization must resolve all launch prerequisites,
+reference the final specification/protocol hashes and verified implementation, pin the
+signer public key, approve actual title-use/retention rights, and explicitly permit the
+bounded prospective pilot before the anchor. Otherwise no pilot runs. Publisher access,
+accounts, credentials, paid services, scoring, model downloads, features or feature joining,
+market data, training, backtests, research gates, future holdout collection, and holdout
+access/evaluation remain unauthorized. This documentation task performs no push.
 
 ## Official source register
 
