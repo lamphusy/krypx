@@ -1,0 +1,3 @@
+# Direct Phase 2 signing dependency; already present in requirements-lock.txt.
+# This implementation used the installed version without any network installation.
+cryptography==49.0.0

@@ -4,11 +4,12 @@
   "status": "phase2_batch_a_accepted_completed",
   "batch_b_status": "SPECIFICATION_FROZEN_COMPATIBLE",
   "network_pilot_authorized": false,
+  "real_network_calls_prohibited": true,
   "milestone_3_scoring_authorized": false,
   "created_at": "2026-08-12T09:52:48Z",
-  "approval_state": "milestone0_approved_milestones1_and2_accepted_batch_b_specification_frozen_compatible_network_pilot_not_authorized",
+  "approval_state": "milestone0_approved_milestones1_and2_accepted_batch_b_offline_mock_implementation_authorized_network_pilot_not_authorized",
   "approved": true,
-  "approval_scope": "milestone0_frozen_research_specification_phase2_batch_a_offline_engineering_and_batch_b_specification_only",
+  "approval_scope": "milestone0_frozen_research_specification_phase2_batch_a_offline_engineering_batch_b_specification_and_explicitly_authorized_offline_mock_adapter_signing_tests",
   "milestone0_frozen_engineering_specification_approved": true,
   "phase2_batch_a_accepted": true,
   "engineering_specification_approval": {
@@ -286,12 +287,13 @@
     "status": "SPECIFICATION_FROZEN_COMPATIBLE",
     "batch_a_signoff_commit": "e7c189bf180c9b3fd72892544fa72805998f765d",
     "batch_a_engineering_completion_commit": "bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5",
-    "implementation_readiness": "OFFLINE_LIVE_ADAPTER_IMPLEMENTATION_REQUIRED",
+    "implementation_readiness": "VERIFIED_OFFLINE_PENDING_INDEPENDENT_REVIEW",
     "compatibility_scope": "accepted_gsg_archive_locator_payload_parser_and_underlying_identity_chronology_and_gap_semantics_not_completed_live_transport_or_signed_evidence",
     "network_pilot_authorized": false,
     "milestone_3_scoring_authorized": false,
-    "next_action": "implement_live_gsg_network_adapter_offline",
+    "next_action": "independent_offline_batch_b_acceptance_review",
     "source_and_test_implementation_authorized_by_this_docs_only_instruction": false,
+    "later_offline_source_test_authorization": "batch_b_offline_implementation",
     "requested_provider_scope": "gdelt_gsg_english_btc_titles",
     "source": {
       "permitted_endpoint_subject_to_future_authorization": "https://data.gdeltproject.org/gdeltv3/gsg/",
@@ -359,6 +361,10 @@
       "storage_namespace": "isolated_local_pilot_generation_outside_git"
     },
     "schedule": {
+      "current_status": "MISSED_UNAUTHORIZED_NOT_EXECUTED",
+      "status_recorded_at": "2026-09-10",
+      "elapsed_dates_retained_for": "historical_frozen_schedule_and_synthetic_mock_fixtures_only",
+      "successor_prospective_anchor_requires_explicit_human_approval": true,
       "prospective_anchor_utc": "2026-09-09T00:00:00Z",
       "end_exclusive_utc": "2026-09-10T00:00:00Z",
       "observation_duration_seconds": 86400,
@@ -410,6 +416,8 @@
       "reserve_incident_and_manifest_storage_before_payload_acceptance": true
     },
     "retry_requirements": {
+      "record_scope": "historical_v2_archive_reconciliation_policy_preserved",
+      "subsequent_offline_operational_override": "batch_b_offline_implementation.retry_policy",
       "policy_version": "gdelt-gsg-retry-policy-v1",
       "implementation_status": "ACCEPTED_PURE_POLICY_LIVE_TRANSPORT_ENFORCEMENT_NOT_IMPLEMENTED",
       "maximum_attempts": 3,
@@ -437,8 +445,10 @@
       "signature_encoding": "canonical_base64",
       "independently_pinned_human_approved_signer_public_key_required": true,
       "signature_is_provider_attestation": false,
-      "signature_implementation_status": "NOT_IMPLEMENTED",
+      "signature_implementation_status": "VERIFIED_OFFLINE_LIVE_AUTHORITY_NOT_GRANTED",
       "signing_key_generated_or_accessed": false,
+      "signing_key_flag_scope": "real_operational_keys_only_synthetic_in_memory_test_keys_are_authorized",
+      "implemented_mock_receipt_contract": "batch_b_offline_implementation.signed_receipts",
       "closeout_schema": "batch-b-signed-closeout-v1",
       "closeout_signature_domain_prefix": "KrypX Batch B closeout v1\n",
       "closeout_binds": [
@@ -489,11 +499,13 @@
     },
     "launch_prerequisites": [
       "offline_exact_planned_gsg_locator_gzip_completeness_parser_bounds_and_96_to_1440_schedule_verification",
-      "separately_authorized_fixture_tested_collector_signed_receipts_live_gap_evidence_and_persistent_caps",
+      "independent_acceptance_of_authorized_offline_mock_adapter_signing_caps_and_separate_gap_version",
+      "separately_authorized_reviewed_real_https_transport_and_live_rights_evidence_contract",
       "all_466_baseline_tests_and_phase1_preservation_verified_for_future_implementation",
       "explicit_actual_product_title_usage_and_immutable_raw_retention_rights_record",
       "human_pinned_signer_public_key_verified_code_commit_and_exact_protocol_specification_hashes",
-      "explicit_bounded_network_pilot_authorization_before_prospective_anchor"
+      "human_approved_successor_prospective_anchor_after_missed_september_9_window",
+      "explicit_bounded_network_pilot_authorization_before_successor_prospective_anchor"
     ],
     "explicitly_excluded": [
       "publisher_scraping",
@@ -508,6 +520,147 @@
       "credentials_accounts_or_paid_services",
       "git_push"
     ]
+  },
+  "batch_b_offline_implementation": {
+    "specification_id": "phase2-batch-b-offline-implementation-v1",
+    "authorized_at": "2026-09-10",
+    "base_specification_id": "phase2-batch-b-prospective-ingestion-v2",
+    "base_commit": "ec01f7d411fddc93f959eed06e6e399565538805",
+    "status": "VERIFIED_OFFLINE_PENDING_INDEPENDENT_REVIEW",
+    "human_authority": "implement_live_gsg_network_adapter_and_ed25519_signed_receipts_offline_mock_only",
+    "source_and_test_implementation_authorized": true,
+    "real_network_calls_prohibited": true,
+    "network_pilot_authorized": false,
+    "milestone_3_scoring_authorized": false,
+    "real_provider_rights_approved": false,
+    "transport": {
+      "implementation": "src/crypto_ai/sentiment/network.py",
+      "mode": "explicitly_injected_mock_only_transport_no_builtin_http_client_or_launch_path",
+      "locator_template": "https://data.gdeltproject.org/gdeltv3/gsg/{YYYYMMDDHHMMSS}.gsg.json.gz",
+      "http_timeout_seconds": 10.0,
+      "monotonic_session_timeout_seconds": 900,
+      "timeout_enforcement": "cooperative_checks_between_operations_mock_callback_must_honor_10_second_timeout_no_os_preemptive_watchdog",
+      "minimum_request_start_spacing_seconds": 5.0,
+      "maximum_download_bytes": 500000000,
+      "maximum_storage_bytes": 2000000000,
+      "maximum_incremental_cost_usd": 0.0,
+      "cost_unknown_or_positive": "fail_before_request",
+      "transport_cost_and_mock_authority_rechecked_after_open_and_read": true,
+      "resume_rate_policy": "conservative_full_five_monotonic_second_wait_even_if_utc_jumps_forward",
+      "five_irrecoverable_reporting_slots": "stop_92_of_96_no_longer_attainable",
+      "empty_http_body": "rejected_by_network_gzip_framing_check_accepted_batch_a_parser_unchanged",
+      "scheduler_or_real_network_transport_implemented": false,
+      "real_transport_requires_separate_source_implementation_and_network_authorization": true
+    },
+    "retry_policy": {
+      "version": "batch-b-gsg-retry-policy-v1",
+      "authority": "explicit_2026_09_10_user_amendment_for_offline_mock_adapter_only",
+      "supersedes_for_this_implementation_only": "batch_b_specification.retry_requirements",
+      "maximum_attempts": 4,
+      "maximum_retries": 3,
+      "retryable": ["http_429", "http_5xx"],
+      "backoff_seconds_after_prior_completion": [5, 10, 20],
+      "transport_errors_http_408_other_4xx_and_malformed_payloads": "fail_closed_no_retry",
+      "honor_longer_valid_retry_after_for_429_503": true,
+      "deadline_cap_or_cancellation_is_retry_exhaustion": false,
+      "accepted_batch_a_three_attempt_policy_changed": false
+    },
+    "persistent_budget": {
+      "implementation": "src/crypto_ai/sentiment/network_budget.py",
+      "scope": "entire_exclusive_pilot_store_across_worker_invocations_and_restarts",
+      "creation": "explicit_once_no_reset_or_missing_state_repair",
+      "locking": "exclusive_nonblocking_whole_session_descriptor_anchored_lock",
+      "download_count": "every_returned_body_byte_including_partial_error_retry_and_cap_crossing_chunks",
+      "storage_count": "all_logical_and_allocated_store_bytes_including_staging_logs_receipts_and_budget_journal",
+      "journal": "immutable_hash_chained_events_and_fsynced_locked_checkpoint",
+      "successful_closeout_freezes_further_client_budget_writes": true,
+      "unresolved_intent_or_halted_pilot_resume": "fail_closed",
+      "payload_inventory": "all_regular_store_files_exact_sha256_with_pinned_descriptor_prepass_and_global_bottom_up_postpass",
+      "whole_store_simultaneous_rollback_detectable_without_independent_closeout_pin": false
+    },
+    "signed_receipts": {
+      "implementation": "src/crypto_ai/sentiment/receipts.py",
+      "schema_version": "batch-b-signed-receipt-v1",
+      "domain_prefix": "KrypX Batch B receipt v1\n",
+      "algorithm": "Ed25519",
+      "signing_payload": "domain_prefix_then_RFC8785_canonical_body",
+      "body_fields": [
+        "pilot_id", "specification_id", "protocol_sha256", "code_commit",
+        "plan_sha256", "plan_start_at_utc", "interval_index", "filename_timestamp",
+        "source_locator", "retry_policy_version", "input_class",
+        "real_network_calls_prohibited", "attempt_number", "http_status",
+        "bytes_received", "raw_sha256", "snapshot_id", "snapshot_state",
+        "raw_published_at_utc", "retry_after_seconds", "requested_at_utc",
+        "completed_at_utc", "previous_receipt_sha256"
+      ],
+      "envelope_fields": [
+        "schema_version", "body", "body_sha256", "algorithm", "signer_key_id", "signature"
+      ],
+      "signer_key_id": "sha256_of_raw_32_byte_ed25519_public_key",
+      "signature_encoding": "canonical_base64",
+      "verification_key": "independently_supplied_pinned_in_memory_fixture_public_key",
+      "input_class": "synthetic_fixture",
+      "real_network_calls_prohibited": true,
+      "first_predecessor": null,
+      "subsequent_predecessor": "sha256_of_immediately_preceding_canonical_signed_envelope",
+      "operational_key_provisioning_or_rights_approval_implemented": false,
+      "live_authority_receipt_schema_inferred_from_mock_flags": false
+    },
+    "signed_closeout": {
+      "schema_version": "batch-b-signed-closeout-v1",
+      "domain_prefix": "KrypX Batch B closeout v1\n",
+      "body_fields": [
+        "pilot_id", "specification_id", "protocol_sha256", "code_commit",
+        "plan_sha256", "final_receipt_sha256", "receipt_count", "slot_outcomes",
+        "payload_inventory_sha256"
+      ],
+      "reporting_slots": 96,
+      "inventory_scope": "complete_pilot_payload_tree_before_closeout_publication_including_budget_journal_cas_receipts_gaps_reports_and_logs",
+      "inventory_exclusion": "not_yet_published_closeout_bundle_only",
+      "independently_pinned_final_closeout_hash_and_chain_head_required": true,
+      "retained_verification": "exact_pilot_protocol_stored_signed_chain_durable_attempt_and_byte_counts_raw_cas_parser_replay_and_terminal_gap_publications_must_reconcile",
+      "missing_or_truncated_chain_or_inventory": "fail_closed_never_coverage_pass"
+    },
+    "terminal_gap_evidence": {
+      "shape": "accepted_TerminalGapEvidence_dataclass_fields_reused_not_a_state_migration",
+      "version": "batch-b-gsg-terminal-gap-evidence-v1",
+      "retry_policy_version": "batch-b-gsg-retry-policy-v1",
+      "derivation": "recomputed_from_exact_plan_and_verified_signed_actual_attempt_receipts",
+      "input_class": "synthetic_fixture",
+      "network_access_authorized": false,
+      "accepted_batch_a_v1_validators_and_state_v3_accept_this_new_version": false,
+      "local_cap_or_deadline_stop_is_provider_gap": false,
+      "new_live_evidence_authority_or_hydration_migration_authorized": false
+    },
+    "elapsed_schedule": {
+      "status": "MISSED_UNAUTHORIZED_NOT_EXECUTED",
+      "anchor_utc": "2026-09-09T00:00:00Z",
+      "end_exclusive_utc": "2026-09-10T00:00:00Z",
+      "historical_dates_used_for_mock_fixtures_only": true,
+      "automatic_shift_or_backfill": false,
+      "future_pilot_requires_new_human_approved_prospective_anchor": true
+    },
+    "verification": {
+      "status": "PASSED_OFFLINE",
+      "record": "docs/phase2-batch-b-verification.md",
+      "accepted_baseline_tests": 466,
+      "accepted_phase1_tests": 253,
+      "repository_tests_passed": 648,
+      "sentiment_tests_passed": 395,
+      "phase1_tests_passed": 253,
+      "new_offline_tests_passed": 182,
+      "expected_phase1_single_class_metric_warnings": 12,
+      "unchanged_preexisting_tracked_blobs_outside_four_modified_phase2_files": "85_of_85_byte_identical_against_ec01f7d",
+      "rfc8785_binary64_differential": "49972_of_49972_matched_local_node_v18_20_8",
+      "strict_tracked_json_files_valid": 2,
+      "strict_fixture_jsonl_records_valid": 2,
+      "cryptography_version_already_installed_and_locked": "49.0.0",
+      "network_installation_or_dependency_upgrade_performed": false,
+      "phase1_source_data_artifacts_must_remain_byte_identical": true,
+      "independent_acceptance_or_live_pilot_success_claimed": false
+    },
+    "next_action": "independent_offline_batch_b_acceptance_review",
+    "git_push_authorized": false
   },
   "batch_a_corrective_review": {
     "status": "ACCEPTED_COMPLETED",
@@ -883,7 +1036,7 @@
     "exact_next_action_at_batch_a_signoff": "prepare_batch_b_specification"
   },
   "verdict": "PROCEED_WITH_FORWARD_ONLY_COLLECTION",
-  "next_action": "implement_live_gsg_network_adapter_offline",
+  "next_action": "independent_offline_batch_b_acceptance_review",
   "article_contract_version": "article-contract-v1",
   "contract_versions": {
     "article_contract": "article-contract-v1",
@@ -908,7 +1061,9 @@
     "batch_b_status": "SPECIFICATION_FROZEN_COMPATIBLE",
     "network_pilot_authorized": false,
     "milestone_3_scoring_authorized": false,
-    "documentation_only": true,
+    "documentation_only": false,
+    "batch_b_offline_mock_source_and_tests_authorized": true,
+    "real_network_calls_prohibited": true,
     "provider_api_called": false,
     "provider_data_downloaded": false,
     "market_data_fetched": false,
@@ -2529,7 +2684,9 @@
     }
   },
   "human_decisions_required": [
-    "separately_authorize_offline_live_gsg_network_adapter_signed_envelope_and_caps_implementation",
+    "independently_accept_offline_mock_gsg_adapter_signed_receipts_and_durable_caps",
+    "separately_authorize_and_review_actual_live_https_transport_and_live_rights_evidence_schema",
+    "approve_new_successor_prospective_anchor_after_missed_september_9_window",
     "approve_actual_provider_retention_rights_signed_receipts_and_bounded_network_pilot",
     "approve_gdelt_gsg_title_only_real_use_and_retention_rights_interpretation",
     "later_approve_any_real_prospective_network_storage_pilot_budget",
@@ -2539,9 +2696,10 @@
     "later_approve_exact_development_cutoff_selected_model_control_and_future_holdout_start"
   ],
   "unresolved_decisions": [
-    "batch_b_live_transport_signed_envelopes_live_gap_evidence_and_persistent_caps_implementation",
-    "batch_b_signer_key_pin_and_separately_authorized_offline_implementation",
-    "explicit_batch_b_network_pilot_authorization_before_frozen_anchor",
+    "independent_offline_batch_b_acceptance_review",
+    "batch_b_real_https_transport_and_live_rights_evidence_separate_implementation_authority",
+    "batch_b_real_signer_key_pin_and_actual_product_retention_rights",
+    "human_approved_successor_prospective_anchor_and_explicit_pre_anchor_network_authorization",
     "gdelt_gsg_title_only_real_provider_rights_approval",
     "future_real_prospective_pilot_budget_and_network_authorization",
     "llama2_license_account_weight_hash_and_hardware_approval",
@@ -2566,13 +2724,15 @@
     "future_holdout_evaluation": "separate_explicit_authorization_required"
   },
   "next_authorized_task": {
-    "status": "OFFLINE_IMPLEMENTATION_NEXT_REQUIRES_SEPARATE_SOURCE_TEST_AUTHORIZATION",
-    "action": "implement_live_gsg_network_adapter_offline",
+    "status": "VERIFIED_OFFLINE_PENDING_INDEPENDENT_REVIEW",
+    "action": "independent_offline_batch_b_acceptance_review",
     "canonical_batch_a_completion_commit": "bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5",
     "batch_a_status": "ACCEPTED_COMPLETED",
     "batch_b_specification_status": "SPECIFICATION_FROZEN_COMPATIBLE",
-    "description": "Next, separately authorize offline implementation of the live GSG network adapter, signed envelopes and persistent caps using synthetic fixtures. This docs/config-only reconciliation does not authorize source/test changes or execution. Live transport and evidence must pass review, followed by explicit rights and network-pilot authorization before the prospective anchor; a missed anchor requires a successor specification.",
+    "description": "The September 10 instruction authorizes source/test implementation and offline mock verification of the GSG adapter, persistent circuit breakers and Ed25519 receipts. Next independently review the resulting offline implementation. No real HTTPS transport, live rights evidence, network pilot or scoring is authorized. The September 9 anchor elapsed without authorization or execution; a future pilot requires a separately approved successor date, live implementation, rights, keys and explicit pre-anchor network authority.",
     "source_and_test_implementation_authorized_by_this_docs_only_instruction": false,
+    "subsequent_offline_implementation_authorized_by_september_10_instruction": true,
+    "real_network_calls_prohibited": true,
     "network_pilot_authorized": false,
     "milestone_3_scoring_authorized": false,
     "milestone3_authorized": false,

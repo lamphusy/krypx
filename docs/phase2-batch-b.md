@@ -4,17 +4,26 @@ Specification ID: `phase2-batch-b-prospective-ingestion-v2`. Reconciled on 2026-
 Supersedes v1, frozen on 2026-09-07 in commit `b8b72d50133647ebc99846bfd69bb8866d185136`.
 Status: `SPECIFICATION_FROZEN_COMPATIBLE`. `network_pilot_authorized: false`.
 `milestone_3_scoring_authorized: false`.
-Next action: `implement_live_gsg_network_adapter_offline` (a subsequent, separately
-authorized source/test task; this instruction remains documentation/configuration only).
+Offline implementation amendment: `phase2-batch-b-offline-implementation-v1`, authorized
+2026-09-10 against base commit `ec01f7d411fddc93f959eed06e6e399565538805`.
+Implementation status: `VERIFIED_OFFLINE_PENDING_INDEPENDENT_REVIEW`.
+Next action: `independent_offline_batch_b_acceptance_review`.
 
-The human instruction authorizes this document, its protocol-configuration companion,
-offline verification, and one local documentation commit on `main`. Batch A remains
+The September 8 instruction authorized only documentation/configuration. The subsequent
+September 10 human instruction authorizes source/test implementation of the network-client
+interface, circuit breakers and Ed25519 receipts, with **offline/mock-only execution** and
+a local feature commit on `main`. `real_network_calls_prohibited: true`. Batch A remains
 ACCEPTED and COMPLETED at engineering commit
 `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`, signed off by governance commit
-`e7c189bf180c9b3fd72892544fa72805998f765d`. This specification grants no execution,
-provider-rights, signing-key, scheduler, or network authority. It freezes the requested
-requirements; archive-contract compatibility is resolved, while implementation readiness
-is `OFFLINE_LIVE_ADAPTER_IMPLEMENTATION_REQUIRED`.
+`e7c189bf180c9b3fd72892544fa72805998f765d`. No real provider rights, operational signing-key
+access, scheduler, live HTTP implementation or network execution is authorized. Deterministic
+in-memory fixture keys and mocked transport responses are permitted for the new tests.
+Archive compatibility remains resolved; offline implementation passed the required verification,
+not independently accepted and not evidence of a successful live pilot.
+
+The dated implementation amendment below supersedes v2's operational retry restriction only
+for this mock-only adapter: four attempts instead of three, with a distinct Batch B policy.
+The frozen v2 source/window and all accepted Batch A contract identities remain unchanged.
 
 ## Source, usage, and retention boundary
 
@@ -54,11 +63,12 @@ The archive payload and identity contracts align with accepted
 | Gap evidence / retry | `gdelt-gsg-terminal-gap-evidence-v1` / `gdelt-gsg-retry-policy-v1`; existing synthetic-only authority restriction preserved |
 | Parser maximums | 67,108,864 compressed bytes, 268,435,456 decompressed bytes, 1,000,000 JSON lines per snapshot |
 
-This resolves the DOC/GSG product blocker, not the missing live transport, signatures,
-budget enforcement, or live-evidence implementation. Signed pilot envelopes must bind
-the accepted identities, not redefine them. Synthetic-only gap evidence cannot be used
-for a real response by changing its flags; the live authorization envelope requires
-separate offline implementation and review before any network pilot.
+The DOC/GSG product blocker is resolved. Offline adapter, budget and signing components
+are now implemented and verified offline; a real HTTP transport and live-authority evidence
+remain unimplemented and unauthorized. Signed mock envelopes bind the accepted identities,
+not redefine them. The new gap version described below is deliberately rejected by unchanged
+Batch A v1 validators/state-v3. Changing flags cannot convert synthetic evidence into real
+authority, and no state migration or live evidence approval is implied.
 
 Freeze the intended rights scope as internal title-metadata ingestion, immutable raw
 response retention, normalization, deduplication, integrity replay, and engineering coverage
@@ -85,7 +95,12 @@ isolated pilot namespace and keep all records local and outside Git.
 
 ## Prospective schedule and hard bounds
 
-The fixed prospective UTC anchor is `2026-09-09T00:00:00Z`. The pilot observation window
+Current schedule status: `MISSED_UNAUTHORIZED_NOT_EXECUTED`, recorded on 2026-09-10.
+The September 9 anchor elapsed without network authorization or execution. Preserve these
+dates solely as the historical frozen plan and synthetic test fixtures; never backfill or
+shift them automatically. A future pilot requires a newly human-approved prospective anchor.
+
+The historical fixed prospective UTC anchor is `2026-09-09T00:00:00Z`. Its observation window
 is half-open: `[2026-09-09T00:00:00Z, 2026-09-10T00:00:00Z)`. Freeze 96 reporting
 intervals, each 900 seconds, with interval `i` equal to
 `[anchor + i*900s, anchor + (i+1)*900s)` for `0 <= i < 96`.
@@ -101,7 +116,8 @@ human-approved successor specification with a new prospective date.
 | Retained storage | 2.0 GB = 2,000,000,000 bytes across the complete pilot namespace, including CAS, staging, receipts, signatures, manifests, logs, and reports; enforce allocated and logical bytes conservatively |
 | Process duration | At most 900 seconds of monotonic wall time per invocation, including connection, waits, retries, parsing, publication, and cleanup |
 | Rate | At most 0.2 Hz globally: one request start per five seconds, no bursts, one in-flight request, including retries |
-| Retries | Original ceiling of three retries/four attempts is not increased; the compatible GSG policy is stricter: three total attempts, two retries, never a fourth attempt; counters persist across restarts |
+| Retries | September 10 mock-only amendment: at most three retries/four attempts, HTTP 429/5xx only, delays 5/10/20 seconds; durable counters; accepted Batch A three-attempt policy unchanged |
+| HTTP timeout | 10.0 seconds passed to the injected mock transport; no actual HTTP client is included |
 | Cost | $0.00 incremental billed cost; no paid service or infrastructure; any positive or unknown third-party charge blocks execution |
 
 The 900-second cap applies to each process, not to the 24-hour calendar span. A future
@@ -131,8 +147,9 @@ file timestamps. No later catch-up is allowed. The 30-minute value is the accept
 engineering policy, not a newly verified provider SLA; late files remain subject to
 bounded retries and genuine gap evidence. No live arrival behavior is claimed offline.
 
-Even all three attempts for all 15 files require only 45 request starts per worker
-(at least 220 seconds from first to last at five-second spacing), but transfer time,
+Under the new four-attempt mock policy, all attempts for 15 files require at most 60
+request starts per worker (at least 295 seconds from first to last at five-second spacing;
+retry-completion delays impose additional bounds), but transfer time,
 provider delay, full-feed volume, and signing/storage work remain unmeasured. These
 counts do not guarantee completion under 900 seconds or 500 MB; caps override coverage.
 
@@ -143,15 +160,16 @@ stop before exceeding the allowance, and include partial bytes in the durable to
 Parser compressed/decompressed/record limits must be versioned, persisted in snapshot
 identity, and no larger than the approved product-specific limits. An unknown length does
 not waive the cap. Honor a valid longer `Retry-After`; if it cannot fit the remaining slot
-and process budget, stop without retrying early. Use unchanged `GSGRetryPolicy`:
-transport failures, HTTP 408, 429, and 5xx are retryable; HTTP 200 proceeds to bounded
-parsing. Its two base delays are 2 and 4 seconds; the outer global limiter imposes at
-least five seconds between request starts, also honoring any longer valid `Retry-After`
-for 429/503. Both the policy's delay from the prior attempt's completion and the global
-request-start spacing must hold. Other responses terminate the logical retrieval; authentication,
-payment, redirect, or scope violations stop the entire pilot. Malformed retry metadata
-fails closed. There is no four-attempt pilot-policy override, and a process restart cannot
-reset per-file attempts. Deadline/cap cancellation is not retry exhaustion.
+and process budget, stop without retrying early. The September 10 implementation amendment
+uses `batch-b-gsg-retry-policy-v1`: only HTTP 429 and 5xx retry, for four total attempts
+with delays 5, 10 and 20 seconds after prior completion. Transport failures, HTTP 408,
+other client errors and malformed payloads fail closed without retries. HTTP 200 proceeds
+to bounded parsing. Preserve global five-second request-start spacing and valid longer
+`Retry-After` for 429/503 in addition to completion-relative delays. Authentication, payment,
+redirect and scope violations stop the pilot. A restart cannot reset per-file attempts;
+deadline/cap cancellation is not retry exhaustion. Accepted Batch A `GSGRetryPolicy`
+remains unchanged at three attempts, transport/408/429/5xx and base delays 2/4 seconds;
+the v2 historical retry record is retained in JSON with an explicit amendment pointer.
 
 ## Raw CAS, signed receipts, and availability
 
@@ -175,8 +193,11 @@ times, every revision, deterministic observation links, and causal deduplication
 publication/seen times are audit fields and cannot backdate KrypX availability. Equivalent
 offline replay must reproduce identities, links, revisions, exclusions, and coverage exactly.
 
-A signed receipt is a future collector attestation, not a provider signature. Freeze
-Ed25519 detached signatures over RFC 8785 UTF-8 bytes of a versioned receipt body containing:
+A signed receipt is a collector attestation, not a provider signature or rights grant.
+The live-pilot design continues to require the broader authority metadata below; the exact
+implemented synthetic receipt schema is separately listed in the implementation amendment.
+Do not represent that mock schema as a completed live-authority contract. The broader
+design requires Ed25519 detached signatures over RFC 8785 UTF-8 bytes of a body containing:
 
 - pilot ID, specification ID, protocol SHA-256, code commit, approval-record SHA-256,
   actual provider ID, parser version/policy and bounds;
@@ -213,9 +234,10 @@ as a complete generation. The signed body records raw-object publication time; t
 receipt envelope has its own later publication timestamp for eligibility, avoiding a
 self-referential signature over its own publication. A missing/invalid signature, raw hash,
 approval binding, inventory entry, or timestamp prevents verification and normalization.
-No signing key is generated or accessed now. Key provisioning, signing support, and offline
-tamper tests require separate implementation authority. Batch A SHA-256 receipts are
-unsigned and cannot be represented as satisfying this requirement.
+No operational signing key is generated, provisioned or accessed. The September 10 instruction
+authorizes in-memory deterministic fixture signing keys and offline tamper tests; it does
+not approve real key custody or live receipt authority. Batch A SHA-256 receipts are unsigned
+and cannot be represented as satisfying the signature requirement.
 
 Redact credentials from locators, request logs, headers, and error diagnostics before those
 metadata fields are serialized and signed. Requests must contain no credentials. A
@@ -235,10 +257,12 @@ terminal timestamp, provider outage, or complete interval from absence alone.
 Preserve `TerminalGapEvidence` semantics: only an observed terminal non-retryable outcome
 or verified retry exhaustion establishes a provider gap. Batch A's current evidence contract
 is restricted to synthetic fixtures and cannot encode a real gap by changing a flag.
-A separately versioned, signed live evidence contract and offline tamper/replay validation
-are prerequisites. The accepted evidence fields, plan/locator identities, actual-attempt
-semantics, retry policy, and chronology remain authoritative; any added live envelope
-must bind them without falsely claiming synthetic approval. No DOC evidence is permitted.
+The new mock-only contract reuses the `TerminalGapEvidence` dataclass shape under
+`batch-b-gsg-terminal-gap-evidence-v1`, bound to `batch-b-gsg-retry-policy-v1` and
+authenticated actual attempt receipts. This is not Batch A's
+`gdelt-gsg-terminal-gap-evidence-v1`; unchanged Batch A validators and state-v3 hydration
+reject the new version. No migration is implemented. The shape reuse and synthetic flags
+do not authorize real gaps or a real signed-authority envelope. No DOC evidence is permitted.
 
 Local cap, deadline, cancellation, missing authority, and missed-schedule stops are local
 incident records, not fabricated provider gaps. They remain uncovered in the fixed
@@ -255,7 +279,8 @@ After a fifth irrecoverably uncovered reporting interval, 92/96 is unattainable;
 retain a failed report with the denominator still 96. Never delete evidence or expand any
 budget to reach acceptance.
 
-Before human network authorization, separately authorized offline implementation must prove:
+Before human network authorization, the authorized offline implementation and independent
+review must prove:
 
 1. Exact planned HTTPS GSG locators and the 96-to-1,440 schedule mapping, gzip/JSONL
    parsing under the accepted snapshot-v2 bounds, complete transfer and gzip integrity,
@@ -267,9 +292,76 @@ Before human network authorization, separately authorized offline implementation
 3. Atomic publication, symlink/non-regular-object rejection, invalid manifest rejection,
    persistent global budgets, retry exhaustion, `Retry-After`, credential redaction, and
    fail-closed live gap-evidence validation using synthetic fixtures only.
-4. All 466 accepted repository tests still pass and Phase 1 source/data/artifacts remain
-   unchanged. These are prerequisites for new implementation; this documentation task
-   does not implement or certify a collector.
+4. All 466 accepted repository tests still pass alongside the new mock/signature/budget tests,
+   and Phase 1 source/data/artifacts remain byte-identical. Full verification passed;
+   passing offline tests does not certify live transport, rights or collection feasibility.
+
+## September 10 offline implementation amendment
+
+`phase2-batch-b-offline-implementation-v1` records the new source/test authority independently
+of the frozen v2 archive specification. Its implementation status is
+`VERIFIED_OFFLINE_PENDING_INDEPENDENT_REVIEW`; no independent acceptance or real pilot pass is claimed.
+
+- `network.py` implements an explicitly injected mock-only streaming interface, exact
+  planned GSG locators, accepted bounded parser integration, four-attempt Batch B retry
+  policy, durable raw CAS/receipts and gap recomputation. There is no built-in HTTP client,
+  scheduler or executable live collection path; `real_network_calls_prohibited` must be
+  true, input must be synthetic, and transport cost must be known and exactly zero.
+- `network_budget.py` implements pilot-wide durable byte counts, request starts and attempts,
+  exclusive whole-session locks, fail-closed interrupted intents/stops and no automatic
+  budget resets. Entire-store logical/allocated capacity includes CAS, staging, logs,
+  publication metadata and the budget journal. Full payload inventory hashes every regular
+  store file under pinned descriptors with pre-read and bottom-up post-read verification.
+- `receipts.py` implements RFC 8785 domain-separated Ed25519 signing and strict verification,
+  predecessor hash chains, immutable context/plan binding and a 96-slot signed closeout.
+  A pinned closeout plus independently checked full payload inventory detects chain suffix
+  truncation. A local hash chain alone cannot detect a simultaneous rollback of the entire
+  store and its checkpoint.
+
+Verification on 2026-09-10: **648 tests passed** (395 sentiment, 253 Phase 1), including
+182 new offline tests. Black left 72 files unchanged; Ruff, compilation and dependency
+checks passed. Strict tracked JSON/fixture JSONL checks passed, and 49,972/49,972 RFC 8785
+binary64 comparisons matched local Node.js. All 85 pre-existing tracked blobs outside the
+four modified Phase 2 governance/exception files are byte-identical to `ec01f7d`, covering
+all Phase 1 source/data/artifacts and the accepted Batch A code/tests. See
+[the verification record](phase2-batch-b-verification.md) for commands, outputs and limits.
+The Ed25519 dependency is already present as `cryptography==49.0.0` in the existing lock;
+`requirements-phase2.txt` declares this direct Phase 2 dependency without changing Phase 1
+dependency files or installing anything.
+
+Retained closeout verification binds the signed pilot/protocol to its actual stored chain,
+durable byte/attempt counters, exact CAS bytes, parser replay and immutable gap publications.
+A signature over an unrelated chain cannot certify that store. Restarts wait at least five
+monotonic seconds even after a forward UTC clock jump. Closeout and retrieval cannot overlap;
+successful closeout prevents later client error paths from mutating its signed budget inventory.
+
+The exact `batch-b-signed-receipt-v1` body fields are:
+`pilot_id`, `specification_id`, `protocol_sha256`, `code_commit`, `plan_sha256`,
+`plan_start_at_utc`, `interval_index`, `filename_timestamp`, `source_locator`,
+`retry_policy_version`, `input_class`, `real_network_calls_prohibited`, `attempt_number`,
+`http_status`, `bytes_received`, `raw_sha256`, `snapshot_id`, `snapshot_state`,
+`raw_published_at_utc`, `retry_after_seconds`, `requested_at_utc`, `completed_at_utc`,
+and `previous_receipt_sha256`. Unknown fields are rejected, not silently accepted as authority.
+The envelope contains exactly `schema_version`, `body`, `body_sha256`, `algorithm`,
+`signer_key_id`, and `signature`. Keys are supplied in memory; verification requires the
+independently supplied fixture public key, not a key trusted from the envelope itself.
+
+The closeout body contains exactly `pilot_id`, `specification_id`, `protocol_sha256`,
+`code_commit`, `plan_sha256`, `final_receipt_sha256`, `receipt_count`, `slot_outcomes`,
+and `payload_inventory_sha256`. The inventory covers the complete pilot tree immediately
+before closeout publication, including budget checkpoints/events, raw CAS, receipts, gaps,
+reports and logs; only the not-yet-created closeout bundle is outside that snapshot. It is
+not a filtered inventory of known receipt files. Later acceptance must independently pin
+the closeout hash and chain head; an unpinned local result cannot establish completeness.
+
+Known implementation boundaries: the 10.0-second HTTP timeout is a contract passed to the
+injected callback. The 900-second deadline is checked cooperatively between operations,
+not enforced by an OS-preemptive kill; a real transport and hard watchdog are not implemented.
+The network boundary additionally rejects a zero-byte HTTP body even though the accepted
+gzip reader can treat an empty stream as empty; a valid gzip member containing zero records
+remains allowed. This framing check does not modify Batch A's parser. Real transport,
+operational keys, live rights/approval metadata, state integration for the distinct gap
+version and the future prospective schedule all require separate review/authorization.
 
 After a separately authorized live pilot, acceptance requires at least **92 of 96** fully
 verified reporting intervals (`92/96 = 95.833333...%`, satisfying `>=95.83%`). The
@@ -291,8 +383,9 @@ criterion; it neither changes nor approves the frozen 99.5% research coverage ga
 
 ## Authority and next action
 
-`SPECIFICATION_FROZEN_COMPATIBLE` records the archive-compatible specification, not
-permission to implement or execute a collector under this docs-only instruction.
+`SPECIFICATION_FROZEN_COMPATIBLE` records the archive-compatible specification, not live
+execution approval. The September 10 instruction separately permits only offline mock
+source/test implementation and verification, as recorded above.
 Before any request, a later human instruction must reference the final protocol and
 specification hashes, accept the offline live-adapter verification, approve the actual
 title-use/retention scope, pin the signer public key and verified implementation commit,
@@ -304,10 +397,11 @@ joining, market-data access, training, backtesting, research-gate execution, fut
 collection, holdout access/evaluation, paid services, credentials, and `git push` are excluded.
 Milestone 3 remains unauthorized. No pilot, scheduler, or collection is started here.
 
-The next action is `implement_live_gsg_network_adapter_offline`, under a subsequent
-source/test implementation authorization and using synthetic fixtures only. After that
-review passes, explicit human network-pilot authorization is still required. This document
-and current protocol configuration supersede v1's
+The next action is `independent_offline_batch_b_acceptance_review`. After that review passes,
+actual live transport and authority-envelope implementation, operational key/rights
+approval, a new prospective date and explicit human network-pilot authorization are still
+required. This amendment supersedes the now-authorized offline implementation next action;
+the document and current protocol configuration had already superseded v1's
 `await_human_network_pilot_authorization` action and the
 historical `prepare_batch_b_specification` next action in the 2026-09-02 Batch A sign-off
 record. Earlier one-GiB/seven-day collection proposals do not apply to this pilot. No
