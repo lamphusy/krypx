@@ -78,6 +78,10 @@ class Response:
     def close(self) -> None:
         self.closed = True
 
+    @property
+    def transfer_complete(self) -> bool:
+        return self.offset == len(self.raw)
+
 
 class Transport:
     mock_only = True

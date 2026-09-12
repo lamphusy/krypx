@@ -6,7 +6,10 @@ Status: `SPECIFICATION_FROZEN_COMPATIBLE`. `network_pilot_authorized: false`.
 `milestone_3_scoring_authorized: false`.
 Offline implementation amendment: `phase2-batch-b-offline-implementation-v1`, authorized
 2026-09-10 against base commit `ec01f7d411fddc93f959eed06e6e399565538805`.
-Implementation status: `VERIFIED_OFFLINE_PENDING_INDEPENDENT_REVIEW`.
+Implementation status: `CORRECTED_OFFLINE_PENDING_INDEPENDENT_REVIEW`.
+Four-P1 corrective authority: 2026-09-11; verification completed 2026-09-12 against
+`a4ce157c0a8306ea6b760bdfab3812295f3e86be`. The initial 648-test implementation was
+subsequently **NOT ACCEPTED**; the corrective patch requires a fresh independent review.
 Next action: `independent_offline_batch_b_acceptance_review`.
 
 The September 8 instruction authorized only documentation/configuration. The subsequent
@@ -258,7 +261,7 @@ Preserve `TerminalGapEvidence` semantics: only an observed terminal non-retryabl
 or verified retry exhaustion establishes a provider gap. Batch A's current evidence contract
 is restricted to synthetic fixtures and cannot encode a real gap by changing a flag.
 The new mock-only contract reuses the `TerminalGapEvidence` dataclass shape under
-`batch-b-gsg-terminal-gap-evidence-v1`, bound to `batch-b-gsg-retry-policy-v1` and
+`batch-b-gsg-terminal-gap-evidence-v2`, bound to `batch-b-gsg-retry-policy-v1` and
 authenticated actual attempt receipts. This is not Batch A's
 `gdelt-gsg-terminal-gap-evidence-v1`; unchanged Batch A validators and state-v3 hydration
 reject the new version. No migration is implemented. The shape reuse and synthetic flags
@@ -300,7 +303,7 @@ review must prove:
 
 `phase2-batch-b-offline-implementation-v1` records the new source/test authority independently
 of the frozen v2 archive specification. Its implementation status is
-`VERIFIED_OFFLINE_PENDING_INDEPENDENT_REVIEW`; no independent acceptance or real pilot pass is claimed.
+`CORRECTED_OFFLINE_PENDING_INDEPENDENT_REVIEW`; no independent acceptance or real pilot pass is claimed.
 
 - `network.py` implements an explicitly injected mock-only streaming interface, exact
   planned GSG locators, accepted bounded parser integration, four-attempt Batch B retry
@@ -318,7 +321,7 @@ of the frozen v2 archive specification. Its implementation status is
   truncation. A local hash chain alone cannot detect a simultaneous rollback of the entire
   store and its checkpoint.
 
-Verification on 2026-09-10: **648 tests passed** (395 sentiment, 253 Phase 1), including
+Historical initial verification on 2026-09-10: **648 tests passed** (395 sentiment, 253 Phase 1), including
 182 new offline tests. Black left 72 files unchanged; Ruff, compilation and dependency
 checks passed. Strict tracked JSON/fixture JSONL checks passed, and 49,972/49,972 RFC 8785
 binary64 comparisons matched local Node.js. All 85 pre-existing tracked blobs outside the
@@ -335,12 +338,13 @@ A signature over an unrelated chain cannot certify that store. Restarts wait at 
 monotonic seconds even after a forward UTC clock jump. Closeout and retrieval cannot overlap;
 successful closeout prevents later client error paths from mutating its signed budget inventory.
 
-The exact `batch-b-signed-receipt-v1` body fields are:
+The current exact `batch-b-signed-receipt-v2` body fields are:
 `pilot_id`, `specification_id`, `protocol_sha256`, `code_commit`, `plan_sha256`,
 `plan_start_at_utc`, `interval_index`, `filename_timestamp`, `source_locator`,
 `retry_policy_version`, `input_class`, `real_network_calls_prohibited`, `attempt_number`,
-`http_status`, `bytes_received`, `raw_sha256`, `snapshot_id`, `snapshot_state`,
-`raw_published_at_utc`, `retry_after_seconds`, `requested_at_utc`, `completed_at_utc`,
+`http_status`, `bytes_received`, `content_length`, `transfer_complete`, `raw_sha256`,
+`snapshot_id`, `snapshot_state`, `raw_published_at_utc`, `retry_after_seconds`,
+`requested_at_utc`, `dispatch_confirmed_at_utc`, `completed_at_utc`,
 and `previous_receipt_sha256`. Unknown fields are rejected, not silently accepted as authority.
 The envelope contains exactly `schema_version`, `body`, `body_sha256`, `algorithm`,
 `signer_key_id`, and `signature`. Keys are supplied in memory; verification requires the
@@ -362,6 +366,46 @@ gzip reader can treat an empty stream as empty; a valid gzip member containing z
 remains allowed. This framing check does not modify Batch A's parser. Real transport,
 operational keys, live rights/approval metadata, state integration for the distinct gap
 version and the future prospective schedule all require separate review/authorization.
+
+## Four-P1 offline correction — September 11 authority, September 12 verification
+
+The correction does not change the frozen anchor, caps, retry ceiling, accepted Batch A
+contracts, Phase 1 behavior, or network/scoring authorization. It tightens four contracts:
+
+1. Capacity checks pin **every** traversed directory until one global bottom-up postpass
+   verifies the complete tree. Entry sets, identities, logical sizes and allocated blocks
+   must remain unchanged; deep FIFO, sparse-file growth and symlink injections fail closed.
+   This is a bounded stability check, not an atomic filesystem snapshot against an external
+   writer acting after the final observation. The pilot namespace remains exclusive.
+2. The signed request window is `[requested_at_utc, dispatch_confirmed_at_utc]`, bracketing
+   `transport.open()`. The durable journal records a separate earlier intent. The next
+   request waits at least five monotonic seconds after the preceding open **returns** and
+   five UTC seconds after its signed dispatch confirmation. This conservative boundary
+   cannot precede physical initiation; a dispatch delay cannot shorten request spacing.
+3. A present Content-Length is a strict bounded nonnegative decimal integer and must match
+   received bytes exactly for success. The mock transport must explicitly attest completion
+   even for an unknown-length stream; bare EOF is insufficient. Known truncation or overrun
+   retains exact received CAS bytes and a signed `transfer_complete: false` receipt, clears
+   HTTP-200 observations, and produces non-retryable terminal failure evidence, including
+   for HTTP 429/5xx. Such minutes never count as verified. Missing/malformed completion
+   attestation or a raised stream exception instead leaves a halted unresolved intent;
+   neither successful evidence nor an unobserved provider gap is fabricated.
+4. Request, dispatch confirmation, completion and raw publication must all lie in the
+   authoritative half-open worker slot: `[plan_start + 45 minutes + i*15 minutes,
+   plan_start + 60 minutes + i*15 minutes)`. Signatures do not exempt records from these
+   bounds; retained replay rejects future-dated evidence too.
+
+Receipt schema v2 authenticates the three additional fields above. Gap evidence is now
+`batch-b-gsg-terminal-gap-evidence-v2`. Both signature prefixes remain exactly
+`KrypX Batch B receipt v1\n` and `KrypX Batch B closeout v1\n`; closeout schema v1 is unchanged.
+Old receipt-v1 evidence is rejected rather than silently supplied new fields or migrated.
+The operational `provider_gap` slot label records a terminal unusable retrieval, not proof
+of a provider-wide outage; signed transfer facts distinguish truncation from HTTP failure.
+
+See [the corrective verification record](phase2-batch-b-verification.md) for current results.
+Local `origin/main` reflog records a push of `a4ce157` at `2026-09-11T00:11:49+07:00`;
+the actor and authorization cannot be established by that record. This corrective task
+performs only the authorized local commit on `main`, with no push or remote verification.
 
 After a separately authorized live pilot, acceptance requires at least **92 of 96** fully
 verified reporting intervals (`92/96 = 95.833333...%`, satisfying `>=95.83%`). The

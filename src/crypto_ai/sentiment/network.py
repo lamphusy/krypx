@@ -44,7 +44,7 @@ from crypto_ai.sentiment.receipts import (
 from crypto_ai.sentiment.storage import ContentAddressedStore
 
 RETRY_POLICY_VERSION = "batch-b-gsg-retry-policy-v1"
-GAP_EVIDENCE_VERSION = "batch-b-gsg-terminal-gap-evidence-v1"
+GAP_EVIDENCE_VERSION = "batch-b-gsg-terminal-gap-evidence-v2"
 HTTP_TIMEOUT_SECONDS = 10.0
 SESSION_TIMEOUT_SECONDS = 900.0
 MINIMUM_REQUEST_SPACING_SECONDS = 5.0
@@ -60,6 +60,9 @@ class MockResponse(Protocol):
     status: int
     headers: Mapping[str, str]
     url: str
+    # True only when the fixture transport can attest a fully terminated body.
+    # A bare b"" from read() is not sufficient proof of successful transfer.
+    transfer_complete: bool
 
     def read(self, maximum_bytes: int, *, timeout: float) -> bytes: ...
 
@@ -90,6 +93,13 @@ class RetrievalFailure(NetworkSafetyError):
         self.result = result
 
 
+@dataclass(frozen=True)
+class _TransferCapture:
+    raw: bytes
+    content_length: int | None
+    complete: bool
+
+
 def _utc(value: str) -> datetime:
     try:
         instant = parse_utc_timestamp(value, field="collector timestamp")
@@ -102,6 +112,31 @@ def _utc(value: str) -> datetime:
 
 def _transient(status: int | None) -> bool:
     return status == 429 or (status is not None and 500 <= status <= 599)
+
+
+def _retryable_receipt(body: Mapping[str, Any]) -> bool:
+    return body["transfer_complete"] and _transient(body["http_status"])
+
+
+def _terminal_failure(body: Mapping[str, Any]) -> bool:
+    return body["http_status"] is not None and (
+        not body["transfer_complete"]
+        or body["snapshot_state"] == "invalid"
+        or body["http_status"] != 200
+        and (not _retryable_receipt(body) or body["attempt_number"] == MAXIMUM_ATTEMPTS)
+    )
+
+
+def _apply_transfer_verdict(snapshot: SnapshotResult, complete: bool) -> SnapshotResult:
+    if not complete:
+        return replace(
+            snapshot,
+            state="invalid",
+            observations=(),
+            json_line_count=0,
+            error_code="incomplete_transfer",
+        )
+    return snapshot
 
 
 def _require_gzip_framing(snapshot: SnapshotResult, raw: bytes) -> SnapshotResult:
@@ -150,22 +185,30 @@ def build_terminal_gap_evidence(
         if index:
             prior = selected[index - 1]
             delay = max(BACKOFF_SECONDS[index - 1], prior["retry_after_seconds"] or 0)
-            if not _transient(prior["http_status"]) or _utc(body["requested_at_utc"]) < _utc(
+            if not _retryable_receipt(prior) or _utc(body["requested_at_utc"]) < _utc(
                 prior["completed_at_utc"]
             ) + timedelta(seconds=delay):
                 raise NetworkSafetyError("terminal gap retries violate the Batch B policy")
     last = selected[-1]
     if last["snapshot_state"] == "complete" or last["http_status"] is None:
         raise NetworkSafetyError("a successful or unobserved retrieval is not a provider gap")
-    if _transient(last["http_status"]) and len(selected) != MAXIMUM_ATTEMPTS:
+    if _retryable_receipt(last) and len(selected) != MAXIMUM_ATTEMPTS:
         raise NetworkSafetyError("terminal retry exhaustion is not established")
     invalid = last["snapshot_state"] == "invalid"
     attempts = tuple(
         GapAttempt(
             attempt_number=body["attempt_number"],
             attempted_at=body["requested_at_utc"],
-            http_status=None if body["snapshot_state"] == "invalid" else body["http_status"],
-            error_kind="invalid_payload" if body["snapshot_state"] == "invalid" else None,
+            http_status=(
+                None
+                if body["snapshot_state"] == "invalid" or not body["transfer_complete"]
+                else body["http_status"]
+            ),
+            error_kind=(
+                "invalid_payload"
+                if body["snapshot_state"] == "invalid" or not body["transfer_complete"]
+                else None
+            ),
             retry_after_seconds=body["retry_after_seconds"],
             retry_disposition="retry" if index < len(selected) - 1 else "gap",
         )
@@ -182,7 +225,7 @@ def build_terminal_gap_evidence(
         protocol_config_sha256=protocol_sha256,
         retry_policy_version=RETRY_POLICY_VERSION,
         final_terminal_disposition=(
-            "retry_exhausted" if _transient(last["http_status"]) else "non_retryable"
+            "retry_exhausted" if _retryable_receipt(last) else "non_retryable"
         ),
         observed_snapshot_id=last["snapshot_id"] if invalid else None,
         observed_raw_snapshot_sha256=last["raw_sha256"] if invalid else None,
@@ -190,7 +233,7 @@ def build_terminal_gap_evidence(
     evidence = replace(evidence, version=GAP_EVIDENCE_VERSION)
     identity = evidence.identity_payload()
     evidence_id = canonical_sha256(
-        {"identity": identity, "identity_version": "batch-b-gsg-terminal-gap-identity-v1"}
+        {"identity": identity, "identity_version": "batch-b-gsg-terminal-gap-identity-v2"}
     )
     return replace(
         evidence,
@@ -269,6 +312,7 @@ def _load_verified_receipts(
             ):
                 raise NetworkSafetyError("snapshot receipt binding mismatch")
             parsed = _require_gzip_framing(adapter._parse_snapshot(receipt, raw), raw)
+            parsed = _apply_transfer_verdict(parsed, body["transfer_complete"])
             if parsed.state != body["snapshot_state"]:
                 raise NetworkSafetyError("signed snapshot state does not replay")
     if (
@@ -531,16 +575,22 @@ class GSGNetworkClient:
             self._check_transport()
             self._pace()
             self.budget.assert_storage_capacity(PUBLICATION_RESERVE_BYTES)
-            requested_at = self._now()
+            intent_at = self._now()
             self.budget.record_request(
-                requested_at, filename_timestamp=filename_timestamp, attempt_number=attempt
+                intent_at, filename_timestamp=filename_timestamp, attempt_number=attempt
             )
-            self._last_request_monotonic = self._tick()
             timeout = min(HTTP_TIMEOUT_SECONDS, self._remaining())
+            # Durable intent is not dispatch. Bracket the open call honestly in
+            # UTC, and pace from its *return*, which cannot precede initiation.
+            # A pause anywhere before/during open can only delay the next start.
+            requested_at = self._now()
+            open_started = self._tick()
             response = self.transport.open(url, timeout=timeout)
             try:
+                self._last_request_monotonic = self._tick()
+                dispatch_confirmed_at = self._now()
                 self._check_transport()
-                if self._tick() - self._last_request_monotonic > timeout:
+                if self._tick() - open_started > timeout:
                     raise NetworkSafetyError("HTTP open exceeded its timeout")
                 self._remaining()
                 if type(response.status) is not int or not 100 <= response.status <= 599:
@@ -550,8 +600,10 @@ class GSGNetworkClient:
                         "redirect or unexpected response locator is prohibited"
                     )
                 status = response.status
-                retry_after = self._retry_after(response.headers, status)
-                body_bytes = self._read_body(response)
+                headers = self._response_headers(response.headers)
+                retry_after = self._retry_after(headers, status)
+                transfer = self._read_body(response, self._content_length(headers))
+                body_bytes = transfer.raw
                 completed_at = self._now()
             finally:
                 response.close()
@@ -577,6 +629,7 @@ class GSGNetworkClient:
                     input_class="synthetic_fixture",
                 )
                 snapshot = _require_gzip_framing(snapshot, body_bytes)
+                snapshot = _apply_transfer_verdict(snapshot, transfer.complete)
                 raw_hash = snapshot.receipt.raw_snapshot_sha256
             else:
                 raw_hash = self.store.put_bytes(body_bytes)
@@ -597,7 +650,10 @@ class GSGNetworkClient:
                 "snapshot_state": snapshot.state if snapshot else "absent",
                 "raw_published_at_utc": raw_published_at,
                 "requested_at_utc": requested_at,
+                "dispatch_confirmed_at_utc": dispatch_confirmed_at,
                 "completed_at_utc": completed_at,
+                "content_length": transfer.content_length,
+                "transfer_complete": transfer.complete,
                 "retry_after_seconds": retry_after,
                 "previous_receipt_sha256": (
                     receipt_sha256(self._receipts[-1]) if self._receipts else None
@@ -624,7 +680,7 @@ class GSGNetworkClient:
             self._remaining()
             if snapshot is not None and snapshot.state == "complete":
                 return RetrievalResult(snapshot, tuple(deepcopy(result_receipts)), None)
-            if _transient(status) and attempt < MAXIMUM_ATTEMPTS:
+            if _retryable_receipt(body) and attempt < MAXIMUM_ATTEMPTS:
                 self._wait(max(BACKOFF_SECONDS[attempt - 1], retry_after or 0.0))
                 continue
             evidence = build_terminal_gap_evidence(
@@ -646,7 +702,7 @@ class GSGNetworkClient:
             )
             self._remaining()
             result = RetrievalResult(snapshot, tuple(deepcopy(result_receipts)), evidence)
-            if not _transient(status):
+            if not _retryable_receipt(body):
                 raise RetrievalFailure(result)
             self._require_attainable_coverage()
             return result
@@ -665,13 +721,7 @@ class GSGNetworkClient:
         for index in range(96):
             slot = [body for body in latest.values() if body["interval_index"] == index]
             complete = sum(body["snapshot_state"] == "complete" for body in slot)
-            terminal_gap = any(
-                body["snapshot_state"] == "invalid"
-                or body["http_status"] is not None
-                and body["http_status"] != 200
-                and (not _transient(body["http_status"]) or body["attempt_number"] == 4)
-                for body in slot
-            )
+            terminal_gap = any(_terminal_failure(body) for body in slot)
             if terminal_gap or index < self._worker_index and complete < 15:
                 uncovered += 1
         if uncovered >= 5:
@@ -689,9 +739,18 @@ class GSGNetworkClient:
             if elapsed < 0:
                 raise NetworkSafetyError("UTC request clock regression")
             delay = max(delay, MINIMUM_REQUEST_SPACING_SECONDS - elapsed)
+        if self._receipts:
+            # Match the independently verifiable upper bound on the preceding
+            # dispatch, including after restart or a UTC/monotonic clock skew.
+            elapsed = (
+                _utc(self._now()) - _utc(self._receipts[-1]["body"]["dispatch_confirmed_at_utc"])
+            ).total_seconds()
+            if elapsed < 0:
+                raise NetworkSafetyError("UTC dispatch clock regression")
+            delay = max(delay, MINIMUM_REQUEST_SPACING_SECONDS - elapsed)
         self._wait(delay)
 
-    def _read_body(self, response: MockResponse) -> bytes:
+    def _read_body(self, response: MockResponse, content_length: int | None) -> _TransferCapture:
         chunks = []
         total = 0
         while True:
@@ -709,16 +768,25 @@ class GSGNetworkClient:
             if len(chunk) > CHUNK_BYTES:
                 raise NetworkSafetyError("transport exceeded the bounded read size")
             if not chunk:
-                break
+                completed = getattr(response, "transfer_complete", None)
+                if type(completed) is not bool:
+                    raise NetworkSafetyError("transport must attest explicit transfer completion")
+                return _TransferCapture(
+                    b"".join(chunks),
+                    content_length,
+                    completed and (content_length is None or total == content_length),
+                )
             total += len(chunk)
             if total > MAX_COMPRESSED_BYTES:
                 raise NetworkSafetyError("response exceeds the frozen compressed parser cap")
             self.budget.assert_storage_capacity(2 * total + PUBLICATION_RESERVE_BYTES)
             chunks.append(chunk)
-        return b"".join(chunks)
+            if content_length is not None and total > content_length:
+                # Stop on overrun, retaining/counting every byte already returned.
+                return _TransferCapture(b"".join(chunks), content_length, False)
 
     @staticmethod
-    def _retry_after(headers: Mapping[str, str], status: int) -> float | None:
+    def _response_headers(headers: Mapping[str, str]) -> dict[str, str]:
         if not isinstance(headers, Mapping) or any(
             type(k) is not str or type(v) is not str for k, v in headers.items()
         ):
@@ -732,9 +800,26 @@ class GSGNetworkClient:
             raise NetworkSafetyError(
                 "unexpected content encoding would change gzip raw-byte identity"
             )
-        if "retry-after" not in lowered:
+        if "transfer-encoding" in lowered:
+            raise NetworkSafetyError(
+                "HTTP transfer framing must be handled explicitly by transport"
+            )
+        return lowered
+
+    @staticmethod
+    def _content_length(headers: Mapping[str, str]) -> int | None:
+        value = headers.get("content-length")
+        if value is None:
             return None
-        value = lowered["retry-after"]
+        if not re.fullmatch(r"0|[1-9][0-9]{0,8}", value) or int(value) > 500_000_000:
+            raise NetworkSafetyError("invalid or unbounded Content-Length")
+        return int(value)
+
+    @staticmethod
+    def _retry_after(headers: Mapping[str, str], status: int) -> float | None:
+        if "retry-after" not in headers:
+            return None
+        value = headers["retry-after"]
         if status not in {429, 503} or not re.fullmatch(r"[0-9]{1,3}", value) or int(value) > 900:
             raise NetworkSafetyError("unsupported or malformed Retry-After")
         return float(value)
@@ -771,13 +856,7 @@ class GSGNetworkClient:
                 body["filename_timestamp"] for body in slot if body["snapshot_state"] == "complete"
             }
             outcome = "verified" if len(complete) == 15 else "uncovered"
-            if outcome != "verified" and any(
-                body["snapshot_state"] == "invalid"
-                or body["http_status"] is not None
-                and body["http_status"] != 200
-                and (not _transient(body["http_status"]) or body["attempt_number"] == 4)
-                for body in slot
-            ):
+            if outcome != "verified" and any(_terminal_failure(body) for body in slot):
                 outcome = "provider_gap"
             outcomes.append({"interval_index": index, "outcome": outcome})
         inventory = self.budget.payload_inventory()

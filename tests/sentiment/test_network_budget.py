@@ -3,6 +3,7 @@
 import json
 import os
 import stat
+from contextlib import ExitStack
 from pathlib import Path
 
 import pytest
@@ -246,12 +247,16 @@ def test_storage_inventory_postpass_rejects_late_mutation(
     nested.mkdir()
     (nested / "payload").write_bytes(b"already inventoried")
     nested_inode = nested.stat().st_ino
-    original = budget_module._inventory
+    original = budget_module._capture_capacity_inventory
     changed = False
 
-    def racing_inventory(descriptor: int) -> tuple[int, int]:
+    def racing_inventory(
+        descriptor: int,
+        descriptors: ExitStack,
+        directories: list[tuple[int, os.stat_result, dict[str, os.stat_result]]],
+    ) -> tuple[int, int]:
         nonlocal changed
-        result = original(descriptor)
+        result = original(descriptor, descriptors, directories)
         if os.fstat(descriptor).st_ino == nested_inode and not changed:
             changed = True
             if mutation == "late_fifo":
@@ -262,10 +267,94 @@ def test_storage_inventory_postpass_rejects_late_mutation(
                 nested.symlink_to(moved, target_is_directory=True)
         return result
 
-    monkeypatch.setattr(budget_module, "_inventory", racing_inventory)
+    monkeypatch.setattr(budget_module, "_capture_capacity_inventory", racing_inventory)
     with pytest.raises(NetworkSafetyError, match="changed"):
         budget.assert_storage_capacity(0)
     assert changed
+
+
+@pytest.mark.parametrize("mutation", ["fifo", "sparse_file", "file_growth", "directory_symlink"])
+def test_storage_capacity_global_postpass_rejects_late_deep_subtree_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
+) -> None:
+    budget = make_budget(tmp_path)
+    staging = tmp_path / ".staging"
+    nested = staging / "a" / "b"
+    nested.mkdir(parents=True)
+    payload = nested / "payload"
+    payload.write_bytes(b"previously inventoried")
+    staging_inode = staging.stat().st_ino
+    original = budget_module._capture_capacity_inventory
+    changed = False
+
+    def racing_inventory(
+        descriptor: int,
+        descriptors: ExitStack,
+        directories: list[tuple[int, os.stat_result, dict[str, os.stat_result]]],
+    ) -> tuple[int, int]:
+        nonlocal changed
+        result = original(descriptor, descriptors, directories)
+        if os.fstat(descriptor).st_ino == staging_inode and not changed:
+            changed = True
+            # Change a grandchild only after its entire .staging ancestor has
+            # been scanned. Local recursive post-checks miss this exact race.
+            if mutation == "fifo":
+                os.mkfifo(nested / "late")
+            elif mutation == "sparse_file":
+                with (nested / "late").open("wb") as handle:
+                    handle.truncate(2_000_000_001)
+            elif mutation == "file_growth":
+                with payload.open("r+b") as handle:
+                    handle.truncate(2_000_000_001)
+            else:
+                moved = nested.with_name("moved")
+                nested.rename(moved)
+                nested.symlink_to(moved, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(budget_module, "_capture_capacity_inventory", racing_inventory)
+    with pytest.raises(NetworkSafetyError, match="changed"):
+        budget.assert_storage_capacity(131_072)
+    assert changed
+    assert list(budget.store.objects_root.iterdir()) == []
+
+
+def test_storage_capacity_checks_logical_length_of_deep_sparse_file(tmp_path: Path) -> None:
+    budget = make_budget(tmp_path)
+    nested = tmp_path / ".staging" / "a" / "b"
+    nested.mkdir(parents=True)
+    with (nested / "oversized").open("wb") as handle:
+        handle.truncate(2_000_000_001)
+    with pytest.raises(NetworkSafetyError, match="storage cap"):
+        budget.assert_storage_capacity(0)
+
+
+def test_storage_capacity_pins_all_directories_until_global_postpass_finishes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    budget = make_budget(tmp_path)
+    (tmp_path / ".staging" / "a" / "b").mkdir(parents=True)
+    original = budget_module._capture_capacity_inventory
+    pinned: list[int] = []
+
+    def capture(
+        descriptor: int,
+        descriptors: ExitStack,
+        directories: list[tuple[int, os.stat_result, dict[str, os.stat_result]]],
+    ) -> tuple[int, int]:
+        result = original(descriptor, descriptors, directories)
+        pinned.append(descriptor)
+        # Even descriptors belonging to previously completed sibling/subtree
+        # captures remain anchored, and are then closed by the outer ExitStack.
+        assert all(stat.S_ISDIR(os.fstat(item).st_mode) for item in pinned)
+        return result
+
+    monkeypatch.setattr(budget_module, "_capture_capacity_inventory", capture)
+    budget.assert_storage_capacity(0)
+    assert len(pinned) >= 4
+    for descriptor in pinned:
+        with pytest.raises(OSError):
+            os.fstat(descriptor)
 
 
 def test_budget_creation_checks_storage_before_any_new_journal_write(tmp_path: Path) -> None:

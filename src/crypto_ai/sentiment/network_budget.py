@@ -458,21 +458,55 @@ class PilotBudget:
 
 
 def _inventory(descriptor: int) -> tuple[int, int]:
+    """Approve totals only after a whole-tree, pinned bottom-up confirmation.
+
+    Keep every directory descriptor open until the global post-pass completes.
+    A recursive local post-check is insufficient: a writer can change an already
+    visited grandchild without changing any of its ancestors' entry lists.
+    Like other POSIX checks, this is a bounded stability check, not an atomic
+    filesystem snapshot against a writer acting after the final observation.
+    """
+    with ExitStack() as descriptors:
+        directories: list[tuple[int, os.stat_result, dict[str, os.stat_result]]] = []
+        totals = _capture_capacity_inventory(descriptor, descriptors, directories)
+        for directory, before, entries in reversed(directories):
+            if set(os.listdir(directory)) != set(entries):
+                raise NetworkSafetyError("retained directory entries changed during inventory")
+            for name, info in entries.items():
+                after = os.stat(name, dir_fd=directory, follow_symlinks=False)
+                if _capacity_fingerprint(info) != _capacity_fingerprint(after):
+                    raise NetworkSafetyError("retained storage entry changed during inventory")
+            if _capacity_fingerprint(before) != _capacity_fingerprint(os.fstat(directory)):
+                raise NetworkSafetyError("retained directory changed during inventory")
+        return totals
+
+
+def _capacity_fingerprint(value: os.stat_result) -> tuple[int, ...]:
+    # Allocation can change without logical length changing (e.g. a sparse file).
+    return (*_stat_tree_fingerprint(value), value.st_blocks)
+
+
+def _capture_capacity_inventory(
+    descriptor: int,
+    descriptors: ExitStack,
+    directories: list[tuple[int, os.stat_result, dict[str, os.stat_result]]],
+) -> tuple[int, int]:
     before = os.fstat(descriptor)
     entries = {
         name: os.stat(name, dir_fd=descriptor, follow_symlinks=False)
-        for name in os.listdir(descriptor)
+        for name in sorted(os.listdir(descriptor))
     }
+    directories.append((descriptor, before, entries))
     logical, allocated = before.st_size, before.st_blocks * 512
     for name, info in entries.items():
         if stat.S_ISDIR(info.st_mode):
             child = _open_directory_at(descriptor, name, description="retained directory")
-            try:
-                if _stat_tree_fingerprint(info) != _stat_tree_fingerprint(os.fstat(child)):
-                    raise NetworkSafetyError("retained directory changed before inventory")
-                child_logical, child_allocated = _inventory(child)
-            finally:
-                os.close(child)
+            descriptors.callback(os.close, child)
+            if _capacity_fingerprint(info) != _capacity_fingerprint(os.fstat(child)):
+                raise NetworkSafetyError("retained directory changed before inventory")
+            child_logical, child_allocated = _capture_capacity_inventory(
+                child, descriptors, directories
+            )
             logical += child_logical
             allocated += child_allocated
         elif stat.S_ISREG(info.st_mode):
@@ -480,12 +514,4 @@ def _inventory(descriptor: int) -> tuple[int, int]:
             allocated += info.st_blocks * 512
         else:
             raise NetworkSafetyError("retained storage contains a symlink or non-regular entry")
-    if set(os.listdir(descriptor)) != set(entries):
-        raise NetworkSafetyError("retained directory entries changed during inventory")
-    for name, info in entries.items():
-        after = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
-        if _stat_tree_fingerprint(info) != _stat_tree_fingerprint(after):
-            raise NetworkSafetyError("retained storage entry changed during inventory")
-    if _stat_tree_fingerprint(before) != _stat_tree_fingerprint(os.fstat(descriptor)):
-        raise NetworkSafetyError("retained directory changed during inventory")
     return logical, allocated

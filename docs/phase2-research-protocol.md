@@ -12,7 +12,8 @@
 **Latest offline corrective authorization:** 2026-09-02
 **Formal Batch A sign-off:** 2026-09-02
 **Batch B specification freeze:** v1 on 2026-09-07; v2 GSG reconciliation on 2026-09-08; [prospective ingestion specification](phase2-batch-b.md)
-**Batch B offline implementation authority:** 2026-09-10; `phase2-batch-b-offline-implementation-v1`; `VERIFIED_OFFLINE_PENDING_INDEPENDENT_REVIEW`
+**Batch B offline implementation authority:** 2026-09-10; `phase2-batch-b-offline-implementation-v1`
+**Batch B four-P1 corrective authority:** 2026-09-11; verified 2026-09-12; `CORRECTED_OFFLINE_PENDING_INDEPENDENT_REVIEW`
 **Companion machine-readable protocol:** `config/phase2_protocol.json`
 
 **Approval boundary:** The human authority has accepted the completed offline Batch A engineering work at canonical `main` commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`. This freezes Milestone 0 and accepts Milestones 1 and 2; it does not approve real GDELT title-use rights, Batch B network activity or Milestone 3, GDELT collection, provider/API access, scorer selection, model downloads, research gates, real feature generation, training/backtesting, forward collection, or holdout access/evaluation. The later September 10 instruction separately authorizes Batch B offline mock source/test implementation only.
@@ -713,7 +714,7 @@ Batch A approval is deliberately narrower than research approval. The article/sc
 
 | Action | Current state |
 |---|---|
-| Batch B specification | `SPECIFICATION_FROZEN_COMPATIBLE`; offline mock implementation `VERIFIED_OFFLINE_PENDING_INDEPENDENT_REVIEW`; real transport, rights, successor date and network authorization still required |
+| Batch B specification | `SPECIFICATION_FROZEN_COMPATIBLE`; offline correction `CORRECTED_OFFLINE_PENDING_INDEPENDENT_REVIEW`; real transport, rights, successor date and network authorization still required |
 | Batch B source/test execution | Synthetic mocks only; `real_network_calls_prohibited: true`; no operational keys or real HTTP client |
 | Batch B network pilot | `network_pilot_authorized: false` |
 | Milestone 3 sentiment scoring | `milestone_3_scoring_authorized: false` |
@@ -960,11 +961,11 @@ Preserve immutable `first_seen_at = raw_published_at`, strictly increasing termi
 minute watermarks, causal-availability boundaries, revisions, deduplication and replay.
 Signed receipt publication is a separate verification/eligibility gate, not a rewrite of
 Batch A first-seen timestamps. Archive compatibility does not mean a live collector is
-ready: offline implementation readiness is `VERIFIED_OFFLINE_PENDING_INDEPENDENT_REVIEW`.
+ready: offline implementation readiness is `CORRECTED_OFFLINE_PENDING_INDEPENDENT_REVIEW`.
 The adapter accepts only injected mock streams, rejects real-input receipts and has no
 built-in HTTP client, scheduler or live launch path. Unsigned Batch A receipts and synthetic
 flags do not grant real signing/rights authority. The new
-`batch-b-gsg-terminal-gap-evidence-v1` reuses `TerminalGapEvidence` fields with the distinct
+`batch-b-gsg-terminal-gap-evidence-v2` reuses `TerminalGapEvidence` fields with the distinct
 Batch B retry version and recomputes terminal facts from verified signed actual attempts.
 Unchanged Batch A v1 validators and state-v3 hydration reject that new version; this is
 not a migration and cannot advance an accepted Batch A watermark by relabeling evidence.
@@ -996,14 +997,32 @@ signer public key, approve actual title-use/retention rights, and explicitly per
 bounded prospective pilot before a newly approved successor anchor. Otherwise no pilot runs. Publisher access,
 accounts, credentials, paid services, scoring, model downloads, features or feature joining,
 market data, training, backtests, research gates, future holdout collection, and holdout
-access/evaluation remain unauthorized. The current offline implementation task authorizes
-one local feature commit on `main`, not a push. The required verification passed: 648 tests
+access/evaluation remain unauthorized. The initial offline implementation task authorized
+one local feature commit on `main`, not a push. Its historical verification passed: 648 tests
 (395 sentiment, 253 Phase 1), 182 new offline tests, Black/Ruff/compilation/dependency checks,
 strict JSON checks, and 49,972/49,972 RFC 8785 comparisons. All 85 pre-existing tracked blobs
 outside the four modified Phase 2 governance/exception files remain byte-identical to the
 base commit, including Phase 1 source/data/artifacts and accepted Batch A code/tests.
 See [the exact verification record](phase2-batch-b-verification.md). No independent acceptance
 or real pilot result is claimed here.
+
+The subsequent acceptance review of `a4ce157c0a8306ea6b760bdfab3812295f3e86be` was
+**NOT ACCEPTED** because of four P1 findings. The September 11 corrective authorization
+addresses them with global pinned capacity inventory, conservative post-open dispatch
+pacing, signed Content-Length/explicit transfer completion, and plan-derived half-open
+worker bounds for every receipt timestamp. Verification was rerun on September 12.
+Receipt schema `batch-b-signed-receipt-v2` adds `dispatch_confirmed_at_utc`, `content_length`
+and `transfer_complete`; the exact v1 Ed25519 domain prefixes and closeout schema stay
+unchanged. Legacy receipt-v1 evidence fails closed without migration. Raw bytes from known
+incomplete transfers remain retained as terminal failure evidence, never verified coverage;
+unobserved stream failures do not manufacture gaps. The signed request window brackets
+dispatch and is distinct from durable intent. Current command results and limitations
+appear in the verification record; fresh independent acceptance is still required.
+
+The local remote-tracking reflog records `a4ce157` updated by push at
+`2026-09-11T00:11:49+07:00`, without establishing actor or authorization. No network lookup
+or push is performed by this correction. Phase 1 files and accepted Batch A contracts
+remain unchanged; the original accepted Batch A sign-off is not reopened by this patch.
 
 ## Official source register
 

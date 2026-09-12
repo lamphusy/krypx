@@ -33,7 +33,7 @@ from crypto_ai.sentiment.providers.gdelt_gsg import (
     plan_retrieval,
 )
 
-RECEIPT_SCHEMA_VERSION = "batch-b-signed-receipt-v1"
+RECEIPT_SCHEMA_VERSION = "batch-b-signed-receipt-v2"
 CLOSEOUT_SCHEMA_VERSION = "batch-b-signed-closeout-v1"
 RECEIPT_DOMAIN = b"KrypX Batch B receipt v1\n"
 CLOSEOUT_DOMAIN = b"KrypX Batch B closeout v1\n"
@@ -55,12 +55,15 @@ RECEIPT_BODY_FIELDS = frozenset(
         "attempt_number",
         "http_status",
         "bytes_received",
+        "content_length",
+        "transfer_complete",
         "raw_sha256",
         "snapshot_id",
         "snapshot_state",
         "raw_published_at_utc",
         "retry_after_seconds",
         "requested_at_utc",
+        "dispatch_confirmed_at_utc",
         "completed_at_utc",
         "previous_receipt_sha256",
     }
@@ -159,6 +162,15 @@ def _receipt_body(body: object) -> dict[str, Any]:
     _integer(body["interval_index"], "interval_index", 0, 95)
     _integer(body["attempt_number"], "attempt_number", 1, 4)
     _integer(body["bytes_received"], "bytes_received", 0, 500_000_000)
+    if body["content_length"] is not None:
+        _integer(body["content_length"], "content_length", 0, 500_000_000)
+    _require(type(body["transfer_complete"]) is bool, "transfer_complete must be a boolean")
+    _require(
+        body["content_length"] is None
+        or not body["transfer_complete"]
+        or body["content_length"] == body["bytes_received"],
+        "complete transfer does not match its declared Content-Length",
+    )
     if body["http_status"] is not None:
         _integer(body["http_status"], "http_status", 100, 599)
     _hash(body["raw_sha256"], "raw_sha256", nullable=True)
@@ -191,11 +203,33 @@ def _receipt_body(body: object) -> dict[str, Any]:
     )
     _require(body["real_network_calls_prohibited"] is True, "real network execution is prohibited")
     requested = _timestamp(body["requested_at_utc"], "requested_at_utc")
+    dispatched = _timestamp(body["dispatch_confirmed_at_utc"], "dispatch_confirmed_at_utc")
     completed = _timestamp(body["completed_at_utc"], "completed_at_utc")
+    # A release lower bound alone permits retroactive collection to masquerade
+    # as prospective coverage. Derive the entire frozen reporting-worker
+    # window from the authenticated plan, never from caller-supplied bounds.
+    try:
+        worker_start = plan_start + timedelta(minutes=45 + body["interval_index"] * 15)
+        worker_end = worker_start + timedelta(minutes=15)
+    except OverflowError as exc:
+        raise ReceiptValidationError("receipt reporting slot exceeds the UTC range") from exc
+    for field, timestamp in (
+        ("requested_at_utc", requested),
+        ("dispatch_confirmed_at_utc", dispatched),
+        ("completed_at_utc", completed),
+    ):
+        _require(
+            worker_start <= timestamp < worker_end,
+            f"{field} is outside its scheduled reporting slot",
+        )
     _require(
         requested >= minute + timedelta(minutes=30), "request precedes the GSG release allowance"
     )
     _require(completed >= requested, "receipt completion precedes request")
+    _require(
+        requested <= dispatched <= completed,
+        "dispatch confirmation must lie between the request window start and completion",
+    )
     retry_after = body["retry_after_seconds"]
     if retry_after is not None:
         _require(
@@ -214,10 +248,18 @@ def _receipt_body(body: object) -> dict[str, Any]:
     if body["http_status"] is None:
         _require(body["bytes_received"] == 0, "absent response cannot contain received bytes")
         _require(
+            body["content_length"] is None and body["transfer_complete"] is False,
+            "absent response cannot contain transfer completion evidence",
+        )
+        _require(
             body["raw_published_at_utc"] is None, "absent response cannot have a publication time"
         )
     else:
         published = _timestamp(body["raw_published_at_utc"], "raw_published_at_utc")
+        _require(
+            worker_start <= published < worker_end,
+            "raw_published_at_utc is outside its scheduled reporting slot",
+        )
         _require(published >= completed, "raw publication precedes response completion")
         _require(
             body["bytes_received"] != 0 or body["raw_sha256"] == sha256_bytes(b""),
@@ -225,6 +267,10 @@ def _receipt_body(body: object) -> dict[str, Any]:
         )
     if body["http_status"] == 200:
         _require(body["snapshot_state"] != "absent", "HTTP 200 must record snapshot validation")
+        _require(
+            body["snapshot_state"] != "complete" or body["transfer_complete"] is True,
+            "complete snapshot requires a verified complete transfer",
+        )
         _require(
             body["snapshot_state"] != "complete"
             or 0 < body["bytes_received"] <= MAX_COMPRESSED_BYTES,
@@ -422,7 +468,7 @@ def verify_receipt_chain(
             )
             _require(
                 _timestamp(body["requested_at_utc"], "requested_at_utc")
-                >= _timestamp(previous["requested_at_utc"], "requested_at_utc")
+                >= _timestamp(previous["dispatch_confirmed_at_utc"], "dispatch_confirmed_at_utc")
                 + timedelta(seconds=5),
                 "receipt request starts violate the five-second rate limit",
             )
@@ -446,7 +492,8 @@ def verify_receipt_chain(
         if prior is not None:
             status = prior["http_status"]
             _require(
-                status == 429 or (isinstance(status, int) and 500 <= status <= 599),
+                prior["transfer_complete"]
+                and (status == 429 or (isinstance(status, int) and 500 <= status <= 599)),
                 "a nonretryable response cannot have another attempt",
             )
             backoff = max(
@@ -506,7 +553,8 @@ def verify_closeout(
         if slot["outcome"] == "provider_gap":
             _require(
                 any(
-                    item["snapshot_state"] == "invalid"
+                    (item["http_status"] is not None and item["transfer_complete"] is False)
+                    or item["snapshot_state"] == "invalid"
                     or (
                         item["http_status"] is not None
                         and item["http_status"] not in (200, 429)

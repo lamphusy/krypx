@@ -64,6 +64,8 @@ def _body(*, minute: int = 0, requested_seconds: int = 0, **changes: object) -> 
         "attempt_number": 1,
         "http_status": 200,
         "bytes_received": len(b"fixture gzip bytes"),
+        "content_length": None,
+        "transfer_complete": True,
         "raw_sha256": raw_hash,
         "snapshot_id": _derive_snapshot_id(
             collection_mode="prospective",
@@ -77,6 +79,7 @@ def _body(*, minute: int = 0, requested_seconds: int = 0, **changes: object) -> 
         "snapshot_state": "complete",
         "retry_after_seconds": None,
         "requested_at_utc": request_at,
+        "dispatch_confirmed_at_utc": request_at,
         "completed_at_utc": request_at,
         "raw_published_at_utc": request_at,
         "previous_receipt_sha256": None,
@@ -219,6 +222,7 @@ def test_null_http_requires_zero_bytes_and_absent_capture() -> None:
         snapshot_state="absent",
         snapshot_id=None,
         raw_published_at_utc=None,
+        transfer_complete=False,
     )
     assert verify_receipt(sign_receipt(body, KEY), PUBLIC) == body
     body["bytes_received"] = 1
@@ -504,3 +508,189 @@ def test_source_minutes_cannot_move_backwards_but_uncovered_minutes_are_allowed(
 def test_plan_datetime_overflow_raises_project_specific_error() -> None:
     with pytest.raises(ReceiptValidationError, match="24-hour receipt plan"):
         sign_receipt(_body(plan_start_at_utc="9999-12-31T00:00:00Z"), KEY)
+
+
+def _resign_unvalidated_receipt(receipt: dict, **changes: object) -> dict:
+    """A legitimate key cannot make semantically false schedule evidence valid."""
+    receipt = deepcopy(receipt)
+    receipt["body"].update(changes)
+    encoded = canonicalize(receipt["body"])
+    receipt["body_sha256"] = sha256_bytes(encoded)
+    receipt["signature"] = base64.b64encode(KEY.sign(RECEIPT_DOMAIN + encoded)).decode("ascii")
+    PUBLIC.verify(base64.b64decode(receipt["signature"]), RECEIPT_DOMAIN + encoded)
+    return receipt
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["requested_at_utc", "dispatch_confirmed_at_utc", "completed_at_utc", "raw_published_at_utc"],
+)
+@pytest.mark.parametrize(
+    "outside", ["2026-09-09T00:44:59.999999Z", "2026-09-09T01:00:00Z", "2099-01-01T00:00:00Z"]
+)
+def test_every_receipt_timestamp_is_confined_to_authoritative_worker_slot(
+    field: str, outside: str
+) -> None:
+    body = _body(**{field: outside})
+    with pytest.raises(ReceiptValidationError, match="scheduled reporting slot"):
+        sign_receipt(body, KEY)
+    forged = _resign_unvalidated_receipt(sign_receipt(_body(), KEY), **{field: outside})
+    with pytest.raises(ReceiptValidationError, match="scheduled reporting slot"):
+        verify_receipt(forged, PUBLIC)
+    with pytest.raises(ReceiptValidationError, match="scheduled reporting slot"):
+        verify_receipt_chain([forged], PUBLIC)
+
+
+@pytest.mark.parametrize("minute", [0, 14, 15, 30, 1_439])
+@pytest.mark.parametrize("offset_microseconds", [0, 899_999_999])
+def test_reporting_worker_bounds_are_lower_inclusive_and_upper_exclusive(
+    minute: int, offset_microseconds: int
+) -> None:
+    start = parse_utc_timestamp(START, field="start")
+    timestamp = format_utc_timestamp(
+        start + timedelta(minutes=45 + (minute // 15) * 15, microseconds=offset_microseconds)
+    )
+    body = _body(
+        minute=minute,
+        requested_at_utc=timestamp,
+        dispatch_confirmed_at_utc=timestamp,
+        completed_at_utc=timestamp,
+        raw_published_at_utc=timestamp,
+    )
+    assert verify_receipt(sign_receipt(body, KEY), PUBLIC) == body
+
+
+def test_cryptographically_valid_future_receipts_cannot_certify_closeout_coverage() -> None:
+    chain = _chain(15)
+    future_chain = []
+    future = parse_utc_timestamp("2099-01-01T00:00:00Z", field="future")
+    for index, receipt in enumerate(chain):
+        timestamp = format_utc_timestamp(future + timedelta(seconds=index * 5))
+        future_chain.append(
+            _resign_unvalidated_receipt(
+                receipt,
+                requested_at_utc=timestamp,
+                dispatch_confirmed_at_utc=timestamp,
+                completed_at_utc=timestamp,
+                raw_published_at_utc=timestamp,
+                previous_receipt_sha256=(
+                    sha256_bytes(canonicalize(future_chain[-1])) if future_chain else None
+                ),
+            )
+        )
+    body = _closeout(chain, outcome="verified")["body"]
+    body["final_receipt_sha256"] = sha256_bytes(canonicalize(future_chain[-1]))
+    closeout = sign_closeout(body, KEY)
+    PUBLIC.verify(base64.b64decode(closeout["signature"]), CLOSEOUT_DOMAIN + canonicalize(body))
+    with pytest.raises(ReceiptValidationError, match="scheduled reporting slot"):
+        _verify_closeout(closeout, future_chain)
+
+
+@pytest.mark.parametrize("declared", [-1, 500_000_001, True, "18", 18.0, float("nan")])
+def test_content_length_requires_a_bounded_exact_integer(declared: object) -> None:
+    with pytest.raises(ReceiptValidationError, match="content_length"):
+        sign_receipt(_body(content_length=declared), KEY)
+    if isinstance(declared, float) and declared != declared:
+        # NaN has no canonical JSON encoding to sign; reject even before hashing.
+        forged = sign_receipt(_body(), KEY)
+        forged["body"]["content_length"] = declared
+    else:
+        forged = _resign_unvalidated_receipt(sign_receipt(_body(), KEY), content_length=declared)
+    with pytest.raises(ReceiptValidationError, match="content_length"):
+        verify_receipt(forged, PUBLIC)
+
+
+@pytest.mark.parametrize("delta", [-1, 1])
+def test_declared_transfer_length_mismatch_cannot_be_signed_as_complete(delta: int) -> None:
+    body = _body(content_length=len(b"fixture gzip bytes") + delta)
+    with pytest.raises(ReceiptValidationError, match="Content-Length"):
+        sign_receipt(body, KEY)
+    forged = _resign_unvalidated_receipt(
+        sign_receipt(_body(), KEY), content_length=body["content_length"]
+    )
+    with pytest.raises(ReceiptValidationError, match="Content-Length"):
+        verify_receipt(forged, PUBLIC)
+
+
+@pytest.mark.parametrize("value", [None, 0, 1, "true"])
+def test_transfer_complete_requires_an_exact_boolean(value: object) -> None:
+    with pytest.raises(ReceiptValidationError, match="transfer_complete"):
+        sign_receipt(_body(transfer_complete=value), KEY)
+
+
+def test_transfer_completion_evidence_is_required_for_verified_coverage() -> None:
+    with pytest.raises(ReceiptValidationError, match="verified complete transfer"):
+        sign_receipt(_body(transfer_complete=False), KEY)
+    forged = _resign_unvalidated_receipt(sign_receipt(_body(), KEY), transfer_complete=False)
+    with pytest.raises(ReceiptValidationError, match="verified complete transfer"):
+        verify_receipt(forged, PUBLIC)
+    body = _body(
+        content_length=len(b"fixture gzip bytes") + 100,
+        transfer_complete=False,
+        snapshot_state="invalid",
+    )
+    receipt = sign_receipt(body, KEY)
+    assert verify_receipt(receipt, PUBLIC) == body
+    assert _verify_closeout(_closeout([receipt], outcome="provider_gap"), [receipt])
+
+
+def test_non200_incomplete_transfer_is_terminal_and_not_retryable() -> None:
+    receipt = sign_receipt(
+        _body(
+            http_status=429,
+            snapshot_id=None,
+            snapshot_state="absent",
+            content_length=100,
+            transfer_complete=False,
+        ),
+        KEY,
+    )
+    assert _verify_closeout(_closeout([receipt], outcome="provider_gap"), [receipt])
+    retry = sign_receipt(
+        _body(
+            requested_seconds=5,
+            attempt_number=2,
+            previous_receipt_sha256=receipt_sha256(receipt),
+        ),
+        KEY,
+    )
+    with pytest.raises(ReceiptValidationError, match="nonretryable"):
+        verify_receipt_chain([receipt, retry], PUBLIC)
+
+
+@pytest.mark.parametrize("dispatch", ["2026-09-09T00:45:00Z", "2026-09-09T00:45:02Z"])
+def test_dispatch_confirmation_must_be_inside_request_completion_window(dispatch: str) -> None:
+    body = _body(requested_seconds=1, dispatch_confirmed_at_utc=dispatch)
+    with pytest.raises(ReceiptValidationError, match="dispatch confirmation"):
+        sign_receipt(body, KEY)
+
+
+def test_chain_paces_from_dispatch_upper_bound_not_request_intent() -> None:
+    first = sign_receipt(
+        _body(
+            dispatch_confirmed_at_utc="2026-09-09T00:45:01Z",
+            completed_at_utc="2026-09-09T00:45:01Z",
+            raw_published_at_utc="2026-09-09T00:45:01Z",
+        ),
+        KEY,
+    )
+    early = sign_receipt(
+        _body(minute=1, requested_seconds=5, previous_receipt_sha256=receipt_sha256(first)), KEY
+    )
+    with pytest.raises(ReceiptValidationError, match="five-second rate limit"):
+        verify_receipt_chain([first, early], PUBLIC)
+    on_time = sign_receipt(
+        _body(minute=1, requested_seconds=6, previous_receipt_sha256=receipt_sha256(first)), KEY
+    )
+    assert len(verify_receipt_chain([first, on_time], PUBLIC)) == 2
+
+
+def test_legacy_v1_receipts_cannot_silently_lack_transfer_or_dispatch_evidence() -> None:
+    receipt = sign_receipt(_body(), KEY)
+    assert receipt["schema_version"] == "batch-b-signed-receipt-v2"
+    receipt["schema_version"] = "batch-b-signed-receipt-v1"
+    for field in ("content_length", "transfer_complete", "dispatch_confirmed_at_utc"):
+        del receipt["body"][field]
+    receipt = _resign_unvalidated_receipt(receipt)
+    with pytest.raises(ReceiptValidationError, match="unknown signed envelope schema"):
+        verify_receipt(receipt, PUBLIC)
