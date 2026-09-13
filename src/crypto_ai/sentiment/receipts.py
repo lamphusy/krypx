@@ -25,6 +25,11 @@ from crypto_ai.exceptions import CanonicalizationError
 from crypto_ai.sentiment.canonical import canonicalize, sha256_bytes
 from crypto_ai.sentiment.contracts import format_utc_timestamp, parse_utc_timestamp
 from crypto_ai.sentiment.exceptions import ReceiptValidationError
+from crypto_ai.sentiment.live_contracts import (
+    LIVE_CLOSEOUT_SCHEMA,
+    LIVE_RECEIPT_SCHEMA,
+    LiveAuthority,
+)
 from crypto_ai.sentiment.providers.gdelt_gsg import (
     MAX_COMPRESSED_BYTES,
     MAX_DECOMPRESSED_BYTES,
@@ -95,6 +100,10 @@ def _require(condition: bool, message: str) -> None:
         raise ReceiptValidationError(message)
 
 
+def _validate_live_authority(value: object) -> None:
+    _require(value is None or type(value) is LiveAuthority, "invalid explicit live authority")
+
+
 def _hash(value: object, field: str, *, nullable: bool = False) -> None:
     if nullable and value is None:
         return
@@ -154,10 +163,10 @@ def _plan_hash(start_at: str) -> str:
         raise ReceiptValidationError("invalid 24-hour receipt plan") from exc
 
 
-def _receipt_body(body: object) -> dict[str, Any]:
-    _require(
-        type(body) is dict and body.keys() == RECEIPT_BODY_FIELDS, "invalid receipt body fields"
-    )
+def _receipt_body(body: object, live_authority: LiveAuthority | None = None) -> dict[str, Any]:
+    _validate_live_authority(live_authority)
+    fields = RECEIPT_BODY_FIELDS | ({"live_evidence"} if live_authority else set())
+    _require(type(body) is dict and body.keys() == fields, "invalid receipt body fields")
     _context(body)
     _integer(body["interval_index"], "interval_index", 0, 95)
     _integer(body["attempt_number"], "attempt_number", 1, 4)
@@ -199,9 +208,13 @@ def _receipt_body(body: object) -> dict[str, Any]:
     )
     _require(body["retry_policy_version"] == RETRY_POLICY_VERSION, "unknown receipt retry policy")
     _require(
-        body["input_class"] == "synthetic_fixture", "only synthetic fixture receipts are permitted"
+        body["input_class"] == ("provider_response" if live_authority else "synthetic_fixture"),
+        "receipt input class does not match its explicit authority",
     )
-    _require(body["real_network_calls_prohibited"] is True, "real network execution is prohibited")
+    _require(
+        body["real_network_calls_prohibited"] is (live_authority is None),
+        "real network execution is prohibited without live authority",
+    )
     requested = _timestamp(body["requested_at_utc"], "requested_at_utc")
     dispatched = _timestamp(body["dispatch_confirmed_at_utc"], "dispatch_confirmed_at_utc")
     completed = _timestamp(body["completed_at_utc"], "completed_at_utc")
@@ -281,7 +294,7 @@ def _receipt_body(body: object) -> dict[str, Any]:
             == _derive_snapshot_id(
                 collection_mode="prospective",
                 filename_timestamp=body["filename_timestamp"],
-                input_class="synthetic_fixture",
+                input_class="provider_response" if live_authority else "synthetic_fixture",
                 raw_snapshot_sha256=body["raw_sha256"],
                 max_compressed_bytes=MAX_COMPRESSED_BYTES,
                 max_decompressed_bytes=MAX_DECOMPRESSED_BYTES,
@@ -294,14 +307,22 @@ def _receipt_body(body: object) -> dict[str, Any]:
             body["snapshot_state"] == "absent" and body["snapshot_id"] is None,
             "non-200 response cannot contain a parsed GSG snapshot",
         )
+    if live_authority:
+        live_authority.validate_evidence(body)
     _canonical(body)
     return body
 
 
-def _closeout_body(body: object) -> dict[str, Any]:
-    _require(
-        type(body) is dict and body.keys() == CLOSEOUT_BODY_FIELDS, "invalid closeout body fields"
-    )
+def _closeout_body(body: object, live_authority: LiveAuthority | None = None) -> dict[str, Any]:
+    _validate_live_authority(live_authority)
+    fields = CLOSEOUT_BODY_FIELDS | ({"live_authority_sha256"} if live_authority else set())
+    _require(type(body) is dict and body.keys() == fields, "invalid closeout body fields")
+    if live_authority:
+        live_authority.validate_context(body)
+        _require(
+            body["live_authority_sha256"] == live_authority.sha256,
+            "live closeout authority mismatch",
+        )
     _context(body)
     _hash(body["final_receipt_sha256"], "final_receipt_sha256", nullable=True)
     _hash(body["payload_inventory_sha256"], "payload_inventory_sha256")
@@ -341,14 +362,30 @@ def signer_key_id(public_key: Ed25519PublicKey) -> str:
 
 
 def _sign(
-    body: dict[str, Any], private_key: Ed25519PrivateKey, *, closeout: bool
+    body: dict[str, Any],
+    private_key: Ed25519PrivateKey,
+    *,
+    closeout: bool,
+    live_authority: LiveAuthority | None = None,
 ) -> dict[str, Any]:
+    _validate_live_authority(live_authority)
     _require(isinstance(private_key, Ed25519PrivateKey), "an Ed25519 private key is required")
-    body = _copy(_closeout_body(body) if closeout else _receipt_body(body))
+    if live_authority:
+        _require(
+            signer_key_id(private_key.public_key()) == live_authority.value["signer_key_id"],
+            "live signing key is not pinned",
+        )
+    body = _copy(
+        _closeout_body(body, live_authority) if closeout else _receipt_body(body, live_authority)
+    )
     encoded = _canonical(body)
     domain = CLOSEOUT_DOMAIN if closeout else RECEIPT_DOMAIN
     return {
-        "schema_version": CLOSEOUT_SCHEMA_VERSION if closeout else RECEIPT_SCHEMA_VERSION,
+        "schema_version": (
+            (LIVE_CLOSEOUT_SCHEMA if closeout else LIVE_RECEIPT_SCHEMA)
+            if live_authority
+            else (CLOSEOUT_SCHEMA_VERSION if closeout else RECEIPT_SCHEMA_VERSION)
+        ),
         "body": body,
         "body_sha256": sha256_bytes(encoded),
         "algorithm": "Ed25519",
@@ -357,25 +394,44 @@ def _sign(
     }
 
 
-def sign_receipt(body: dict[str, Any], private_key: Ed25519PrivateKey) -> dict[str, Any]:
+def sign_receipt(
+    body: dict[str, Any],
+    private_key: Ed25519PrivateKey,
+    *,
+    live_authority: LiveAuthority | None = None,
+) -> dict[str, Any]:
     """Sign a strictly validated fixture receipt without retaining key material."""
-    return _sign(body, private_key, closeout=False)
+    return _sign(body, private_key, closeout=False, live_authority=live_authority)
 
 
-def sign_closeout(body: dict[str, Any], private_key: Ed25519PrivateKey) -> dict[str, Any]:
+def sign_closeout(
+    body: dict[str, Any],
+    private_key: Ed25519PrivateKey,
+    *,
+    live_authority: LiveAuthority | None = None,
+) -> dict[str, Any]:
     """Sign a complete 96-slot inventory commitment; verification also needs pins."""
-    return _sign(body, private_key, closeout=True)
+    return _sign(body, private_key, closeout=True, live_authority=live_authority)
 
 
-def _envelope(envelope: object, *, closeout: bool) -> dict[str, Any]:
+def _envelope(
+    envelope: object, *, closeout: bool, live_authority: LiveAuthority | None = None
+) -> dict[str, Any]:
+    _validate_live_authority(live_authority)
     _require(
         type(envelope) is dict and envelope.keys() == _ENVELOPE_FIELDS,
         "invalid signed envelope fields",
     )
     expected = CLOSEOUT_SCHEMA_VERSION if closeout else RECEIPT_SCHEMA_VERSION
+    if live_authority:
+        expected = LIVE_CLOSEOUT_SCHEMA if closeout else LIVE_RECEIPT_SCHEMA
     _require(envelope["schema_version"] == expected, "unknown signed envelope schema")
     _require(envelope["algorithm"] == "Ed25519", "signature algorithm must be Ed25519")
-    body = _closeout_body(envelope["body"]) if closeout else _receipt_body(envelope["body"])
+    body = (
+        _closeout_body(envelope["body"], live_authority)
+        if closeout
+        else _receipt_body(envelope["body"], live_authority)
+    )
     _hash(envelope["body_sha256"], "body_sha256")
     _hash(envelope["signer_key_id"], "signer_key_id")
     _require(
@@ -394,8 +450,19 @@ def _envelope(envelope: object, *, closeout: bool) -> dict[str, Any]:
     return envelope
 
 
-def _verify(envelope: object, public_key: Ed25519PublicKey, *, closeout: bool) -> dict[str, Any]:
-    envelope = _envelope(envelope, closeout=closeout)
+def _verify(
+    envelope: object,
+    public_key: Ed25519PublicKey,
+    *,
+    closeout: bool,
+    live_authority: LiveAuthority | None = None,
+) -> dict[str, Any]:
+    envelope = _envelope(envelope, closeout=closeout, live_authority=live_authority)
+    if live_authority:
+        _require(
+            signer_key_id(public_key) == live_authority.value["signer_key_id"],
+            "live verification key is not pinned",
+        )
     _require(
         envelope["signer_key_id"] == signer_key_id(public_key),
         "receipt signer is not the pinned key",
@@ -411,25 +478,33 @@ def _verify(envelope: object, public_key: Ed25519PublicKey, *, closeout: bool) -
     return _copy(envelope["body"])
 
 
-def verify_receipt(envelope: object, public_key: Ed25519PublicKey) -> dict[str, Any]:
+def verify_receipt(
+    envelope: object, public_key: Ed25519PublicKey, *, live_authority: LiveAuthority | None = None
+) -> dict[str, Any]:
     """Verify a detached receipt against the caller's independently pinned key."""
-    return _verify(envelope, public_key, closeout=False)
+    return _verify(envelope, public_key, closeout=False, live_authority=live_authority)
 
 
-def receipt_sha256(envelope: object) -> str:
+def receipt_sha256(envelope: object, *, live_authority: LiveAuthority | None = None) -> str:
     """Hash the full canonical envelope; signature verification is a separate step."""
-    return sha256_bytes(_canonical(_envelope(envelope, closeout=False)))
+    return sha256_bytes(
+        _canonical(_envelope(envelope, closeout=False, live_authority=live_authority))
+    )
 
 
-def closeout_sha256(envelope: object) -> str:
+def closeout_sha256(envelope: object, *, live_authority: LiveAuthority | None = None) -> str:
     """Hash the entire validated closeout envelope for independent pinning."""
-    return sha256_bytes(_canonical(_envelope(envelope, closeout=True)))
+    return sha256_bytes(
+        _canonical(_envelope(envelope, closeout=True, live_authority=live_authority))
+    )
 
 
 def verify_receipt_chain(
     receipts: object,
     public_key: Ed25519PublicKey,
     expected_head: str | None = None,
+    *,
+    live_authority: LiveAuthority | None = None,
 ) -> tuple[dict[str, Any], ...]:
     """Reject reordered, omitted, duplicated, cross-context or noncausal receipts.
 
@@ -446,8 +521,13 @@ def verify_receipt_chain(
     bytes_received = 0
     last_snapshot_publication: datetime | None = None
     for envelope in receipts:
-        body = verify_receipt(envelope, public_key)
+        body = verify_receipt(envelope, public_key, live_authority=live_authority)
         bytes_received += body["bytes_received"]
+        if live_authority:
+            _require(
+                body["live_evidence"]["cumulative_download_bytes"] == bytes_received,
+                "live cumulative bytes detached from chain",
+            )
         _require(bytes_received <= 500_000_000, "receipt chain exceeds the cumulative download cap")
         _require(
             body["previous_receipt_sha256"] == previous_hash, "receipt predecessor hash mismatch"
@@ -507,7 +587,7 @@ def verify_receipt_chain(
             )
         previous_by_minute[body["filename_timestamp"]] = body
         verified.append(body)
-        previous_hash = receipt_sha256(envelope)
+        previous_hash = receipt_sha256(envelope, live_authority=live_authority)
     if expected_head is not None:
         _require(previous_hash == expected_head, "receipt chain does not reach its pinned head")
     return tuple(verified)
@@ -521,6 +601,7 @@ def verify_closeout(
     expected_closeout_sha256: str,
     expected_inventory_sha256: str,
     expected_plan_sha256: str,
+    live_authority: LiveAuthority | None = None,
 ) -> dict[str, Any]:
     """Verify externally pinned completion, inventory, chain and evidenced slots."""
     for field, value in (
@@ -529,13 +610,18 @@ def verify_closeout(
         ("expected_plan_sha256", expected_plan_sha256),
     ):
         _hash(value, field)
-    body = _verify(envelope, public_key, closeout=True)
-    _require(closeout_sha256(envelope) == expected_closeout_sha256, "closeout pin mismatch")
+    body = _verify(envelope, public_key, closeout=True, live_authority=live_authority)
+    _require(
+        closeout_sha256(envelope, live_authority=live_authority) == expected_closeout_sha256,
+        "closeout pin mismatch",
+    )
     _require(
         body["payload_inventory_sha256"] == expected_inventory_sha256, "payload inventory mismatch"
     )
     _require(body["plan_sha256"] == expected_plan_sha256, "closeout retrieval plan mismatch")
-    verified = verify_receipt_chain(receipts, public_key, body["final_receipt_sha256"])
+    verified = verify_receipt_chain(
+        receipts, public_key, body["final_receipt_sha256"], live_authority=live_authority
+    )
     _require(len(verified) == body["receipt_count"], "closeout receipt count mismatch")
     for receipt in verified:
         _require(

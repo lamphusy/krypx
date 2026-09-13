@@ -1,6 +1,6 @@
 # KrypX Phase 2 — Milestone 0 Research Protocol and News-Source Feasibility
 
-**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B `SPECIFICATION_FROZEN_COMPATIBLE`; its network pilot and Milestone 3 scoring **NOT AUTHORIZED**
+**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**; the September 13 live pilot **AUTHORIZED**, setup verified offline, not armed; Milestone 3 scoring **NOT AUTHORIZED**
 
 **Research decision:** `PROCEED_WITH_FORWARD_ONLY_COLLECTION`
 
@@ -13,20 +13,44 @@
 **Formal Batch A sign-off:** 2026-09-02
 **Batch B specification freeze:** v1 on 2026-09-07; v2 GSG reconciliation on 2026-09-08; [prospective ingestion specification](phase2-batch-b.md)
 **Batch B offline implementation authority:** 2026-09-10; `phase2-batch-b-offline-implementation-v1`
-**Batch B four-P1 corrective authority:** 2026-09-11; verified 2026-09-12; `CORRECTED_OFFLINE_PENDING_INDEPENDENT_REVIEW`
+**Batch B four-P1 corrective authority:** 2026-09-11; verified and independently accepted at `14769aff7d72a44c17e520c99f6f90588e83101a`; 723 passing tests
+**Batch B live authority and explicit rights record:** `2026-09-12T17:46:20Z`; `phase2-batch-b-live-prospective-v1`
+**Replacement window authority:** `2026-09-13T13:03:24Z`; anchor `2026-09-13T14:00:00Z`. The midnight September 13 anchor was missed without arming or collection; no backfill is authorized.
 **Companion machine-readable protocol:** `config/phase2_protocol.json`
 
-**Approval boundary:** The human authority has accepted the completed offline Batch A engineering work at canonical `main` commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`. This freezes Milestone 0 and accepts Milestones 1 and 2; it does not approve real GDELT title-use rights, Batch B network activity or Milestone 3, GDELT collection, provider/API access, scorer selection, model downloads, research gates, real feature generation, training/backtesting, forward collection, or holdout access/evaluation. The later September 10 instruction separately authorizes Batch B offline mock source/test implementation only.
+**Approval boundary:** The human authority accepted offline Batch A at canonical `main` commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`; its original limited sign-off remains unchanged. The later September 13 pilot instruction separately authorizes the exact bounded GSG HTTPS window, real transport/runner setup and Ed25519 key provisioning. Explicit actual-product rights approval covers internal title metadata and incidental exact raw fields, retained immutably through review with GDELT attribution and no redistribution. It does not authorize publisher scraping/body-text collection, other provider/API or market-data access, scoring, models, indicators/features, research gates, training/backtesting, future holdout collection, holdout access/evaluation, paid services or push.
 
 The Batch A governance sign-off commit is `e7c189bf180c9b3fd72892544fa72805998f765d`.
 The 2026-09-07 freeze and 2026-09-08 GSG reconciliation instructions authorized Batch B
 documentation/configuration only. Against commit `ec01f7d411fddc93f959eed06e6e399565538805`,
-the September 10 instruction now permits adapter, circuit-breaker and Ed25519 source/test
-implementation using synthetic mocks only. Current fields are
-`batch_b_status: SPECIFICATION_FROZEN_COMPATIBLE`, `network_pilot_authorized: false`,
-`milestone_3_scoring_authorized: false`, `real_network_calls_prohibited: true`, and
-`next_action: independent_offline_batch_b_acceptance_review`. Full offline verification passed;
-no independent acceptance, real HTTP client, pilot or scheduler is claimed.
+the September 10 instruction permitted adapter, circuit-breaker and Ed25519 source/test
+implementation using synthetic mocks only. That historical amendment remains mock-only;
+the separate `batch_b_live_pilot` authority now permits production-input implementation.
+Current fields are `batch_b_status: SPECIFICATION_FROZEN_COMPATIBLE`,
+`network_pilot_authorized: true`, `real_provider_rights_approved: true`,
+`milestone_3_scoring_authorized: false`, `real_network_calls_prohibited: false` solely for
+the approved pilot, and `next_action: execute_live_prospective_pilot`. Live setup is
+`VERIFIED_SETUP_NOT_ARMED`; it performs no real request and does not arm collection.
+
+The approved observation window is `[2026-09-13T14:00:00Z, 2026-09-14T14:00:00Z)`:
+96 reporting intervals, 1,440 one-minute files, first worker at `2026-09-13T14:45:00Z`,
+last worker at `2026-09-14T14:30:00Z`, and signed closeout deadline
+`2026-09-14T14:45:00Z`. Historical missed dates are not backfilled. After offline verification,
+the explicit pre-anchor arming command is `.venv/bin/python scripts/run_phase2_pilot.py arm`.
+It schedules 96 exclusive local launchd workers, each limited by a 900-second OS watchdog
+and its fixed lag-adjusted slot end. Setup itself does not run the arming command.
+
+The exclusive namespace is `data/phase2-pilot-20260913` (ignored by Git, mode `0700`), with
+private key `secrets/pilot_ed25519.key` (mode `0600`), raw CAS, receipts, control files and
+bounded status records all included in retained-storage accounting. The public key and
+its SHA-256 key ID are independently pinned in `batch_b_live_pilot`. The canonical approval
+record and exact protocol hashes are computed and checked without a self-referential
+protocol hash. Synthetic receipt/gap identities cannot be relabeled as live evidence.
+
+All caps remain strict: 500,000,000 cumulative received bytes, 2,000,000,000 retained
+logical/allocated bytes, at least five seconds between dispatches, 10-second HTTP timeout,
+at most four attempts (HTTP 429/5xx only), and $0.00 incremental billed cost. Setup acceptance
+does not imply a completed or accepted live pilot; verified coverage must later meet 92/96.
 
 ## Executive decision
 
@@ -37,13 +61,13 @@ This recommendation is deliberately title-only. It does not authorize fetching p
 | Decision item | Milestone 0 result |
 |---|---|
 | Exact verdict | `PROCEED_WITH_FORWARD_ONLY_COLLECTION` |
-| Engineering-specification approval | Milestone 0 approved as the frozen research specification; offline Milestones 1 and 2 accepted at `bb6d4d`; all research/external-access approvals remain false |
-| Recommended provider | GDELT GSG, title-only, with KrypX receipt time and exact raw-byte hashes; human approval still required |
+| Engineering-specification approval | Milestone 0 frozen; offline Milestones 1 and 2 accepted at `bb6d4d`; separate September 13 bounded pilot/rights authority does not approve research execution |
+| Recommended provider | GDELT GSG, title-only, with KrypX receipt time and exact raw-byte hashes; only the separately approved September 13 pilot scope is authorized |
 | Historical feasibility | `REJECTED`: no retrospective news scoring/backtest for the Phase 1 period |
 | Main blocker to outcomes | A newly collected development corpus does not yet exist; scorer, gates, budget, and later holdout are unapproved |
 | Provider fee | GDELT datasets: $0; query infrastructure may cost money |
 | Planning cost | GDELT provider fee: $0. Low / expected / high remote-price scoring proxy: about $0.79 / $3.17 / $15.84; direct-archive storage, network, local compute, engineering, legal review, and hardware remain **UNVERIFIED** |
-| Required human decisions | Independently review the now-authorized offline mock implementation; separately approve real transport/live authority metadata, rights, keys, a successor prospective anchor and bounded network pilot; scorer, research gates and future holdout remain unapproved |
+| Required human decisions | Later accept the live pilot against independently pinned closeout evidence; separately approve any successor window/disposal change; scorer, research gates and future holdout remain unapproved |
 
 The decision is not an empirical claim that news improves BTC trading. It authorizes nothing by itself and requires a long forward research sequence: collect development data, freeze/evaluate the four-cell ablation, then begin a separate future holdout.
 
@@ -697,12 +721,10 @@ For the rolling 30-day gate, align the augmented and control ledgers on the sort
 
 ### Unresolved decisions that remain human-owned
 
-1. Approve GDELT GSG title-only real use and retention rights; choosing the archive for
-   the engineering specification does not grant those rights or authorize collection.
-2. Independently review the authorized offline mock GSG adapter, signing, durable budgets
-   and separately versioned gap evidence. Actual HTTPS transport and live-authority evidence
-   require separate implementation authorization. The September 9 anchor was missed without
-   authorization/execution; approve a successor date before any separately authorized pilot.
+1. Independently accept the later live pilot result and pin its closeout/chain checkpoint.
+   The September 13 network/rights authority is not a coverage pass or research approval.
+2. Separately approve any later observation window, retention/disposal change, or expanded
+   scope. The approved successor is September 13 only; the missed September 9 plan is not backfilled.
 3. Approve the scorer. The recommendation is gated Llama 2 subject to Meta license/account approval and deterministic validation; FinBERT is the financial-news alternative, CryptoBERT the crypto benchmark, and VADER a lexicon sanity baseline.
 4. Approve or revise the proposed engineering, coverage, development, concentration, and final gates before any outcomes.
 5. Approve the $100 third-party compute ceiling or a lower ceiling.
@@ -710,18 +732,18 @@ For the rolling 30-day gate, align the augmented and control ledgers on the sort
 
 ### Required authorizations
 
-Batch A approval is deliberately narrower than research approval. The article/score schemas and storage/provider-fixture contracts have been implemented, verified offline, and accepted. The provider recommendation, scorer/model choice, numerical gates, real collection, and future-holdout policy remain proposals requiring their own later approvals.
+Batch A approval is deliberately narrower than research approval. The article/score schemas and storage/provider-fixture contracts are accepted. Separate human authority now covers only the bounded September 13 GSG live pilot and its actual internal-use/retention rights; scorer/model choice, numerical research gates and future-holdout policy still require their own approvals.
 
 | Action | Current state |
 |---|---|
-| Batch B specification | `SPECIFICATION_FROZEN_COMPATIBLE`; offline correction `CORRECTED_OFFLINE_PENDING_INDEPENDENT_REVIEW`; real transport, rights, successor date and network authorization still required |
-| Batch B source/test execution | Synthetic mocks only; `real_network_calls_prohibited: true`; no operational keys or real HTTP client |
-| Batch B network pilot | `network_pilot_authorized: false` |
+| Batch B specification | Base `SPECIFICATION_FROZEN_COMPATIBLE`; offline correction `ACCEPTED_OFFLINE_ONLY`; separate `phase2-batch-b-live-prospective-v1` authorized, setup verified offline, not armed |
+| Batch B source/test execution | Real HTTPS runner and isolated operational key authorized; verification is offline, accepted mock contracts remain unchanged |
+| Batch B network pilot | `network_pilot_authorized: true`; exact September 13 window only; explicit pre-anchor arming required |
 | Milestone 3 sentiment scoring | `milestone_3_scoring_authorized: false` |
-| Download/query GDELT or any provider data | Not authorized |
-| Call a provider API or fetch a publisher page | Not authorized |
+| Download/query GDELT or any provider data | Only 1,440 exact planned GSG archive URLs within the approved window and budgets; every other source is excluded |
+| Call a provider API or fetch a publisher page | No other API, DOC endpoint, directory listing, redirect or publisher access |
 | Fetch or alter market data | Not authorized |
-| Create an account, accept a model/provider license, or request credentials | Not authorized |
+| Create an account, accept a model/provider license, or request credentials | Not authorized; isolated local Ed25519 pilot key generation alone is authorized |
 | Start a paid service or incur third-party spend | Not authorized |
 | Download model weights, score articles, build features, train, or backtest | Not authorized |
 | Start future-holdout collection | Not authorized; requires approved frozen protocol/generation |
@@ -873,11 +895,18 @@ the earlier pushes. At human sign-off immediately before this governance finaliz
 completion commit, and the worktree was clean. The requested governance commit is a
 forward-only successor whose identity is reported after creation.
 
-### Batch B specification — GSG-compatible, pilot unauthorized
+### Batch B specification — historical v2 and offline implementation record
+
+This section preserves the pre-live specification and implementation history. Its September 9
+schedule, mock-only flags and then-pending approvals are historical, superseded operationally
+by the separate September 13 live authority above. They do not restrict the new authorized
+setup or permit synthetic evidence to masquerade as real responses. The offline corrective
+commit `14769aff` subsequently passed independent acceptance with 723 tests; the initial
+648-test review failure below remains part of the audit trail.
 
 Phase 2 Batch A remains **ACCEPTED** and **COMPLETED**. The Batch B requirements are frozen
 in [phase2-batch-b.md](phase2-batch-b.md) and `batch_b_specification` in the companion JSON.
-The current action is `independent_offline_batch_b_acceptance_review`. The September 10
+The action at that record was `independent_offline_batch_b_acceptance_review`. The September 10
 instruction authorizes source/test implementation using synthetic fixtures only under
 `phase2-batch-b-offline-implementation-v1`; implementation passed full offline verification.
 The v2 specification
@@ -960,8 +989,8 @@ The old v2 operational retry record remains historical with an explicit amendmen
 Preserve immutable `first_seen_at = raw_published_at`, strictly increasing terminal times,
 minute watermarks, causal-availability boundaries, revisions, deduplication and replay.
 Signed receipt publication is a separate verification/eligibility gate, not a rewrite of
-Batch A first-seen timestamps. Archive compatibility does not mean a live collector is
-ready: offline implementation readiness is `CORRECTED_OFFLINE_PENDING_INDEPENDENT_REVIEW`.
+Batch A first-seen timestamps. Archive compatibility did not mean a live collector was
+ready: offline implementation readiness at that record was `CORRECTED_OFFLINE_PENDING_INDEPENDENT_REVIEW`.
 The adapter accepts only injected mock streams, rejects real-input receipts and has no
 built-in HTTP client, scheduler or live launch path. Unsigned Batch A receipts and synthetic
 flags do not grant real signing/rights authority. The new
@@ -990,7 +1019,9 @@ archive-file coverage imply complete news coverage.
 
 `batch_b_status: SPECIFICATION_FROZEN_COMPATIBLE` records archive-compatible requirements,
 not live implementation completion or network execution approval.
-`network_pilot_authorized: false` and `milestone_3_scoring_authorized: false` remain in force.
+At that historical record, `network_pilot_authorized: false` and
+`milestone_3_scoring_authorized: false` were in force; the separate September 13 authority
+changes only the bounded network/rights permission, not scoring authorization.
 Before any request, later human authorization must resolve all launch prerequisites,
 reference the final specification/protocol hashes and verified live implementation, pin the
 signer public key, approve actual title-use/retention rights, and explicitly permit the
@@ -1017,12 +1048,18 @@ unchanged. Legacy receipt-v1 evidence fails closed without migration. Raw bytes 
 incomplete transfers remain retained as terminal failure evidence, never verified coverage;
 unobserved stream failures do not manufacture gaps. The signed request window brackets
 dispatch and is distinct from durable intent. Current command results and limitations
-appear in the verification record; fresh independent acceptance is still required.
+appear in the verification record; fresh independent acceptance subsequently passed for
+`14769aff`, without certifying live collection or extending the mock-only contracts.
 
 The local remote-tracking reflog records `a4ce157` updated by push at
 `2026-09-11T00:11:49+07:00`, without establishing actor or authorization. No network lookup
 or push is performed by this correction. Phase 1 files and accepted Batch A contracts
 remain unchanged; the original accepted Batch A sign-off is not reopened by this patch.
+
+The later local `origin/main` reflog records `14769aff` updated by push at
+`2026-09-12T23:45:28+07:00`, without establishing actor or authorization. Current live setup
+performs no push, fetch or live remote query. No live pilot completion or acceptance is
+claimed before collection and independently verified signed closeout evidence exist.
 
 ## Official source register
 

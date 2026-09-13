@@ -1,8 +1,8 @@
-"""Offline-tested GSG streaming client; no built-in live transport or launch path.
+"""GSG safety engine with separate mock and explicitly authorized live profiles.
 
-Only explicitly injected mock transports are accepted. The transport interface models
-HTTPS without importing or creating a socket, HTTP session, credential or scheduler.
-The four-attempt Batch B policy is deliberately separate from accepted Batch A state.
+The default contract remains strictly mock-only. The optional live profile requires
+a validated, pinned authority and the narrow reviewed HTTPS transport. Importing this
+module never requests a URL or starts a scheduler. Batch A state contracts are unchanged.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ from crypto_ai.exceptions import CryptoAIError
 from crypto_ai.sentiment.canonical import canonical_sha256, canonicalize
 from crypto_ai.sentiment.contracts import format_utc_timestamp, parse_utc_timestamp
 from crypto_ai.sentiment.exceptions import NetworkSafetyError
+from crypto_ai.sentiment.live_contracts import LIVE_GAP_SCHEMA, LiveAuthority
 from crypto_ai.sentiment.network_budget import PilotBudget
 from crypto_ai.sentiment.providers.gdelt_gsg import (
     MAX_COMPRESSED_BYTES,
@@ -70,7 +71,7 @@ class MockResponse(Protocol):
 
 
 class MockTransport(Protocol):
-    """No default real implementation exists; production transport is forbidden."""
+    """Fixture transport contract; live execution uses a separate explicit authority."""
 
     mock_only: bool
     incremental_cost_usd: float
@@ -156,6 +157,7 @@ def build_terminal_gap_evidence(
     receipts: Sequence[dict[str, Any]],
     public_key: Ed25519PublicKey,
     protocol_sha256: str,
+    live_authority: LiveAuthority | None = None,
 ) -> TerminalGapEvidence:
     """Recompute a versioned Batch B terminal fact from authenticated actual attempts.
 
@@ -164,7 +166,7 @@ def build_terminal_gap_evidence(
     """
     if type(plan) is not RetrievalPlan:
         raise NetworkSafetyError("gap evidence requires a retrieval plan")
-    bodies = verify_receipt_chain(receipts, public_key)
+    bodies = verify_receipt_chain(receipts, public_key, live_authority=live_authority)
     if plan != plan_retrieval(plan.start_at, plan.end_at_exclusive):
         raise NetworkSafetyError("gap retrieval plan identity mismatch")
     intervals = {interval.filename_timestamp: interval for interval in plan.intervals}
@@ -223,6 +225,8 @@ def build_terminal_gap_evidence(
         attempts=attempts,
         terminal_at=last["raw_published_at_utc"],
         protocol_config_sha256=protocol_sha256,
+        input_class="provider_response" if live_authority else "synthetic_fixture",
+        network_access_authorized=live_authority is not None,
         retry_policy_version=RETRY_POLICY_VERSION,
         final_terminal_disposition=(
             "retry_exhausted" if _retryable_receipt(last) else "non_retryable"
@@ -230,10 +234,21 @@ def build_terminal_gap_evidence(
         observed_snapshot_id=last["snapshot_id"] if invalid else None,
         observed_raw_snapshot_sha256=last["raw_sha256"] if invalid else None,
     )
-    evidence = replace(evidence, version=GAP_EVIDENCE_VERSION)
+    evidence = replace(
+        evidence,
+        version=LIVE_GAP_SCHEMA if live_authority else GAP_EVIDENCE_VERSION,
+        input_class="provider_response" if live_authority else "synthetic_fixture",
+    )
     identity = evidence.identity_payload()
     evidence_id = canonical_sha256(
-        {"identity": identity, "identity_version": "batch-b-gsg-terminal-gap-identity-v2"}
+        {
+            "identity": identity,
+            "identity_version": (
+                "batch-b-live-terminal-gap-identity-v1"
+                if live_authority
+                else "batch-b-gsg-terminal-gap-identity-v2"
+            ),
+        }
     )
     return replace(
         evidence,
@@ -255,7 +270,10 @@ def _gap_publication_name(pilot_id: str, evidence: TerminalGapEvidence) -> str:
 
 
 def _load_verified_receipts(
-    budget: PilotBudget, public_key: Ed25519PublicKey, context: Mapping[str, Any]
+    budget: PilotBudget,
+    public_key: Ed25519PublicKey,
+    context: Mapping[str, Any],
+    live_authority: LiveAuthority | None = None,
 ) -> list[dict[str, Any]]:
     """Verify closed-world receipt, CAS, parsed snapshot, gap and budget provenance."""
     if (
@@ -288,7 +306,7 @@ def _load_verified_receipts(
         if canonicalize(envelope) != raw:
             raise NetworkSafetyError("receipt publication must be exact canonical bytes")
         loaded.append(envelope)
-    bodies = verify_receipt_chain(loaded, public_key)
+    bodies = verify_receipt_chain(loaded, public_key, live_authority=live_authority)
     attempts: dict[str, int] = {}
     final_by_minute = {}
     for body, envelope in zip(bodies, loaded, strict=True):
@@ -332,20 +350,21 @@ def _load_verified_receipts(
                 receipts=loaded,
                 public_key=public_key,
                 protocol_sha256=budget.protocol_sha256,
+                live_authority=live_authority,
             )
             publication = store.read_publication(_gap_publication_name(budget.pilot_id, evidence))
             if publication.files != {
                 "terminal-gap.json": evidence.canonical_bytes()
             } or publication.manifest["metadata"] != {
                 "plan_sha256": plan.plan_id,
-                "receipt_head": receipt_sha256(envelope),
+                "receipt_head": receipt_sha256(envelope, live_authority=live_authority),
             }:
                 raise NetworkSafetyError("immutable terminal gap does not match signed attempts")
     return loaded
 
 
 class GSGNetworkClient:
-    """Session-scoped safety controls and signed provenance over mock-only streams."""
+    """Session-scoped safety controls; mock-only unless live authority is supplied."""
 
     def __init__(
         self,
@@ -366,9 +385,13 @@ class GSGNetworkClient:
         maximum_download_bytes: int = 500_000_000,
         maximum_storage_bytes: int = 2_000_000_000,
         real_network_calls_prohibited: bool = True,
+        live_authority: LiveAuthority | None = None,
     ) -> None:
-        if real_network_calls_prohibited is not True:
+        if live_authority is not None and type(live_authority) is not LiveAuthority:
+            raise NetworkSafetyError("live authority must be an explicitly validated contract")
+        if real_network_calls_prohibited is not (live_authority is None):
             raise NetworkSafetyError("real network calls are prohibited")
+        self.live_authority = live_authority
         if (
             type(plan) is not RetrievalPlan
             or len(plan.intervals) != 1440
@@ -407,6 +430,10 @@ class GSGNetworkClient:
             "plan_sha256": plan.plan_id,
             "plan_start_at_utc": plan.start_at,
         }
+        if live_authority:
+            live_authority.validate_context(self.context)
+            if live_authority.value["public_key_hex"] != public_key.public_bytes_raw().hex():
+                raise NetworkSafetyError("live signer does not match the approved public key")
         self.budget = PilotBudget(
             store,
             pilot_id,
@@ -428,7 +455,17 @@ class GSGNetworkClient:
         self._check_transport()
 
     def _check_transport(self) -> None:
-        if getattr(self.transport, "mock_only", None) is not True:
+        if self.live_authority:
+            from crypto_ai.sentiment.live_transport import RealGSGTransport
+
+            if (
+                not isinstance(self.transport, RealGSGTransport)
+                or self.transport.mock_only is not False
+            ):
+                raise NetworkSafetyError(
+                    "live authority requires the reviewed exact HTTPS transport"
+                )
+        elif getattr(self.transport, "mock_only", None) is not True:
             raise NetworkSafetyError(
                 "only an explicitly injected offline mock transport is allowed"
             )
@@ -528,7 +565,9 @@ class GSGNetworkClient:
     def _load_receipts(self) -> None:
         if (self.store.publications_root / f"{self._prefix}closeout").exists():
             raise NetworkSafetyError("pilot already has an immutable closeout")
-        self._receipts = _load_verified_receipts(self.budget, self.public_key, self.context)
+        self._receipts = _load_verified_receipts(
+            self.budget, self.public_key, self.context, self.live_authority
+        )
 
     def retrieve(self, filename_timestamp: str) -> RetrievalResult:
         if not self._retrieval_lock.acquire(blocking=False):
@@ -626,7 +665,7 @@ class GSGNetworkClient:
                     ingested_at=completed_at,
                     source_locator=url,
                     collection_mode="prospective",
-                    input_class="synthetic_fixture",
+                    input_class="provider_response" if self.live_authority else "synthetic_fixture",
                 )
                 snapshot = _require_gzip_framing(snapshot, body_bytes)
                 snapshot = _apply_transfer_verdict(snapshot, transfer.complete)
@@ -640,8 +679,8 @@ class GSGNetworkClient:
                 "filename_timestamp": filename_timestamp,
                 "source_locator": url,
                 "retry_policy_version": RETRY_POLICY_VERSION,
-                "input_class": "synthetic_fixture",
-                "real_network_calls_prohibited": True,
+                "input_class": "provider_response" if self.live_authority else "synthetic_fixture",
+                "real_network_calls_prohibited": self.live_authority is None,
                 "attempt_number": attempt,
                 "http_status": status,
                 "bytes_received": len(body_bytes),
@@ -656,11 +695,23 @@ class GSGNetworkClient:
                 "transfer_complete": transfer.complete,
                 "retry_after_seconds": retry_after,
                 "previous_receipt_sha256": (
-                    receipt_sha256(self._receipts[-1]) if self._receipts else None
+                    receipt_sha256(self._receipts[-1], live_authority=self.live_authority)
+                    if self._receipts
+                    else None
                 ),
             }
-            envelope = sign_receipt(body, self.private_key)
-            verify_receipt_chain([*self._receipts, envelope], self.public_key)
+            if self.live_authority:
+                body["live_evidence"] = self.live_authority.evidence(
+                    cumulative_bytes=self.budget.total_download_bytes,
+                    dispatch=self._last_request_monotonic,
+                    completed=self._tick(),
+                    elapsed=self._tick() - self._started,
+                    headers=headers,
+                )
+            envelope = sign_receipt(body, self.private_key, live_authority=self.live_authority)
+            verify_receipt_chain(
+                [*self._receipts, envelope], self.public_key, live_authority=self.live_authority
+            )
             self._remaining()
             encoded = canonicalize(envelope)
             self.budget.assert_storage_capacity(2 * len(encoded) + PUBLICATION_RESERVE_BYTES)
@@ -689,6 +740,7 @@ class GSGNetworkClient:
                 receipts=self._receipts,
                 public_key=self.public_key,
                 protocol_sha256=self.context["protocol_sha256"],
+                live_authority=self.live_authority,
             )
             encoded = evidence.canonical_bytes()
             self.budget.assert_storage_capacity(2 * len(encoded) + PUBLICATION_RESERVE_BYTES)
@@ -697,7 +749,7 @@ class GSGNetworkClient:
                 {"terminal-gap.json": encoded},
                 metadata={
                     "plan_sha256": self.plan.plan_id,
-                    "receipt_head": receipt_sha256(envelope),
+                    "receipt_head": receipt_sha256(envelope, live_authority=self.live_authority),
                 },
             )
             self._remaining()
@@ -848,7 +900,9 @@ class GSGNetworkClient:
     def _closeout(self) -> dict[str, Any]:
         self._remaining()
         self._load_receipts()
-        bodies = verify_receipt_chain(self._receipts, self.public_key)
+        bodies = verify_receipt_chain(
+            self._receipts, self.public_key, live_authority=self.live_authority
+        )
         outcomes = []
         for index in range(96):
             slot = [body for body in bodies if body["interval_index"] == index]
@@ -863,12 +917,20 @@ class GSGNetworkClient:
         inventory_hash = canonical_sha256(inventory)
         closeout_body = {
             **{key: value for key, value in self.context.items() if key != "plan_start_at_utc"},
-            "final_receipt_sha256": receipt_sha256(self._receipts[-1]) if self._receipts else None,
+            "final_receipt_sha256": (
+                receipt_sha256(self._receipts[-1], live_authority=self.live_authority)
+                if self._receipts
+                else None
+            ),
             "receipt_count": len(self._receipts),
             "slot_outcomes": outcomes,
             "payload_inventory_sha256": inventory_hash,
         }
-        envelope = sign_closeout(closeout_body, self.private_key)
+        if self.live_authority:
+            closeout_body["live_authority_sha256"] = self.live_authority.sha256
+        envelope = sign_closeout(
+            closeout_body, self.private_key, live_authority=self.live_authority
+        )
         closeout_hash = canonical_sha256(envelope)
         verify_closeout(
             envelope,
@@ -877,6 +939,7 @@ class GSGNetworkClient:
             expected_closeout_sha256=closeout_hash,
             expected_inventory_sha256=inventory_hash,
             expected_plan_sha256=self.plan.plan_id,
+            live_authority=self.live_authority,
         )
         encoded = canonicalize(envelope)
         inventory_bytes = canonicalize(inventory)
@@ -901,6 +964,7 @@ def verify_retained_closeout(
     receipts: Sequence[dict[str, Any]],
     expected_closeout_sha256: str,
     expected_plan_sha256: str,
+    live_authority: LiveAuthority | None = None,
 ) -> dict[str, Any]:
     """Re-read the complete retained inventory against an independent closeout pin.
 
@@ -936,6 +1000,7 @@ def verify_retained_closeout(
             expected_closeout_sha256=expected_closeout_sha256,
             expected_inventory_sha256=inventory_hash,
             expected_plan_sha256=expected_plan_sha256,
+            live_authority=live_authority,
         )
         context = {
             key: verified[key]
@@ -947,7 +1012,7 @@ def verify_retained_closeout(
                 "plan_sha256",
             )
         }
-        retained = _load_verified_receipts(budget, public_key, context)
+        retained = _load_verified_receipts(budget, public_key, context, live_authority)
         if canonicalize(retained) != canonicalize(receipts):
             raise NetworkSafetyError("closeout receipt chain is not the retained receipt chain")
         return verified
