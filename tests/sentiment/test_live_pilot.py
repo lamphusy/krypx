@@ -32,8 +32,17 @@ from crypto_ai.sentiment.storage import ContentAddressedStore
 from .test_gdelt_gsg_network import KEY, PUBLIC, RAW, Clock, Response, Transport
 
 
-def configuration():
+def historical_authorized_configuration():
+    """Test-only authority; current governance may revoke the operational pilot."""
     config = json.loads((Path(__file__).parents[2] / "config/phase2_protocol.json").read_bytes())
+    config["network_pilot_authorized"] = True
+    config["real_network_calls_prohibited"] = False
+    config["batch_b_live_pilot"]["network_pilot_authorized"] = True
+    return config
+
+
+def configuration():
+    config = historical_authorized_configuration()
     config["batch_b_live_pilot"]["public_key_hex"] = PUBLIC.public_bytes_raw().hex()
     config["batch_b_live_pilot"]["signer_key_id"] = sha256_bytes(PUBLIC.public_bytes_raw())
     # Synthetic tests retain their fixed midnight plan independently of a human
@@ -232,8 +241,11 @@ def test_malformed_live_byte_counts_fail_with_project_exception(tmp_path, bad):
 
 def test_real_replacement_schedule_is_exact_and_authority_bound():
     config = json.loads((Path(__file__).parents[2] / "config/phase2_protocol.json").read_bytes())
+    assert config["network_pilot_authorized"] is False
+    with pytest.raises(NetworkSafetyError, match="not authorized"):
+        LiveAuthority.from_config(config)
     pilot = config["batch_b_live_pilot"]
-    authority = LiveAuthority.from_config(config)
+    authority = LiveAuthority.from_config(historical_authorized_configuration())
     assert authority.value["approval_record"]["anchor_utc"] == "2026-09-13T14:00:00Z"
     assert pilot["end_exclusive_utc"] == "2026-09-14T14:00:00Z"
     assert pilot["closeout_deadline_utc"] == "2026-09-14T14:45:00Z"

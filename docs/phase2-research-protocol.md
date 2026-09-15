@@ -1,6 +1,6 @@
 # KrypX Phase 2 — Milestone 0 Research Protocol and News-Source Feasibility
 
-**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**; the September 13 live pilot **AUTHORIZED**, setup verified offline, not armed; Milestone 3 scoring **NOT AUTHORIZED**
+**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**; the live pilot **DEFERRED WITHOUT BACKFILL**; Milestone 3 foundation **ACCEPTED_OFFLINE_ONLY**. Real scoring and Milestone 4 feature aggregation remain **NOT AUTHORIZED**.
 
 **Research decision:** `PROCEED_WITH_FORWARD_ONLY_COLLECTION`
 
@@ -16,41 +16,142 @@
 **Batch B four-P1 corrective authority:** 2026-09-11; verified and independently accepted at `14769aff7d72a44c17e520c99f6f90588e83101a`; 723 passing tests
 **Batch B live authority and explicit rights record:** `2026-09-12T17:46:20Z`; `phase2-batch-b-live-prospective-v1`
 **Replacement window authority:** `2026-09-13T13:03:24Z`; anchor `2026-09-13T14:00:00Z`. The midnight September 13 anchor was missed without arming or collection; no backfill is authorized.
+**Current deferral and offline Milestone 3 authority:** recorded 2026-09-14; live prospective pilot deferred without backfill; synthetic fixtures and mock scorers only.
+**Final offline Milestone 3 acceptance:** 2026-09-15; human-authorized independent verification against `c12aa01705712e53f65206c064248ef9fdc964ce` found zero blocking findings after the binary64 hydration fix; local commit on `main` authorized, no push.
 **Companion machine-readable protocol:** `config/phase2_protocol.json`
 
-**Approval boundary:** The human authority accepted offline Batch A at canonical `main` commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`; its original limited sign-off remains unchanged. The later September 13 pilot instruction separately authorizes the exact bounded GSG HTTPS window, real transport/runner setup and Ed25519 key provisioning. Explicit actual-product rights approval covers internal title metadata and incidental exact raw fields, retained immutably through review with GDELT attribution and no redistribution. It does not authorize publisher scraping/body-text collection, other provider/API or market-data access, scoring, models, indicators/features, research gates, training/backtesting, future holdout collection, holdout access/evaluation, paid services or push.
+**Approval boundary:** The human authority accepted offline Batch A at canonical `main` commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`; its original limited sign-off remains unchanged. The historical September 13 pilot instruction separately authorized the exact bounded GSG HTTPS window, real transport/runner setup and Ed25519 key provisioning. Explicit actual-product rights approval covers internal title metadata and incidental exact raw fields, retained immutably through review with GDELT attribution and no redistribution. The latest human instruction defers that live pilot without backfill and disables current network authority. It authorizes only the offline/mock Milestone 3 foundation below, not real scoring, model/scorer selection, model downloads, external APIs, publisher scraping/body-text collection, market-data access, indicators/features, research gates, training/backtesting, future collection, holdout access/evaluation, paid services or push.
 
 The Batch A governance sign-off commit is `e7c189bf180c9b3fd72892544fa72805998f765d`.
 The 2026-09-07 freeze and 2026-09-08 GSG reconciliation instructions authorized Batch B
 documentation/configuration only. Against commit `ec01f7d411fddc93f959eed06e6e399565538805`,
 the September 10 instruction permitted adapter, circuit-breaker and Ed25519 source/test
 implementation using synthetic mocks only. That historical amendment remains mock-only;
-the separate `batch_b_live_pilot` authority now permits production-input implementation.
+the separate `batch_b_live_pilot` authority subsequently permitted production-input implementation.
 Current fields are `batch_b_status: SPECIFICATION_FROZEN_COMPATIBLE`,
-`network_pilot_authorized: true`, `real_provider_rights_approved: true`,
-`milestone_3_scoring_authorized: false`, `real_network_calls_prohibited: false` solely for
-the approved pilot, and `next_action: execute_live_prospective_pilot`. Live setup is
-`VERIFIED_SETUP_NOT_ARMED`; it performs no real request and does not arm collection.
+`network_pilot_authorized: false`, `real_provider_rights_approved: true`,
+`milestone_3_status: ACCEPTED_OFFLINE_ONLY`,
+`milestone_3_offline_foundation_authorized: true`,
+`milestone_3_scoring_authorized: false`, `milestone_4_feature_aggregation_authorized: false`,
+`real_network_calls_prohibited: true`, and
+`next_action: await_human_next_phase_instruction`. The live-pilot status is
+`DEFERRED_WITHOUT_BACKFILL`; it is neither completed nor accepted. Historical setup
+verification and its then-current `VERIFIED_SETUP_NOT_ARMED` status remain audit records,
+not a statement of current scheduler state or a new collection authorization.
 
-The approved observation window is `[2026-09-13T14:00:00Z, 2026-09-14T14:00:00Z)`:
+The historically approved observation window was `[2026-09-13T14:00:00Z, 2026-09-14T14:00:00Z)`:
 96 reporting intervals, 1,440 one-minute files, first worker at `2026-09-13T14:45:00Z`,
 last worker at `2026-09-14T14:30:00Z`, and signed closeout deadline
-`2026-09-14T14:45:00Z`. Historical missed dates are not backfilled. After offline verification,
-the explicit pre-anchor arming command is `.venv/bin/python scripts/run_phase2_pilot.py arm`.
-It schedules 96 exclusive local launchd workers, each limited by a 900-second OS watchdog
-and its fixed lag-adjusted slot end. Setup itself does not run the arming command.
+`2026-09-14T14:45:00Z`. No part of this deferred window may be backfilled. The historical
+arming command and execution guidance in [the Batch B specification](phase2-batch-b.md)
+are inactive under this newer human deferral. No runner is to be armed or dispatched.
+Any resumption requires separate explicit network authority and a genuinely future
+prospective observation window; no dates are shifted automatically.
 
 The exclusive namespace is `data/phase2-pilot-20260913` (ignored by Git, mode `0700`), with
 private key `secrets/pilot_ed25519.key` (mode `0600`), raw CAS, receipts, control files and
 bounded status records all included in retained-storage accounting. The public key and
-its SHA-256 key ID are independently pinned in `batch_b_live_pilot`. The canonical approval
-record and exact protocol hashes are computed and checked without a self-referential
-protocol hash. Synthetic receipt/gap identities cannot be relabeled as live evidence.
+its SHA-256 key ID are independently pinned in `batch_b_live_pilot`. The canonical historical
+approval record is retained unchanged; changing current governance does not rewrite old
+pinned protocol hashes, receipts, launch records, raw snapshots or signing keys. The old
+embedded `approval_record.network_pilot_authorized: true` is historical evidence, not
+operative permission. Synthetic receipt/gap identities cannot be relabeled as live evidence.
 
 All caps remain strict: 500,000,000 cumulative received bytes, 2,000,000,000 retained
 logical/allocated bytes, at least five seconds between dispatches, 10-second HTTP timeout,
 at most four attempts (HTTP 429/5xx only), and $0.00 incremental billed cost. Setup acceptance
-does not imply a completed or accepted live pilot; verified coverage must later meet 92/96.
+does not imply a completed or accepted live pilot; any separately reauthorized pilot would
+still require its own verification and independent acceptance. Deferral is not a coverage pass.
+
+### Current offline Milestone 3 implementation scope
+
+The human authority permits `src/crypto_ai/sentiment/scoring.py` to implement the Scorer
+Protocol, strict structured JSON output validation, and project-specific fail-closed error
+contracts. Immutable content-addressed score storage and a deterministic cache use
+`data/sentiment/scored/` by default. Only synthetic fixtures and mock scorers may exercise
+this foundation, with adversarial offline coverage in `tests/sentiment/test_scoring.py`.
+No pilot data or real article may be scored, and no model, external API, paid scoring,
+feature join, backtest or holdout may be accessed. `approved_scorer` remains `null`.
+
+The initial implementation authorization did not grant acceptance. The separately requested
+final verification on 2026-09-15 now accepts only this synthetic/mock foundation as
+`ACCEPTED_OFFLINE_ONLY`, with zero blocking findings. All 844 pre-existing tests, including
+the 253 Phase 1 tests, remain passing, and Phase 1 byte identity is preserved. Acceptance
+does not establish real scorer quality, certify any live pilot, authorize real Milestone 3
+scoring, or authorize Milestone 4 feature aggregation. Further work awaits explicit human
+instruction; the present authority covers the final local commit only, not a push.
+
+#### Implemented mock-only boundary and audit semantics
+
+`Scorer` is a protocol seam, not authorization to execute arbitrary adapters. The
+`OfflineScoringEngine` admits the exact built-in `MockScorer` type with a finite immutable
+script, and the exact `SyntheticInput` type. It has no `ArticleRecord` loader or real
+provider/model client. The mock tokenizer counts one token per UTF-8 byte: its 1,024-input
+and 64-output token limits are deliberately synthetic byte limits, not measurements of a
+real model tokenizer. The title limit remains 512 Unicode code points, with no truncation.
+
+The six-field canonical score identity binds content, asset, model label/version, prompt
+version and scoring configuration. Its configuration transitively binds the entire mock
+script, prompt, parser, output schema and mock policy. CAS objects and `score-<score_id>`
+cache publications use the accepted immutable, manifest-last, no-overwrite storage
+contract. Reads replay the script and semantic dependencies as well as verifying exact
+bytes and hashes. Conflicting output or audit metadata for one cache identity fails closed;
+verified cache hits retain the original envelope and `scored_at`, rather than generating a
+new timestamp. `data/sentiment/scored/` is the default path convention only; tests use
+isolated temporary roots and do not populate that repository data path.
+
+Each artifact retains synthetic input, configuration, exact rendered prompt, score record,
+exact generated bytes for every byte-producing attempt, and an envelope binding file
+hashes and UTC attempt chronology. Generated bytes are hashed before strict parsing.
+Output must contain exactly the two finite numeric fields in their frozen ranges; duplicate
+or extra keys, booleans, strings, non-finite numbers, malformed UTF-8/JSON and trailing prose
+fail validation. Only scripted transient local failures retry, up to three attempts total;
+invalid output and permanent failures are terminal, with no repair prompt or neutral
+fallback. Mock item estimates precede execution. The cache-miss item budget is per engine
+instance, not a persistent real-scoring cost quota. Mock artifact/runtime labels and the
+recorded Python version are not approved real model, tokenizer, runtime or dependency-lock
+hashes, and no real inference determinism or cost guarantee is claimed.
+
+#### Final offline acceptance verification (2026-09-15)
+
+The human-authorized final independent verification passed with zero blocking findings.
+Acceptance is limited to the offline synthetic/mock scoring foundation:
+
+| Command / check | Result |
+|---|---|
+| `.venv/bin/pytest --ignore=tests/sentiment/test_scoring.py` | 844 passed, 12 existing warnings |
+| `.venv/bin/pytest tests/sentiment/test_scoring.py` | 159 passed, including 10 binary64 hydration regression cases |
+| `.venv/bin/pytest --ignore=tests/sentiment` | 253 passed, 12 existing warnings |
+| `.venv/bin/pytest` | 1,003 passed, 12 existing warnings |
+| `git diff --check` | Passed |
+| `.venv/bin/black --check .` | 82 files unchanged |
+| `.venv/bin/ruff check --no-cache .` | All checks passed |
+| `.venv/bin/python -m compileall -q src tests` | Passed |
+| `.venv/bin/python -m pip check` | No broken requirements; local cache permission warning only |
+| Strict tracked JSON / JSONL / negative controls | 2/2 documents valid; 2/2 JSONL records valid; 6/6 invalid controls rejected |
+| RFC 8785 binary64 comparison with local Node.js | 49,972/49,972 matched |
+| Byte identity against `c12aa01705712e53f65206c064248ef9fdc964ce` | 50/50 non-sentiment source/test blobs; all 103 pre-existing tracked blobs outside the three edited governance/test-fixture files unchanged |
+
+New adversarial cases include duplicate/extra JSON keys, invalid UTF-8, non-finite and
+out-of-range scores, invalid storage paths, clock failures, backwards attempt chronology,
+recomputed semantic-hash forgeries, cache collisions and injected publication races,
+manifest-only early metadata rejection, raw CAS tampering, FIFO/symlink rejection and
+interrupted publication recovery. Tests deny network connections and use synthetic
+temporary stores only. Current governance rejects live authority before operational key,
+storage or transport access. The historical approval-record digest is unchanged.
+
+The final P2 fix normalizes verified in-memory payload numbers to Python `float` after
+semantic reconstruction and validation. Fresh outputs, store reloads and cache hits now
+retain binary64 types for integral, exponent and decimal representations. The shared
+contracts and serializer are unchanged; pre/post-fix synthetic CAS objects, publications,
+manifests, exact canonical bytes and hashes remain identical. Independent actual publication
+races also rejected conflicting timestamps without replacing the winning immutable record.
+
+The existing `tests/sentiment/test_live_pilot.py` fixtures now construct explicit historical
+test-only authorization to preserve their mocked transport checks independently of current
+governance. A separate assertion verifies that the deferred operative governance rejects
+live authority. This narrow Phase 2 fixture reconciliation does not change Phase 1 code,
+tests, semantics or artifacts, and it grants no network permission.
 
 ## Executive decision
 
@@ -61,13 +162,13 @@ This recommendation is deliberately title-only. It does not authorize fetching p
 | Decision item | Milestone 0 result |
 |---|---|
 | Exact verdict | `PROCEED_WITH_FORWARD_ONLY_COLLECTION` |
-| Engineering-specification approval | Milestone 0 frozen; offline Milestones 1 and 2 accepted at `bb6d4d`; separate September 13 bounded pilot/rights authority does not approve research execution |
-| Recommended provider | GDELT GSG, title-only, with KrypX receipt time and exact raw-byte hashes; only the separately approved September 13 pilot scope is authorized |
+| Engineering-specification approval | Milestone 0 frozen; offline Milestones 1 and 2 accepted at `bb6d4d`; Milestone 3 synthetic/mock foundation authorized; no research execution authorized |
+| Recommended provider | GDELT GSG, title-only, with KrypX receipt time and exact raw-byte hashes; live pilot deferred without backfill; no current network authority |
 | Historical feasibility | `REJECTED`: no retrospective news scoring/backtest for the Phase 1 period |
 | Main blocker to outcomes | A newly collected development corpus does not yet exist; scorer, gates, budget, and later holdout are unapproved |
 | Provider fee | GDELT datasets: $0; query infrastructure may cost money |
 | Planning cost | GDELT provider fee: $0. Low / expected / high remote-price scoring proxy: about $0.79 / $3.17 / $15.84; direct-archive storage, network, local compute, engineering, legal review, and hardware remain **UNVERIFIED** |
-| Required human decisions | Later accept the live pilot against independently pinned closeout evidence; separately approve any successor window/disposal change; scorer, research gates and future holdout remain unapproved |
+| Required human decisions | Separately authorize a future prospective pilot before any network activity, then independently accept its evidence; scorer, research gates, disposal changes and future holdout remain unapproved |
 
 The decision is not an empirical claim that news improves BTC trading. It authorizes nothing by itself and requires a long forward research sequence: collect development data, freeze/evaluate the four-cell ablation, then begin a separate future holdout.
 
@@ -424,7 +525,11 @@ When multiple checks fail, exactly one primary exclusion is selected by this pre
 
 ### Approval state and recommendation
 
-No scorer is approved in Milestone 0.
+No real scorer is approved; `approved_scorer` remains `null`. The 2026-09-14 amendment
+authorized the offline synthetic/mock scoring foundation only; final verification on
+2026-09-15 records `ACCEPTED_OFFLINE_ONLY`. The candidate recommendations, inference specifications,
+remote retry rules and budget proposals below remain frozen research specifications, not
+permission to select/download a model, call an API, run paid scoring or score real articles.
 
 The recommended research scorer is `meta-llama/Llama-2-7b-chat-hf` at immutable Hugging Face revision `c1b0db933684edbfe29a06fa47eb19cc48025e93`. Its model card says pretraining data ends in September 2022 and tuning data extends through July 2023, well before any future collection authorized after this protocol. Unlike a generic sentiment classifier, its frozen prompt can ask directly for expected BTC direction over four hours. It is gated: obtaining weights requires sharing contact information, accepting the Llama 2 license/use policy, and later hashing every model/tokenizer file. No account creation, license acceptance, credential request, or download occurred here.
 
@@ -711,7 +816,7 @@ For the rolling 30-day gate, align the augmented and control ledgers on the sort
 
 ### Known limitations
 
-- No provider archive or API was called, so BTC title volume, continuity, source diversity, missing-hour rate, revisions, and real extraction cost are unmeasured.
+- Milestone 0 research and the offline implementation did not call a provider archive or API. Deferral does not establish a later collection outcome, and no accepted live evidence establishes BTC title volume, continuity, source diversity, missing-hour rate, revisions or real extraction cost.
 - GSG is a similarity graph and may omit isolated stories; its revision/deletion history is not documented as complete.
 - The forward recommendation is title-only. Publisher bodies remain unlicensed and out of scope.
 - The recommended scorer is gated, its files are not hashed locally, and its BTC-title quality and exact hardware determinism are untested.
@@ -721,10 +826,11 @@ For the rolling 30-day gate, align the augmented and control ledgers on the sort
 
 ### Unresolved decisions that remain human-owned
 
-1. Independently accept the later live pilot result and pin its closeout/chain checkpoint.
-   The September 13 network/rights authority is not a coverage pass or research approval.
-2. Separately approve any later observation window, retention/disposal change, or expanded
-   scope. The approved successor is September 13 only; the missed September 9 plan is not backfilled.
+1. Separately authorize a genuinely future prospective pilot window and its network activity
+   before resuming collection; no deferred or missed window may be backfilled.
+2. Independently accept any later live pilot result and pin its closeout/chain checkpoint.
+   The historical September 13 network/rights authority is not a coverage pass or research
+   approval. Retention/disposal changes or expanded scope also require separate approval.
 3. Approve the scorer. The recommendation is gated Llama 2 subject to Meta license/account approval and deterministic validation; FinBERT is the financial-news alternative, CryptoBERT the crypto benchmark, and VADER a lexicon sanity baseline.
 4. Approve or revise the proposed engineering, coverage, development, concentration, and final gates before any outcomes.
 5. Approve the $100 third-party compute ceiling or a lower ceiling.
@@ -732,20 +838,27 @@ For the rolling 30-day gate, align the augmented and control ledgers on the sort
 
 ### Required authorizations
 
-Batch A approval is deliberately narrower than research approval. The article/score schemas and storage/provider-fixture contracts are accepted. Separate human authority now covers only the bounded September 13 GSG live pilot and its actual internal-use/retention rights; scorer/model choice, numerical research gates and future-holdout policy still require their own approvals.
+Batch A approval is deliberately narrower than research approval. The article/score schemas
+and storage/provider-fixture contracts are accepted. The latest human authority defers the
+live pilot without backfill and permits only synthetic/mock Milestone 3 foundation
+implementation. Historical internal-use/retention rights remain recorded, but do not
+override disabled network authority. Real scorer/model choice and scoring, numerical
+research gates and future-holdout policy still require their own approvals.
 
 | Action | Current state |
 |---|---|
-| Batch B specification | Base `SPECIFICATION_FROZEN_COMPATIBLE`; offline correction `ACCEPTED_OFFLINE_ONLY`; separate `phase2-batch-b-live-prospective-v1` authorized, setup verified offline, not armed |
-| Batch B source/test execution | Real HTTPS runner and isolated operational key authorized; verification is offline, accepted mock contracts remain unchanged |
-| Batch B network pilot | `network_pilot_authorized: true`; exact September 13 window only; explicit pre-anchor arming required |
-| Milestone 3 sentiment scoring | `milestone_3_scoring_authorized: false` |
-| Download/query GDELT or any provider data | Only 1,440 exact planned GSG archive URLs within the approved window and budgets; every other source is excluded |
-| Call a provider API or fetch a publisher page | No other API, DOC endpoint, directory listing, redirect or publisher access |
+| Batch B specification | Base `SPECIFICATION_FROZEN_COMPATIBLE`; offline correction `ACCEPTED_OFFLINE_ONLY`; live pilot `DEFERRED_WITHOUT_BACKFILL`, not completed or accepted |
+| Batch B source/test execution | Accepted offline implementation and historical runner/key setup preserved; no current live execution |
+| Batch B network pilot | `network_pilot_authorized: false`; separate future prospective authorization required; no backfill |
+| Milestone 3 offline foundation | `milestone_3_status: ACCEPTED_OFFLINE_ONLY`; Scorer Protocol, strict JSON validation/errors, immutable CAS/cache and synthetic/mock tests accepted; local commit authorized |
+| Milestone 3 real sentiment scoring | `milestone_3_scoring_authorized: false`; `approved_scorer: null` |
+| Milestone 4 feature aggregation | `milestone_4_feature_aggregation_authorized: false`; separate instruction required |
+| Download/query GDELT or any provider data | Not authorized while pilot is deferred |
+| Call a provider API or fetch a publisher page | Not authorized; all implementation and verification remain offline |
 | Fetch or alter market data | Not authorized |
-| Create an account, accept a model/provider license, or request credentials | Not authorized; isolated local Ed25519 pilot key generation alone is authorized |
+| Create an account, accept a model/provider license, or request credentials | Not authorized; preserve the previously provisioned isolated Ed25519 pilot key |
 | Start a paid service or incur third-party spend | Not authorized |
-| Download model weights, score articles, build features, train, or backtest | Not authorized |
+| Download model weights, score real articles, build/join features, train, or backtest | Not authorized; synthetic mock scoring tests alone are in scope |
 | Start future-holdout collection | Not authorized; requires approved frozen protocol/generation |
 | Claim or evaluate the future holdout | Separate explicit authorization required after readiness |
 
