@@ -1,6 +1,6 @@
 # KrypX Phase 2 — Milestone 0 Research Protocol and News-Source Feasibility
 
-**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**; the live pilot **DEFERRED WITHOUT BACKFILL**; Milestone 3 foundation **ACCEPTED_OFFLINE_ONLY**. Real scoring and Milestone 4 feature aggregation remain **NOT AUTHORIZED**.
+**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**; the live pilot **DEFERRED WITHOUT BACKFILL**; Milestone 3 foundation **ACCEPTED_OFFLINE_ONLY**; Milestone 4 offline feature-aggregation specification **SPECIFICATION_FROZEN**. Real scoring and Milestone 4 implementation/feature aggregation remain **NOT AUTHORIZED**.
 
 **Research decision:** `PROCEED_WITH_FORWARD_ONLY_COLLECTION`
 
@@ -18,9 +18,11 @@
 **Replacement window authority:** `2026-09-13T13:03:24Z`; anchor `2026-09-13T14:00:00Z`. The midnight September 13 anchor was missed without arming or collection; no backfill is authorized.
 **Current deferral and offline Milestone 3 authority:** recorded 2026-09-14; live prospective pilot deferred without backfill; synthetic fixtures and mock scorers only.
 **Final offline Milestone 3 acceptance:** 2026-09-15; human-authorized independent verification against `c12aa01705712e53f65206c064248ef9fdc964ce` found zero blocking findings after the binary64 hydration fix; local commit on `main` authorized, no push.
+**Milestone 3 completion commit:** `d129094c9483f69431eeb6e3698e52ee273d5d0e`; 1,003 passing tests.
+**Milestone 4 specification freeze:** 2026-09-15; [offline point-in-time aggregation specification](phase2-milestone-4.md); documentation/configuration only, no implementation authority.
 **Companion machine-readable protocol:** `config/phase2_protocol.json`
 
-**Approval boundary:** The human authority accepted offline Batch A at canonical `main` commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`; its original limited sign-off remains unchanged. The historical September 13 pilot instruction separately authorized the exact bounded GSG HTTPS window, real transport/runner setup and Ed25519 key provisioning. Explicit actual-product rights approval covers internal title metadata and incidental exact raw fields, retained immutably through review with GDELT attribution and no redistribution. The latest human instruction defers that live pilot without backfill and disables current network authority. It authorizes only the offline/mock Milestone 3 foundation below, not real scoring, model/scorer selection, model downloads, external APIs, publisher scraping/body-text collection, market-data access, indicators/features, research gates, training/backtesting, future collection, holdout access/evaluation, paid services or push.
+**Approval boundary:** The human authority accepted offline Batch A at canonical `main` commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`; its original limited sign-off remains unchanged. The historical September 13 pilot instruction separately authorized the exact bounded GSG HTTPS window, real transport/runner setup and Ed25519 key provisioning. Explicit actual-product rights approval covers internal title metadata and incidental exact raw fields, retained immutably through review with GDELT attribution and no redistribution. The later deferral disables network authority without backfill; the offline/mock Milestone 3 foundation is now accepted. The latest human instruction authorizes only the Milestone 4 specification freeze in three documentation/configuration files and one local commit. It does not authorize Milestone 4 implementation, real scoring, model/scorer selection, model downloads, external APIs, publisher scraping/body-text collection, market-data access or joins, indicators/features, research gates, training/backtesting, future collection, holdout access/evaluation, paid services or push.
 
 The Batch A governance sign-off commit is `e7c189bf180c9b3fd72892544fa72805998f765d`.
 The 2026-09-07 freeze and 2026-09-08 GSG reconciliation instructions authorized Batch B
@@ -33,8 +35,10 @@ Current fields are `batch_b_status: SPECIFICATION_FROZEN_COMPATIBLE`,
 `milestone_3_status: ACCEPTED_OFFLINE_ONLY`,
 `milestone_3_offline_foundation_authorized: true`,
 `milestone_3_scoring_authorized: false`, `milestone_4_feature_aggregation_authorized: false`,
+`milestone_4_status: SPECIFICATION_FROZEN`, `milestone_4_implementation_authorized: false`,
 `real_network_calls_prohibited: true`, and
-`next_action: await_human_next_phase_instruction`. The live-pilot status is
+`next_action: implement_milestone_4_aggregation_offline`. This next-action label is a proposed
+successor task and requires separate human review/authorization before execution. The live-pilot status is
 `DEFERRED_WITHOUT_BACKFILL`; it is neither completed nor accepted. Historical setup
 verification and its then-current `VERIFIED_SETUP_NOT_ARMED` status remain audit records,
 not a statement of current scheduler state or a new collection authorization.
@@ -78,8 +82,9 @@ final verification on 2026-09-15 now accepts only this synthetic/mock foundation
 `ACCEPTED_OFFLINE_ONLY`, with zero blocking findings. All 844 pre-existing tests, including
 the 253 Phase 1 tests, remain passing, and Phase 1 byte identity is preserved. Acceptance
 does not establish real scorer quality, certify any live pilot, authorize real Milestone 3
-scoring, or authorize Milestone 4 feature aggregation. Further work awaits explicit human
-instruction; the present authority covers the final local commit only, not a push.
+scoring, or authorize Milestone 4 feature aggregation. Its final local commit is
+`d129094c9483f69431eeb6e3698e52ee273d5d0e`. The newer Milestone 4 authority below covers
+documentation/configuration only, not source/test implementation or a push.
 
 #### Implemented mock-only boundary and audit semantics
 
@@ -153,6 +158,34 @@ governance. A separate assertion verifies that the deferred operative governance
 live authority. This narrow Phase 2 fixture reconciliation does not change Phase 1 code,
 tests, semantics or artifacts, and it grants no network permission.
 
+### Current Milestone 4 specification-only scope
+
+The human authority freezes `phase2-milestone4-offline-aggregation-v1` in
+[the Milestone 4 specification](phase2-milestone-4.md), this protocol and
+`config/phase2_protocol.json`. Only those three files may change in this step. The exact
+13 feature formulas, types, bounds, window boundaries, relevance floor, share cutoffs and
+half-lives below are frozen for a future synthetic-only implementation; they are not
+permission to compute features now or an approval of research outcomes.
+
+The specification preserves permanent group arrival/source, latest eligible anchor-version
+selection without fallback to an older successful score, and audit-only `scored_at`.
+Missing news, failed/low-relevance scores, unresolved provider inputs and verified terminal
+gaps are distinct. It reconciles the formerly stale JSON due-to-recovery gap bounds with
+accepted `TerminalGapEvidence` expected-minute bounds; no provider code or schema changes.
+The future optimized implementation must match an explicit slow reference at zero ULP,
+using the same ordered binary64 operations and pinned runtime. Future-article perturbations
+must leave all earlier feature bytes unchanged with earlier scores and coverage held fixed.
+
+`milestone_4_status` is `SPECIFICATION_FROZEN`, while both
+`milestone_4_implementation_authorized` and `milestone_4_feature_aggregation_authorized`
+remain `false`. No Milestone 4 code, tests or feature artifacts are created by this freeze.
+Existing 1,003-test regression verification and Phase 1 byte-identity checks are required;
+the newly specified adversarial implementation tests are not claimed complete. The next
+task `implement_milestone_4_aggregation_offline` awaits separate human approval. Live pilot
+deferral, no backfill, disabled network authority and all real-scoring/market/holdout
+prohibitions remain in force. Historical acceptance records and signed pilot authority
+remain unchanged; the current authorization does not retroactively expand them.
+
 ## Executive decision
 
 No candidate clears the retrospective historical-and-immutable gate. GDELT GSG is the closest: its archived records couple URL, title, language, and a GDELT first-seen claim, but official sources do not promise append-only history, publish provider checksums/version IDs, or describe a correction/rewrite policy. KrypX must therefore never use historical GSG rows to rescore the consumed Phase 1 period. Prospectively, however, GDELT's open title metadata can be snapshotted on receipt, content-addressed, and assigned KrypX's own durable `first_seen_at`; that forward path is feasible without publisher-body retrieval.
@@ -162,7 +195,7 @@ This recommendation is deliberately title-only. It does not authorize fetching p
 | Decision item | Milestone 0 result |
 |---|---|
 | Exact verdict | `PROCEED_WITH_FORWARD_ONLY_COLLECTION` |
-| Engineering-specification approval | Milestone 0 frozen; offline Milestones 1 and 2 accepted at `bb6d4d`; Milestone 3 synthetic/mock foundation authorized; no research execution authorized |
+| Engineering-specification approval | Milestone 0 frozen; offline Milestones 1 and 2 accepted at `bb6d4d`; Milestone 3 synthetic/mock foundation accepted at `d129094`; Milestone 4 specification frozen, implementation unauthorized; no research execution authorized |
 | Recommended provider | GDELT GSG, title-only, with KrypX receipt time and exact raw-byte hashes; live pilot deferred without backfill; no current network authority |
 | Historical feasibility | `REJECTED`: no retrospective news scoring/backtest for the Phase 1 period |
 | Main blocker to outcomes | A newly collected development corpus does not yet exist; scorer, gates, budget, and later holdout are unapproved |
@@ -606,11 +639,21 @@ For Llama 2 use the greedy settings above. For a remote scorer, use strict struc
 
 ## Point-in-time hourly sentiment features
 
+The 2026-09-15 [Milestone 4 specification freeze](phase2-milestone-4.md) makes the following
+13-feature contract the offline engineering specification. Its numerical and adversarial
+requirements supplement this section without authorizing implementation or research use.
+
 ### Information set
 
 For every technical decision row, let `t` be its `decision_at` candle close. A version can enter only when `point_in_time_eligible = true`, `first_seen_at <= t`, and `asset = "BTC"`. Each duplicate group has a fixed `group_first_seen_at`, equal to its anchor article's initial eligible `first_seen_at`. Consider only groups with `group_first_seen_at <= t`, then select the anchor's latest version available at `t`; later revisions never flow backward. Window membership and age always use `group_first_seen_at`. A revision can change the score from its own availability onward, but it never creates a new count, re-enters a window, or resets age.
 
 Define `(t-W, t]` as an open-left, closed-right UTC interval. Group counts do not require a successful score. Sentiment aggregates require `score_status = succeeded` and `relevance_score >= 0.20`.
+
+Select the latest eligible anchor **version first**, then use only its matching score if
+successful and relevant. A newer failed, pending, unscored or low-relevance version must
+not fall back to an older success or another group member. `scored_at` remains audit-only,
+not an availability filter. The representative source is permanent `GroupAnchor.source`;
+neither a later duplicate nor a revision changes the source-count representative.
 
 For window `W`, group `g`, selected-version score `s_g`, relevance `r_g`, and age in hours `a_g = (t - group_first_seen_at_g) / 1 hour`:
 
@@ -641,7 +684,19 @@ Scores exactly `-0.20` or `0.20` are neutral for share features.
 | `hours_since_latest_article` | `min(24, age of latest eligible group at t)`; float64 `[0, 24]`; 24 if none |
 | `news_missing_24h` | `1` iff `news_count_24h = 0`, else `0`; int8 `{0,1}` |
 
-These non-inherited parameters remain human-approval proposals. The `0.20` relevance floor removes weakly related titles but can lose subtle BTC effects; strict sentiment cutoffs at `±0.20` keep ambiguous scores neutral but reduce positive/negative sample size. Recency half-lives equal their 6h/24h windows, balancing fresh news against window breadth. The 24h age cap bounds scale and makes no-news deterministic but hides distinctions beyond one day. The 72h exact-dedup tolerance catches typical syndication without merging indefinitely recurring headlines. The 512-code-point/1,024-token scoring limits bound compute and prompt surface but create explicit failures. Three total attempts with 2s/4s delays constrain cost and latency while tolerating brief faults. The one-second collector-clock error bound is generous relative to hourly decisions yet rejects materially unsynchronized availability evidence.
+The aggregation parameters are now frozen for the offline Milestone 4 specification only;
+implementation and real research use remain unauthorized. The real scorer, collector
+policies and numerical research gates still require their separate approvals. The `0.20`
+relevance floor removes weakly related titles but can lose subtle BTC effects; strict
+sentiment cutoffs at `±0.20` keep ambiguous scores neutral but reduce positive/negative sample
+size. Recency half-lives equal their 6h/24h windows, balancing fresh news against window
+breadth. The 24h age cap bounds scale and makes no-news deterministic but hides distinctions
+beyond one day. The 72h exact-dedup tolerance catches typical syndication without merging
+indefinitely recurring headlines. The 512-code-point/1,024-token scoring limits bound
+compute and prompt surface but create explicit failures. Three total attempts with 2s/4s
+delays constrain cost and latency while tolerating brief faults. The one-second
+collector-clock error bound is generous relative to hourly decisions yet rejects materially
+unsynchronized availability evidence.
 
 ### Missingness and failure policy
 
@@ -653,6 +708,12 @@ These non-inherited parameters remain human-approval proposals. The `0.20` relev
 - Duplicate groups count once in every count/share/source calculation.
 - A valid zero-line gzip is a delivered empty provider interval, not an outage. A missing, HTTP-error, invalid, or corrupt expected gzip remains unresolved unless matching immutable terminal evidence proves a non-retryable result or exact retry exhaustion; verified evidence closes only its bound expected retrieval interval, with `terminal_at` retained as causal audit state.
 - Any decision row whose trailing 24-hour window intersects a provider-gap interval backed by verified immutable terminal evidence is removed from the one shared four-cell row index **before** fold materialization and recorded as `provider_gap_window`; it is never zero-filled and never counted as `news_missing_24h`. Absence or invalid input without matching evidence remains unresolved and cannot advance either watermark or become a coverage gap. Because 24 hours is the largest feature window, this also protects the 1-hour and 6-hour features. Labels and five-row purges continue to use the underlying continuous hourly market ordinal, so removing a row cannot shorten leakage separation.
+- Gap bounds are the evidence's expected `[interval_start, interval_end_exclusive)` minute
+  interval, not release due time, terminal time or a later publication/cutoff. Exact overlap
+  is `gap_start <= t and gap_end_exclusive > t-24h`. Coverage `as_of` and validated causal
+  terminal evidence are pinned inputs; unresolved coverage cannot certify no-news rows.
+  The Milestone 4 freeze specifies this behavior for synthetic tests only; it does not
+  authorize actual market joining, shared-index construction or fold generation.
 
 ## Four-cell development experiment
 
@@ -839,9 +900,10 @@ For the rolling 30-day gate, align the augmented and control ledgers on the sort
 ### Required authorizations
 
 Batch A approval is deliberately narrower than research approval. The article/score schemas
-and storage/provider-fixture contracts are accepted. The latest human authority defers the
-live pilot without backfill and permits only synthetic/mock Milestone 3 foundation
-implementation. Historical internal-use/retention rights remain recorded, but do not
+and storage/provider-fixture contracts are accepted. The synthetic/mock Milestone 3
+foundation is accepted at `d129094`; the latest human authority permits only a Milestone 4
+documentation/configuration freeze and local commit. Milestone 4 implementation is not
+authorized. The live pilot remains deferred without backfill. Historical internal-use/retention rights remain recorded, but do not
 override disabled network authority. Real scorer/model choice and scoring, numerical
 research gates and future-holdout policy still require their own approvals.
 
@@ -850,9 +912,10 @@ research gates and future-holdout policy still require their own approvals.
 | Batch B specification | Base `SPECIFICATION_FROZEN_COMPATIBLE`; offline correction `ACCEPTED_OFFLINE_ONLY`; live pilot `DEFERRED_WITHOUT_BACKFILL`, not completed or accepted |
 | Batch B source/test execution | Accepted offline implementation and historical runner/key setup preserved; no current live execution |
 | Batch B network pilot | `network_pilot_authorized: false`; separate future prospective authorization required; no backfill |
-| Milestone 3 offline foundation | `milestone_3_status: ACCEPTED_OFFLINE_ONLY`; Scorer Protocol, strict JSON validation/errors, immutable CAS/cache and synthetic/mock tests accepted; local commit authorized |
+| Milestone 3 offline foundation | `milestone_3_status: ACCEPTED_OFFLINE_ONLY`; Scorer Protocol, strict JSON validation/errors, immutable CAS/cache and synthetic/mock tests accepted at `d129094` |
 | Milestone 3 real sentiment scoring | `milestone_3_scoring_authorized: false`; `approved_scorer: null` |
-| Milestone 4 feature aggregation | `milestone_4_feature_aggregation_authorized: false`; separate instruction required |
+| Milestone 4 specification | `milestone_4_status: SPECIFICATION_FROZEN`; only the three named docs/config files and one local documentation commit authorized |
+| Milestone 4 implementation/feature aggregation | `milestone_4_implementation_authorized: false`; `milestone_4_feature_aggregation_authorized: false`; next action `implement_milestone_4_aggregation_offline` requires separate human review/authorization |
 | Download/query GDELT or any provider data | Not authorized while pilot is deferred |
 | Call a provider API or fetch a publisher page | Not authorized; all implementation and verification remain offline |
 | Fetch or alter market data | Not authorized |
