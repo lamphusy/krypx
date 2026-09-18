@@ -1,6 +1,6 @@
 # KrypX Phase 2 — Milestone 0 Research Protocol and News-Source Feasibility
 
-**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**; the live pilot **DEFERRED WITHOUT BACKFILL**; Milestone 3 foundation **ACCEPTED_OFFLINE_ONLY**. Milestone 4's specification remains frozen and its synthetic-only implementation is **IN_PROGRESS_OFFLINE_ONLY**, not accepted. Real scoring and real feature use remain **NOT AUTHORIZED**.
+**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**; the live pilot **DEFERRED WITHOUT BACKFILL**; Milestone 3 foundation **ACCEPTED_OFFLINE_ONLY**; Milestone 4 **ACCEPTED** for offline synthetic aggregation. Milestone 5 dataset integration is **SPECIFICATION_FROZEN**, documentation/configuration only. Milestone 5 implementation, real scoring and real feature use remain **NOT AUTHORIZED**.
 
 **Research decision:** `PROCEED_WITH_FORWARD_ONLY_COLLECTION`
 
@@ -20,10 +20,12 @@
 **Final offline Milestone 3 acceptance:** 2026-09-15; human-authorized independent verification against `c12aa01705712e53f65206c064248ef9fdc964ce` found zero blocking findings after the binary64 hydration fix; local commit on `main` authorized, no push.
 **Milestone 3 completion commit:** `d129094c9483f69431eeb6e3698e52ee273d5d0e`; 1,003 passing tests.
 **Milestone 4 specification freeze:** 2026-09-15; [offline point-in-time aggregation specification](phase2-milestone-4.md); documentation/configuration only, no implementation authority.
-**Milestone 4 offline implementation authority:** 2026-09-16; synthetic-only source and adversarial tests against specification commit `683f76d97e132c0d245391c82317b163d61f2e32`; no real workflows, commit or push authorized by this instruction.
+**Milestone 4 offline implementation authority:** 2026-09-16; synthetic-only source and adversarial tests against specification commit `683f76d97e132c0d245391c82317b163d61f2e32`; no real workflows, commit or push authorized by that instruction.
+**Milestone 4 acceptance and commit:** independent review recorded 2026-09-17, human sign-off/local commit authority on 2026-09-18; `c177a762affb101fa37ad200fe8542fb9136f880`; 1,130 passing tests, zero blocking findings, exact reviewed implementation committed unchanged.
+**Milestone 5 specification freeze:** 2026-09-18; [offline dataset integration specification](phase2-milestone-5.md); docs/config only and one separate local commit; no implementation or dataset-building authority.
 **Companion machine-readable protocol:** `config/phase2_protocol.json`
 
-**Approval boundary:** The human authority accepted offline Batch A at canonical `main` commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`; its original limited sign-off remains unchanged. The historical September 13 pilot instruction separately authorized the exact bounded GSG HTTPS window, real transport/runner setup and Ed25519 key provisioning. Explicit actual-product rights approval covers internal title metadata and incidental exact raw fields, retained immutably through review with GDELT attribution and no redistribution. The later deferral disables network authority without backfill; the offline/mock Milestone 3 foundation is accepted. The September 16 instruction now authorizes only Milestone 4 synthetic feature aggregation, its adversarial offline tests and two governance updates. It does not authorize real scoring/features, model/scorer selection, model downloads, external APIs, publisher scraping/body-text collection, market-data access or joins, research gates, training/backtesting, future collection, holdout access/evaluation, paid services, commit or push.
+**Approval boundary:** The human authority accepted offline Batch A at canonical `main` commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`; its original limited sign-off remains unchanged. The historical September 13 pilot instruction separately authorized the exact bounded GSG HTTPS window, real transport/runner setup and Ed25519 key provisioning. Explicit actual-product rights approval covers internal title metadata and incidental exact raw fields, retained immutably through review with GDELT attribution and no redistribution. The later deferral disables network authority without backfill; the offline/mock Milestone 3 and synthetic Milestone 4 foundations are accepted. The September 18 instruction authorizes committing the four reviewed Milestone 4 files unchanged, then freezing Milestone 5 in three documentation/configuration files and a separate local commit. It does not authorize Milestone 5 implementation or dataset construction, real scoring/features, model/scorer selection, downloads, external APIs, publisher scraping/body-text collection, market-data access or joins, research gates, training/backtesting, future collection, holdout access/evaluation, paid services or push.
 
 The Batch A governance sign-off commit is `e7c189bf180c9b3fd72892544fa72805998f765d`.
 The 2026-09-07 freeze and 2026-09-08 GSG reconciliation instructions authorized Batch B
@@ -36,12 +38,15 @@ Current fields are `batch_b_status: SPECIFICATION_FROZEN_COMPATIBLE`,
 `milestone_3_status: ACCEPTED_OFFLINE_ONLY`,
 `milestone_3_offline_foundation_authorized: true`,
 `milestone_3_scoring_authorized: false`, `milestone_4_feature_aggregation_authorized: true`,
-`milestone_4_status: IN_PROGRESS_OFFLINE_ONLY`, `milestone_4_implementation_authorized: true`,
+`milestone_4_status: ACCEPTED`, `milestone_4_implementation_authorized: true`,
 `milestone_4_authorization_scope: offline_synthetic_only`,
 `milestone_4_real_feature_use_authorized: false`,
+`milestone_5_status: SPECIFICATION_FROZEN`, `milestone_5_implementation_authorized: false`,
+`milestone_5_dataset_integration_authorized: false`,
 `real_network_calls_prohibited: true`, and
-`next_action: review_milestone_4_offline_aggregation`. Implementation permission is not
-acceptance or authority for real data. The live-pilot status is
+`next_action: implement_milestone_5_dataset_integration_offline`. This next-action label
+requires separate human authorization; the freeze is not implementation permission or
+authority for real data. The live-pilot status is
 `DEFERRED_WITHOUT_BACKFILL`; it is neither completed nor accepted. Historical setup
 verification and its then-current `VERIFIED_SETUP_NOT_ARMED` status remain audit records,
 not a statement of current scheduler state or a new collection authorization.
@@ -186,13 +191,16 @@ document and JSON `milestone_4_specification` object retain that historical auth
 The newer explicit synthetic-only implementation authority below supersedes those
 implementation prohibitions, not the frozen numerical or provenance contracts.
 
-### Current Milestone 4 synthetic-only implementation scope
+### Accepted Milestone 4 synthetic-only implementation
 
-The September 16 instruction authorizes `src/crypto_ai/sentiment/aggregation.py`,
+The September 16 instruction authorized `src/crypto_ai/sentiment/aggregation.py`,
 `tests/sentiment/test_aggregation.py`, this protocol and its JSON companion only.
-Status is `IN_PROGRESS_OFFLINE_ONLY`: implementation and verification do not themselves
-confer independent acceptance. The 1,003 existing tests and all Phase 1 source, tests,
-data and artifacts must remain unchanged and passing. No commit or push is made in this step.
+Its original status was `IN_PROGRESS_OFFLINE_ONLY`; implementation and engineering
+verification did not themselves confer acceptance. The later independent review returned
+**ACCEPTED**, with all 1,130 tests passing, including the 1,003 pre-existing tests, and
+Phase 1 byte identity preserved. On September 18 the human authorized the exact four-file
+commit `c177a762affb101fa37ad200fe8542fb9136f880` on `main`. No push or real feature use
+is authorized; accepted numerical and causal contracts are unchanged.
 
 `OfflineFeatureAggregator` accepts the exact `SyntheticAggregationInput` type and a local
 `ContentAddressedStore`. It hydrates a named immutable GSG state through full Batch A
@@ -267,9 +275,64 @@ governance files. The frozen Milestone 4 document/numerical contracts, historica
 authority, Milestone 3 acceptance, Phase 1 data and artifacts are unchanged. The new tests
 also confirm metadata failures open only `manifest.json`, incomplete publications do not
 become cache hits, and non-regular/symlink or altered-metadata publications fail closed.
-Status remains `IN_PROGRESS_OFFLINE_ONLY` pending independent review and a separate
-acceptance/commit instruction. No commit, push, live collection, model download, real
-scoring/feature generation, market-data join, training or holdout access occurred.
+At that engineering checkpoint status remained `IN_PROGRESS_OFFLINE_ONLY` pending review;
+no commit, push, live collection, model download, real scoring/feature generation,
+market-data join, training or holdout access had occurred. The later acceptance and local
+commit below supersede only the status/commit boundary, not those historical results.
+
+#### Milestone 4 independent acceptance and local commit
+
+The September 17 read-only review found zero blocking findings against `683f76d`.
+Fresh results were 127 aggregation tests in 65.69s, 253 Phase 1 tests in 6.49s and
+1,130 total tests in 111.58s, with 12 existing synthetic single-class warnings.
+Formatting, lint, compilation, dependency, strict JSON and all 49,972 RFC 8785 binary64
+differential cases passed. An independent 4,000-case reduction oracle matched bit-for-bit;
+107 other tracked blobs, including 82 pre-existing source/test files and 50 Phase 1
+source/test files, were byte-identical. Public-path probes verified future/backdated
+article perturbations, permanent groups, all four gap boundaries, semantic forgery
+rejection and manifest-only early metadata rejection. `scored_at` remains audit-only;
+this is not acceptance of live scoring latency.
+
+The September 18 human sign-off authorizes committing those exact four reviewed files.
+Their SHA-256 values matched the review before commit. Completion commit on `main` is
+`c177a762affb101fa37ad200fe8542fb9136f880`; its worktree was clean immediately afterward.
+`milestone_4_status` is now `ACCEPTED`, scoped to offline synthetic aggregation only.
+
+### Current Milestone 5 documentation/configuration freeze
+
+[Milestone 5](phase2-milestone-5.md) freezes
+`phase2-milestone5-offline-dataset-integration-v1`. Only that new document, this protocol
+and the JSON companion may change in this second commit. No source/test changes, actual
+dataset joins, fold creation or prepared datasets are authorized. Preserve all 1,130 tests
+and Phase 1 byte identity. The proposed implementation requires separate human approval.
+
+The feature space is the unchanged ordered 24 Phase 1 technical columns followed by the
+unchanged ordered 13 Milestone 4 columns: exactly 37. Technical raw `timestamp` remains
+the candle open; the exact one-to-one left join uses `decision_at = timestamp + 1h`.
+Verified no-news rows keep their zero-plus-indicator values; missing/unverified matches
+fail preparation, while verified `provider_gap_window` exclusions remove decisions from
+all four cell views before any future folds. Technical history and H=4 labels are computed
+on the continuous original market sequence before exclusions, with retained execution
+price context and original ordinals. Entry is the next candle open (the decision close
+instant), not another hour later; costs, six label columns and strict threshold remain
+unchanged. The five-market-row purge continues to compare training exits to validation
+candle open, never to its later close or a compressed retained-row position.
+
+The separate Phase 2 `prepared_dataset_manifest.json` binds exact market, article, score,
+sentiment-feature, combined-feature, labeled-dataset and context/index/exclusion bytes;
+ordered columns/dtypes; all effective configuration hashes; protocol/code and both
+dependency-file hashes. It requires canonical JSON, complete transitive verification and
+semantic replay, typed hydration, atomic manifest-last no-overwrite publication, and
+collision/incomplete-write/symlink protections. Phase 1 paths/loaders are not extended or
+overwritten. All requirements are prospective synthetic implementation criteria, not
+claims of an existing dataset or new passing integration tests.
+
+Current fields are `milestone_5_status: SPECIFICATION_FROZEN`,
+`milestone_5_implementation_authorized: false`,
+`milestone_5_dataset_integration_authorized: false`, and
+`next_action: implement_milestone_5_dataset_integration_offline`. No real scoring,
+collection, models, market joins, training, research backtests/gates or holdout work is
+authorized. Live deferral without backfill and all historical approval records remain.
 
 ## Executive decision
 
@@ -280,7 +343,7 @@ This recommendation is deliberately title-only. It does not authorize fetching p
 | Decision item | Milestone 0 result |
 |---|---|
 | Exact verdict | `PROCEED_WITH_FORWARD_ONLY_COLLECTION` |
-| Engineering-specification approval | Milestone 0 frozen; offline Milestones 1 and 2 accepted at `bb6d4d`; Milestone 3 synthetic/mock foundation accepted at `d129094`; Milestone 4 synthetic implementation authorized, `IN_PROGRESS_OFFLINE_ONLY`; no real research execution authorized |
+| Engineering-specification approval | Milestone 0 frozen; offline Milestones 1 and 2 accepted at `bb6d4d`; Milestone 3 synthetic/mock foundation accepted at `d129094`; Milestone 4 synthetic aggregation accepted at `c177a76`; Milestone 5 docs/config specification frozen, implementation unauthorized; no real research execution authorized |
 | Recommended provider | GDELT GSG, title-only, with KrypX receipt time and exact raw-byte hashes; live pilot deferred without backfill; no current network authority |
 | Historical feasibility | `REJECTED`: no retrospective news scoring/backtest for the Phase 1 period |
 | Main blocker to outcomes | A newly collected development corpus does not yet exist; scorer, gates, budget, and later holdout are unapproved |
@@ -292,7 +355,8 @@ The decision is not an empirical claim that news improves BTC trading. It author
 
 ## Scope and non-goals
 
-This milestone did only the following:
+The original Milestone 0 research/specification step did only the following (historical
+scope, not a denial of the separately authorized later offline commits above):
 
 - read the complete implementation plan and Phase 1 artifacts;
 - audit the frozen Phase 1 mechanics and reusable primitives;
@@ -987,9 +1051,10 @@ For the rolling 30-day gate, align the augmented and control ledgers on the sort
 
 Batch A approval is deliberately narrower than research approval. The article/score schemas
 and storage/provider-fixture contracts are accepted. The synthetic/mock Milestone 3
-foundation is accepted at `d129094`; the latest human authority permits only a Milestone 4
-synthetic-only implementation, adversarial tests and governance update, without a commit
-or push. Real feature use is not authorized. The live pilot remains deferred without
+foundation is accepted at `d129094`; Milestone 4 synthetic aggregation is accepted at
+`c177a76`. The latest human authority permits its local commit and the Milestone 5
+docs/config specification freeze with a separate local commit, not integration source/tests
+or dataset construction. Push and real feature use are not authorized. The live pilot remains deferred without
 backfill. Historical internal-use/retention rights remain recorded, but do not
 override disabled network authority. Real scorer/model choice and scoring, numerical
 research gates and future-holdout policy still require their own approvals.
@@ -1002,7 +1067,8 @@ research gates and future-holdout policy still require their own approvals.
 | Milestone 3 offline foundation | `milestone_3_status: ACCEPTED_OFFLINE_ONLY`; Scorer Protocol, strict JSON validation/errors, immutable CAS/cache and synthetic/mock tests accepted at `d129094` |
 | Milestone 3 real sentiment scoring | `milestone_3_scoring_authorized: false`; `approved_scorer: null` |
 | Milestone 4 specification | Frozen at `683f76d`; numerical, causal, coverage and storage requirements unchanged |
-| Milestone 4 implementation/feature aggregation | `milestone_4_status: IN_PROGRESS_OFFLINE_ONLY`; implementation and feature-aggregation flags `true` only for `offline_synthetic_only`; real feature use `false`; next action independent offline review |
+| Milestone 4 implementation/feature aggregation | `milestone_4_status: ACCEPTED` at `c177a76`; synthetic-only, real feature use `false` |
+| Milestone 5 dataset integration | `milestone_5_status: SPECIFICATION_FROZEN`; docs/config only; implementation and dataset-integration authority `false`; next action requires separate human approval |
 | Download/query GDELT or any provider data | Not authorized while pilot is deferred |
 | Call a provider API or fetch a publisher page | Not authorized; all implementation and verification remain offline |
 | Fetch or alter market data | Not authorized |
