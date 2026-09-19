@@ -1,6 +1,6 @@
 # KrypX Phase 2 — Milestone 0 Research Protocol and News-Source Feasibility
 
-**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**; the live pilot **DEFERRED WITHOUT BACKFILL**; Milestone 3 foundation **ACCEPTED_OFFLINE_ONLY**; Milestone 4 **ACCEPTED** for offline synthetic aggregation. Milestone 5 dataset integration is **SPECIFICATION_FROZEN**, documentation/configuration only. Milestone 5 implementation, real scoring and real feature use remain **NOT AUTHORIZED**.
+**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**; the live pilot **DEFERRED WITHOUT BACKFILL**; Milestone 3 foundation **ACCEPTED_OFFLINE_ONLY**; Milestone 4 **ACCEPTED** for offline synthetic aggregation. Milestone 5 dataset integration is **ACCEPTED_OFFLINE_ONLY**, with implementation and dataset-integration authority limited to **offline_synthetic_only**. Its specification stays frozen; real dataset integration, real scoring and real feature use remain **NOT AUTHORIZED**.
 
 **Research decision:** `PROCEED_WITH_FORWARD_ONLY_COLLECTION`
 
@@ -23,9 +23,11 @@
 **Milestone 4 offline implementation authority:** 2026-09-16; synthetic-only source and adversarial tests against specification commit `683f76d97e132c0d245391c82317b163d61f2e32`; no real workflows, commit or push authorized by that instruction.
 **Milestone 4 acceptance and commit:** independent review recorded 2026-09-17, human sign-off/local commit authority on 2026-09-18; `c177a762affb101fa37ad200fe8542fb9136f880`; 1,130 passing tests, zero blocking findings, exact reviewed implementation committed unchanged.
 **Milestone 5 specification freeze:** 2026-09-18; [offline dataset integration specification](phase2-milestone-5.md); docs/config only and one separate local commit; no implementation or dataset-building authority.
+**Historical Milestone 5 offline implementation authority:** 2026-09-18; synthetic-only dataset source, adversarial tests and these two governance files against frozen specification commit `06e87999fa7ddcf8a434fe9c52096816f0dfe575`; that instruction granted no acceptance, commit, push or real workflow authority.
+**Milestone 5 final offline sign-off:** 2026-09-19; independent review **ACCEPTED** with zero blocking findings and 1,280 passing tests; subsequent human authority approves acceptance governance, unchanged reviewed implementation, final offline verification and one local commit on `main`, with no push.
 **Companion machine-readable protocol:** `config/phase2_protocol.json`
 
-**Approval boundary:** The human authority accepted offline Batch A at canonical `main` commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`; its original limited sign-off remains unchanged. The historical September 13 pilot instruction separately authorized the exact bounded GSG HTTPS window, real transport/runner setup and Ed25519 key provisioning. Explicit actual-product rights approval covers internal title metadata and incidental exact raw fields, retained immutably through review with GDELT attribution and no redistribution. The later deferral disables network authority without backfill; the offline/mock Milestone 3 and synthetic Milestone 4 foundations are accepted. The September 18 instruction authorizes committing the four reviewed Milestone 4 files unchanged, then freezing Milestone 5 in three documentation/configuration files and a separate local commit. It does not authorize Milestone 5 implementation or dataset construction, real scoring/features, model/scorer selection, downloads, external APIs, publisher scraping/body-text collection, market-data access or joins, research gates, training/backtesting, future collection, holdout access/evaluation, paid services or push.
+**Approval boundary:** The human authority accepted offline Batch A at canonical `main` commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`; its original limited sign-off remains unchanged. The historical September 13 pilot instruction separately authorized the exact bounded GSG HTTPS window, real transport/runner setup and Ed25519 key provisioning. Explicit actual-product rights approval covers internal title metadata and incidental exact raw fields, retained immutably through review with GDELT attribution and no redistribution. The later deferral disables network authority without backfill; the offline/mock Milestone 3 and synthetic Milestone 4 foundations are accepted. The earlier September 18 instruction authorized the reviewed Milestone 4 commit and separate Milestone 5 documentation/configuration freeze. A later September 18 instruction separately authorized only offline synthetic Milestone 5 dataset implementation, adversarial tests and governance updates. The September 19 final sign-off now approves offline acceptance governance, final verification and one local commit of the unchanged reviewed implementation. It does not authorize real market/news or pilot-data access, real dataset construction or joins, real scoring/features, model/scorer selection, downloads, external APIs, publisher scraping/body-text collection, fold creation, research gates, training/research backtesting, future collection, holdout access/evaluation, paid services, push or the next milestone specification or implementation.
 
 The Batch A governance sign-off commit is `e7c189bf180c9b3fd72892544fa72805998f765d`.
 The 2026-09-07 freeze and 2026-09-08 GSG reconciliation instructions authorized Batch B
@@ -41,12 +43,18 @@ Current fields are `batch_b_status: SPECIFICATION_FROZEN_COMPATIBLE`,
 `milestone_4_status: ACCEPTED`, `milestone_4_implementation_authorized: true`,
 `milestone_4_authorization_scope: offline_synthetic_only`,
 `milestone_4_real_feature_use_authorized: false`,
-`milestone_5_status: SPECIFICATION_FROZEN`, `milestone_5_implementation_authorized: false`,
-`milestone_5_dataset_integration_authorized: false`,
+`milestone_5_status: ACCEPTED_OFFLINE_ONLY`,
+`milestone_5_offline_implementation_authorized: true`,
+`milestone_5_implementation_authorized: true`,
+`milestone_5_dataset_integration_authorized: true`,
+`milestone_5_authorization_scope: offline_synthetic_only`,
+`milestone_5_real_dataset_integration_authorized: false`,
+`milestone_5_real_feature_use_authorized: false`,
 `real_network_calls_prohibited: true`, and
-`next_action: implement_milestone_5_dataset_integration_offline`. This next-action label
-requires separate human authorization; the freeze is not implementation permission or
-authority for real data. The live-pilot status is
+`next_action: await_human_next_milestone_specification_authorization`. This is an approval
+gate, not authority to begin the next specification or implementation. The historical freeze
+was not implementation permission; the later synthetic-only instruction supplied that
+authority and the September 19 sign-off supplies offline acceptance/local commit authority. The live-pilot status is
 `DEFERRED_WITHOUT_BACKFILL`; it is neither completed nor accepted. Historical setup
 verification and its then-current `VERIFIED_SETUP_NOT_ARMED` status remain audit records,
 not a statement of current scheduler state or a new collection authorization.
@@ -298,13 +306,15 @@ Their SHA-256 values matched the review before commit. Completion commit on `mai
 `c177a762affb101fa37ad200fe8542fb9136f880`; its worktree was clean immediately afterward.
 `milestone_4_status` is now `ACCEPTED`, scoped to offline synthetic aggregation only.
 
-### Current Milestone 5 documentation/configuration freeze
+### Historical Milestone 5 documentation/configuration freeze
 
-[Milestone 5](phase2-milestone-5.md) freezes
-`phase2-milestone5-offline-dataset-integration-v1`. Only that new document, this protocol
-and the JSON companion may change in this second commit. No source/test changes, actual
-dataset joins, fold creation or prepared datasets are authorized. Preserve all 1,130 tests
-and Phase 1 byte identity. The proposed implementation requires separate human approval.
+[Milestone 5](phase2-milestone-5.md) froze
+`phase2-milestone5-offline-dataset-integration-v1` at
+`06e87999fa7ddcf8a434fe9c52096816f0dfe575`. Only that new document, this protocol
+and the JSON companion could change in that second commit. That instruction authorized
+no source/test changes, actual dataset joins, fold creation or prepared datasets, and
+required preservation of all 1,130 tests and Phase 1 byte identity. Its proposed
+implementation required separate human approval, supplied only by the newer scope below.
 
 The feature space is the unchanged ordered 24 Phase 1 technical columns followed by the
 unchanged ordered 13 Milestone 4 columns: exactly 37. Technical raw `timestamp` remains
@@ -327,12 +337,106 @@ collision/incomplete-write/symlink protections. Phase 1 paths/loaders are not ex
 overwritten. All requirements are prospective synthetic implementation criteria, not
 claims of an existing dataset or new passing integration tests.
 
-Current fields are `milestone_5_status: SPECIFICATION_FROZEN`,
+At the freeze, fields were `milestone_5_status: SPECIFICATION_FROZEN`,
 `milestone_5_implementation_authorized: false`,
 `milestone_5_dataset_integration_authorized: false`, and
-`next_action: implement_milestone_5_dataset_integration_offline`. No real scoring,
-collection, models, market joins, training, research backtests/gates or holdout work is
-authorized. Live deferral without backfill and all historical approval records remain.
+`next_action: implement_milestone_5_dataset_integration_offline`. The unchanged frozen
+document and JSON `milestone_5_specification` object preserve that historical authority;
+the newer implementation permission does not change their numerical or storage contracts.
+
+### Historical Milestone 5 offline synthetic-only implementation scope
+
+The September 18 human instruction authorized only
+`src/crypto_ai/phase2/dataset.py`, `tests/phase2/test_dataset.py`, this protocol and
+`config/phase2_protocol.json`. A new `tests/phase2/__init__.py` package marker isolates
+the integration tests from the existing Phase 1 `test_dataset.py` module without
+changing Phase 1 test files or test configuration. Dedicated provenance tests reside in
+`tests/phase2/test_dataset_provenance.py`. At that engineering checkpoint, status was
+`IN_PROGRESS_OFFLINE_ONLY`, not
+accepted. `milestone_5_offline_implementation_authorized`,
+`milestone_5_implementation_authorized` and `milestone_5_dataset_integration_authorized`
+were `true` only within `offline_synthetic_only`. Real dataset integration and real
+feature-use flags remained `false`. No commit or push was authorized by that instruction.
+
+Inputs must be synthetic market snapshots and fully verified synthetic Milestone 4
+aggregation parents, including their transitive article/raw and mock-score evidence.
+The frozen 24 technical plus 13 sentiment features, exact close-time left join,
+continuous-history technical/H=4 label calculation, original market ordinals,
+shared exclusions and six unchanged label columns remain mandatory. No folds or models
+may be created or run. Phase 1 source, tests, data, artifacts, schemas and loaders,
+Milestone 3/4 accepted contracts and both frozen specification documents remain unchanged.
+
+The prepared tables retain the frozen canonical JSON encoding, not a CSV conversion.
+Each payload must be captured once so hashing, parsing, validation and semantic replay
+all use the same bytes; verification must not hash one read then parse a different read.
+Temporary synthetic test stores may exercise typed hydration, transitive semantic
+verification and immutable manifest-last no-overwrite publication. Preparation and
+publication require the exact clean local implementation commit, including its source
+and both frozen dependency locks. Hydration verifies the local historical commit's source
+and locks without requiring the current checkout to be clean. Synthetic tests mock only
+read-only Git evidence and retain the real frozen lock bytes; they do not bypass these
+validators. Uncommitted engineering work cannot prepare or publish outside those mocks.
+Any future real use still requires separate authority.
+
+Offline engineering verification completed on September 19: **1,280 tests passed**,
+preserving all 1,130 existing tests and adding 109 dataset and 41 provenance cases.
+The separate Phase 1 run passed all 253 tests. The full suite's 12 warnings are the
+existing synthetic single-class ROC-AUC/PR-AUC warnings. Whitespace checks, Black
+(88 files unchanged), Ruff, compilation and dependency checks passed. Strict validation
+covered both repository JSON documents and both JSONL files, rejecting all six invalid
+controls; all 49,972 local Node/RFC 8785 binary64 comparisons matched. Against the frozen
+base, all 110 other tracked blobs, including all 84 existing source/test blobs and 50
+Phase 1 source/test blobs, remain byte-identical. Frozen specifications and historical
+governance objects remained unchanged at that checkpoint. The then-dirty checkout was rejected by the
+unmocked clean-commit gate as required.
+
+Those were engineering results, not independent acceptance, a real prepared dataset,
+commit or push. At that pre-review checkpoint, six repository files were locally changed
+and unstaged on `main`, whose HEAD was `06e87999fa7ddcf8a434fe9c52096816f0dfe575`.
+The action then was `review_milestone_5_offline_dataset_integration`; the sign-off below
+supersedes that pending-review state without erasing its history.
+The live pilot stays `DEFERRED_WITHOUT_BACKFILL`; no network call, pilot dispatch,
+backfill, real data access/scoring/join, model download, training, research backtest/gate,
+future collection, holdout access/evaluation or paid service is authorized. Historical
+rights, signed approval records and acceptance evidence remain unchanged.
+
+#### Milestone 5 independent acceptance and final local commit authority
+
+The September 19 independent, read-only review against
+`06e87999fa7ddcf8a434fe9c52096816f0dfe575` returned **ACCEPTED**, with zero blocking
+findings. The review verified exact 24/37-feature projections, shared decision indices,
+provider-gap exclusions and legitimate no-news preservation; original-ordinal next-open
+entry/exit and unchanged Phase 1 cost thresholds; all six single-byte payload corruptions;
+fully rehashed semantic forgeries; single-capture verification; metadata pre-validation;
+manifest-last atomic no-overwrite publication; late FIFO/symlink/payload mutation rejection;
+and future-only market extension preserving earlier feature and realizable-label bits.
+
+Independent review results were 150 focused tests in 135.19s, 253 Phase 1 tests in
+5.89s and **1,280 repository tests in 246.32s**. The full/Phase 1 runs each emitted
+12 existing single-class metric warnings. Whitespace, Black (88 unchanged files), Ruff,
+compilation and dependency checks passed. Strict validation passed for 2 JSON documents
+and 2 JSONL files and rejected six malformed controls. RFC 8785 differential verification
+matched 49,972/49,972 binary64 values plus 4/4 Unicode/nested vectors. All 110 other
+tracked blobs, including 84 pre-existing source/test and 50 Phase 1 source/test blobs,
+remained byte-identical. All six reviewed files were unchanged by that read-only review.
+
+The subsequent human instruction approves formal offline sign-off, governance updates,
+another complete offline verification and a single local commit on `main`, while keeping
+the four accepted implementation/test files unchanged. Operative Milestone 5 status is
+`ACCEPTED_OFFLINE_ONLY`. Its completion commit is the commit containing this sign-off,
+with parent `06e87999fa7ddcf8a434fe9c52096816f0dfe575` and exact message
+`feat(phase2): implement offline milestone 5 dataset integration`; the resulting SHA is
+reported after successful commit creation rather than embedded as a self-reference.
+This authorization record does not claim a commit exists before those checks and the
+commit operation complete. No push is authorized.
+
+The next action is `await_human_next_milestone_specification_authorization`. Neither the
+next milestone specification nor its implementation is authorized by this sign-off.
+Live collection stays `DEFERRED_WITHOUT_BACKFILL`, with `network_pilot_authorized: false`
+and `real_network_calls_prohibited: true`. No real scoring, model download, real dataset
+join, training, backtest, research-gate execution or holdout access is authorized. Offline
+engineering acceptance is not evidence of a live pilot, real research dataset or model
+performance.
 
 ## Executive decision
 
@@ -343,7 +447,7 @@ This recommendation is deliberately title-only. It does not authorize fetching p
 | Decision item | Milestone 0 result |
 |---|---|
 | Exact verdict | `PROCEED_WITH_FORWARD_ONLY_COLLECTION` |
-| Engineering-specification approval | Milestone 0 frozen; offline Milestones 1 and 2 accepted at `bb6d4d`; Milestone 3 synthetic/mock foundation accepted at `d129094`; Milestone 4 synthetic aggregation accepted at `c177a76`; Milestone 5 docs/config specification frozen, implementation unauthorized; no real research execution authorized |
+| Engineering-specification approval | Milestone 0 frozen; offline Milestones 1 and 2 accepted at `bb6d4d`; Milestone 3 synthetic/mock foundation accepted at `d129094`; Milestone 4 synthetic aggregation accepted at `c177a76`; Milestone 5 frozen specification preserved and synthetic integration `ACCEPTED_OFFLINE_ONLY`; no real research execution authorized |
 | Recommended provider | GDELT GSG, title-only, with KrypX receipt time and exact raw-byte hashes; live pilot deferred without backfill; no current network authority |
 | Historical feasibility | `REJECTED`: no retrospective news scoring/backtest for the Phase 1 period |
 | Main blocker to outcomes | A newly collected development corpus does not yet exist; scorer, gates, budget, and later holdout are unapproved |
@@ -1052,9 +1156,10 @@ For the rolling 30-day gate, align the augmented and control ledgers on the sort
 Batch A approval is deliberately narrower than research approval. The article/score schemas
 and storage/provider-fixture contracts are accepted. The synthetic/mock Milestone 3
 foundation is accepted at `d129094`; Milestone 4 synthetic aggregation is accepted at
-`c177a76`. The latest human authority permits its local commit and the Milestone 5
-docs/config specification freeze with a separate local commit, not integration source/tests
-or dataset construction. Push and real feature use are not authorized. The live pilot remains deferred without
+`c177a76`. Milestone 5 integration is `ACCEPTED_OFFLINE_ONLY`; the latest human authority
+permits acceptance governance updates, final verification and one local commit of its
+unchanged reviewed source/tests. The prior docs/config freeze is preserved. Push, real
+dataset/feature use and next-milestone work are not authorized. The live pilot remains deferred without
 backfill. Historical internal-use/retention rights remain recorded, but do not
 override disabled network authority. Real scorer/model choice and scoring, numerical
 research gates and future-holdout policy still require their own approvals.
@@ -1068,13 +1173,13 @@ research gates and future-holdout policy still require their own approvals.
 | Milestone 3 real sentiment scoring | `milestone_3_scoring_authorized: false`; `approved_scorer: null` |
 | Milestone 4 specification | Frozen at `683f76d`; numerical, causal, coverage and storage requirements unchanged |
 | Milestone 4 implementation/feature aggregation | `milestone_4_status: ACCEPTED` at `c177a76`; synthetic-only, real feature use `false` |
-| Milestone 5 dataset integration | `milestone_5_status: SPECIFICATION_FROZEN`; docs/config only; implementation and dataset-integration authority `false`; next action requires separate human approval |
+| Milestone 5 dataset integration | `milestone_5_status: ACCEPTED_OFFLINE_ONLY`; offline implementation and dataset-integration authority `true` only for `offline_synthetic_only`; real dataset/feature use `false`; one local acceptance commit authorized, no push; next action is `await_human_next_milestone_specification_authorization` |
 | Download/query GDELT or any provider data | Not authorized while pilot is deferred |
 | Call a provider API or fetch a publisher page | Not authorized; all implementation and verification remain offline |
 | Fetch or alter market data | Not authorized |
 | Create an account, accept a model/provider license, or request credentials | Not authorized; preserve the previously provisioned isolated Ed25519 pilot key |
 | Start a paid service or incur third-party spend | Not authorized |
-| Download model weights, score real articles, build/join real features, train, or backtest | Not authorized; only synthetic mock scoring and synthetic aggregation tests are in scope |
+| Download model weights, score real articles, build/join real features, train, or backtest | Not authorized; only offline synthetic/mock scoring, aggregation and dataset-integration implementation/tests are in scope |
 | Start future-holdout collection | Not authorized; requires approved frozen protocol/generation |
 | Claim or evaluate the future holdout | Separate explicit authorization required after readiness |
 
