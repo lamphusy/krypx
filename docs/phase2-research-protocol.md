@@ -1,6 +1,6 @@
 # KrypX Phase 2 — Milestone 0 Research Protocol and News-Source Feasibility
 
-**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**; the live pilot **DEFERRED WITHOUT BACKFILL**; Milestone 3 foundation **ACCEPTED_OFFLINE_ONLY**; Milestone 4 **ACCEPTED** for offline synthetic aggregation. Milestone 5 dataset integration is **ACCEPTED_OFFLINE_ONLY**, with implementation and dataset-integration authority limited to **offline_synthetic_only**. Its specification stays frozen; real dataset integration, real scoring and real feature use remain **NOT AUTHORIZED**.
+**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**; the live pilot **DEFERRED WITHOUT BACKFILL**; Milestone 3 foundation **ACCEPTED_OFFLINE_ONLY**; Milestone 4 **ACCEPTED** for offline synthetic aggregation; Milestone 5 dataset integration **ACCEPTED_OFFLINE_ONLY**. Milestone 6 specification is **SPECIFICATION_FROZEN** and implementation **ACCEPTED_OFFLINE_ONLY**, with local four-cell fitting and classification limited to synthetic engineering fixtures. Real dataset integration, real scoring/feature use, research training/backtests, Milestone 7 and holdout evaluation remain **NOT AUTHORIZED**.
 
 **Research decision:** `PROCEED_WITH_FORWARD_ONLY_COLLECTION`
 
@@ -25,9 +25,12 @@
 **Milestone 5 specification freeze:** 2026-09-18; [offline dataset integration specification](phase2-milestone-5.md); docs/config only and one separate local commit; no implementation or dataset-building authority.
 **Historical Milestone 5 offline implementation authority:** 2026-09-18; synthetic-only dataset source, adversarial tests and these two governance files against frozen specification commit `06e87999fa7ddcf8a434fe9c52096816f0dfe575`; that instruction granted no acceptance, commit, push or real workflow authority.
 **Milestone 5 final offline sign-off:** 2026-09-19; independent review **ACCEPTED** with zero blocking findings and 1,280 passing tests; subsequent human authority approves acceptance governance, unchanged reviewed implementation, final offline verification and one local commit on `main`, with no push.
+**Milestone 5 completion commit:** `d7cfa57542ea6c44c0b6dead7f76dc376e8d25d2`.
+**Milestone 6 combined freeze/implementation authority:** 2026-09-20; [offline four-cell engine specification](phase2-milestone-6.md); synthetic-only fold construction, frozen local classifier fitting, OOF classification and tree importance, adversarial tests and atomic Phase 2 artifacts; no real workflows or push.
+**Milestone 6 final offline sign-off:** 2026-09-24; independent review against `d7cfa57542ea6c44c0b6dead7f76dc376e8d25d2` found zero blocking findings; human authority accepts the unchanged reviewed source/tests and authorizes one local `main` commit, no push. The commit SHA is reported after creation rather than embedded here.
 **Companion machine-readable protocol:** `config/phase2_protocol.json`
 
-**Approval boundary:** The human authority accepted offline Batch A at canonical `main` commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`; its original limited sign-off remains unchanged. The historical September 13 pilot instruction separately authorized the exact bounded GSG HTTPS window, real transport/runner setup and Ed25519 key provisioning. Explicit actual-product rights approval covers internal title metadata and incidental exact raw fields, retained immutably through review with GDELT attribution and no redistribution. The later deferral disables network authority without backfill; the offline/mock Milestone 3 and synthetic Milestone 4 foundations are accepted. The earlier September 18 instruction authorized the reviewed Milestone 4 commit and separate Milestone 5 documentation/configuration freeze. A later September 18 instruction separately authorized only offline synthetic Milestone 5 dataset implementation, adversarial tests and governance updates. The September 19 final sign-off now approves offline acceptance governance, final verification and one local commit of the unchanged reviewed implementation. It does not authorize real market/news or pilot-data access, real dataset construction or joins, real scoring/features, model/scorer selection, downloads, external APIs, publisher scraping/body-text collection, fold creation, research gates, training/research backtesting, future collection, holdout access/evaluation, paid services, push or the next milestone specification or implementation.
+**Approval boundary:** The human authority accepted offline Batch A at canonical `main` commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`; its original limited sign-off remains unchanged. The historical September 13 pilot instruction separately authorized the exact bounded GSG HTTPS window, real transport/runner setup and Ed25519 key provisioning. Explicit actual-product rights approval covers internal title metadata and incidental exact raw fields, retained immutably through review with GDELT attribution and no redistribution. The later deferral disables network authority without backfill; the offline/mock Milestone 3 and synthetic Milestone 4 foundations are accepted. The September 18 instructions authorized the reviewed Milestone 4 commit, separate Milestone 5 freeze and later synthetic-only dataset implementation. September 19 final sign-off authorized the accepted Milestone 5 local commit. September 20 separately permitted the Milestone 6 freeze and direct offline synthetic four-cell engine implementation, including local fitting of the already installed frozen classifiers; September 24 accepted that implementation and authorized one local commit. Neither instruction authorizes real market/news or pilot-data access, real dataset construction or joins, real scoring/features, model/scorer selection or downloads, external APIs, publisher scraping/body-text collection, research gates, real training, trading backtests, future collection, holdout access/evaluation, paid services, Milestone 7 or push. Historical no-training/no-next-milestone clauses below retain their original scope and are superseded only for the authorized synthetic engineering work.
 
 The Batch A governance sign-off commit is `e7c189bf180c9b3fd72892544fa72805998f765d`.
 The 2026-09-07 freeze and 2026-09-08 GSG reconciliation instructions authorized Batch B
@@ -50,11 +53,17 @@ Current fields are `batch_b_status: SPECIFICATION_FROZEN_COMPATIBLE`,
 `milestone_5_authorization_scope: offline_synthetic_only`,
 `milestone_5_real_dataset_integration_authorized: false`,
 `milestone_5_real_feature_use_authorized: false`,
+`milestone_6_specification_status: SPECIFICATION_FROZEN`,
+`milestone_6_status: ACCEPTED_OFFLINE_ONLY`,
+`milestone_6_offline_implementation_authorized: true`,
+`milestone_6_synthetic_training_authorized: true`,
+`milestone_6_real_training_authorized: false`,
+`milestone_6_research_evaluation_authorized: false`,
 `real_network_calls_prohibited: true`, and
-`next_action: await_human_next_milestone_specification_authorization`. This is an approval
-gate, not authority to begin the next specification or implementation. The historical freeze
-was not implementation permission; the later synthetic-only instruction supplied that
-authority and the September 19 sign-off supplies offline acceptance/local commit authority. The live-pilot status is
+`next_action: await_human_milestone_7_specification_authorization`. September 20 explicitly authorized
+the M6 specification and implementation together; September 24 independently accepted
+the offline result and authorized one local commit. Neither real research execution,
+Milestone 7 work nor push is inferred. Historical freeze/acceptance records remain preserved. The live-pilot status is
 `DEFERRED_WITHOUT_BACKFILL`; it is neither completed nor accepted. Historical setup
 verification and its then-current `VERIFIED_SETUP_NOT_ARMED` status remain audit records,
 not a statement of current scheduler state or a new collection authorization.
@@ -430,13 +439,71 @@ reported after successful commit creation rather than embedded as a self-referen
 This authorization record does not claim a commit exists before those checks and the
 commit operation complete. No push is authorized.
 
-The next action is `await_human_next_milestone_specification_authorization`. Neither the
-next milestone specification nor its implementation is authorized by this sign-off.
+At that sign-off, the next action was `await_human_next_milestone_specification_authorization`.
+Neither the next specification nor its implementation was authorized by the September 19
+sign-off; the separate September 20 instruction below supplies the new synthetic authority.
 Live collection stays `DEFERRED_WITHOUT_BACKFILL`, with `network_pilot_authorized: false`
 and `real_network_calls_prohibited: true`. No real scoring, model download, real dataset
 join, training, backtest, research-gate execution or holdout access is authorized. Offline
 engineering acceptance is not evidence of a live pilot, real research dataset or model
 performance.
+
+### Current Milestone 6 offline synthetic engineering authority
+
+The September 20 human instruction freezes
+`phase2-milestone6-offline-four-cell-experiments-v1` in
+[the Milestone 6 specification](phase2-milestone-6.md) and authorizes direct implementation
+against accepted M5 commit `d7cfa57542ea6c44c0b6dead7f76dc376e8d25d2`. That
+implementation was accepted offline on September 24 after independent review; the
+September 20 instruction alone did not grant acceptance. It was the first authority to construct shared
+folds and fit the frozen installed LogisticRegression/XGBoost classifiers on verified
+synthetic M5 datasets. It is not permission to score real news, use pilot/real market data,
+run research ablations/trading backtests, download models or evaluate any holdout.
+
+Cells remain A=logistic/24 technical, B=XGBoost/24, C=logistic/37 combined and
+D=XGBoost/37. One manifest-bound canonical fold artifact is shared by all four cells:
+five expanding folds, five-row original-market-ordinal purge, training label exits strictly
+before the first validation candle open, and training-fold-only scaling. Frozen effective
+classifier/scaler parameters, features, labels, decision threshold and costs do not change.
+Outputs are chronological continuous retained-row OOF probabilities, complete per-fold
+and aggregate classification metrics, and split-count-weighted global gain/cover plus
+summed weight for tree cells. Logistic tree importance is explicitly not applicable.
+Trading metrics, research-gate judgments and production/full-history refits are excluded.
+
+The research fold length remains 2,098. Because the accepted synthetic market generator
+is capped at 10,000 hours, an explicit engineering-only `fixture_test_rows` in `[1,2098]`
+is frozen separately, with default 2,098 and insufficient-size rejection. No automatic
+shrinking, outcome-based size choice or relaxation of the real 730-day collection gate
+is permitted. Every result must be labeled synthetic engineering, never real research.
+
+Separate `artifacts/phase2/runs/{run_id}/` publications bind the verified prepared manifest,
+shared folds, exact effective configuration, runtime/lock/source provenance, training
+evidence and all cell outputs, with hidden same-filesystem staging, fsync, manifest-last
+and atomic no-overwrite protection. Failed post-rename validation removes the
+completion manifest through the still-open owned directory descriptor; inert payload
+residue may remain, while unrelated replacements are untouched. Parent and
+deterministic synthetic replay verification is required on publication/loading; it
+deliberately costs model refitting and depends on the retained exact source,
+compatible pinned runtime and intact parents. No pickle, production model or holdout
+artifact is introduced. The reviewed engine source is identified by its hash plus base
+commit; the completion SHA is reported after commit creation, not self-embedded here.
+
+Engineering verification completed September 24: **1,425 tests passed**, comprising
+all 1,280 pre-existing tests plus 145 new M6 tests, with the same 12 expected Phase 1
+single-class metric warnings. The standalone Phase 1 suite passed all 253 tests.
+All 114 pre-existing non-governance blobs, including 88 source/test files and all 50
+Phase 1 source/test files, remain byte-identical to the accepted M5 base. Formatting,
+lint, compilation, dependency consistency, strict JSON and RFC 8785 checks pass;
+49,972 binary64 values and four nested/Unicode vectors match the local Node reference.
+See [M6 verification results](phase2-milestone-6.md#9-engineering-verification-results)
+for command results. Independent review found zero blocking findings. The separate
+September 24 human sign-off accepts Milestone 6 **offline only** and authorizes one
+local `main` commit with message
+`feat(phase2): implement four-cell experiment engine and shared fold evaluation`.
+The resulting SHA is reported after creation rather than self-embedded here; no push is
+authorized. The next action is to await explicit human authority for Milestone 7's
+specification. Live pilot remains deferred without backfill, with network permission
+disabled and no change to historical real-world approval boundaries.
 
 ## Executive decision
 
@@ -447,7 +514,7 @@ This recommendation is deliberately title-only. It does not authorize fetching p
 | Decision item | Milestone 0 result |
 |---|---|
 | Exact verdict | `PROCEED_WITH_FORWARD_ONLY_COLLECTION` |
-| Engineering-specification approval | Milestone 0 frozen; offline Milestones 1 and 2 accepted at `bb6d4d`; Milestone 3 synthetic/mock foundation accepted at `d129094`; Milestone 4 synthetic aggregation accepted at `c177a76`; Milestone 5 frozen specification preserved and synthetic integration `ACCEPTED_OFFLINE_ONLY`; no real research execution authorized |
+| Engineering-specification approval | Milestone 0 frozen; offline Milestones 1 and 2 accepted at `bb6d4d`; Milestone 3 synthetic/mock foundation accepted at `d129094`; Milestone 4 synthetic aggregation accepted at `c177a76`; Milestone 5 synthetic integration accepted at `d7cfa575`; Milestone 6 specification frozen and synthetic four-cell implementation authorized; no real research execution authorized |
 | Recommended provider | GDELT GSG, title-only, with KrypX receipt time and exact raw-byte hashes; live pilot deferred without backfill; no current network authority |
 | Historical feasibility | `REJECTED`: no retrospective news scoring/backtest for the Phase 1 period |
 | Main blocker to outcomes | A newly collected development corpus does not yet exist; scorer, gates, budget, and later holdout are unapproved |
@@ -513,6 +580,10 @@ The technical feature set is unchanged and contains exactly these 24 columns:
 `ema_short`, `ema_long`, `ema_ratio`, `close_to_ema_short`, `close_to_ema_long`, `macd`, `macd_signal`, `macd_diff`, `rsi`, `stoch_rsi`, `bb_width`, `bb_pct`, `atr`, `atr_pct`, `candle_range_pct`, `body_return`, `volume_change`, `volume_ma_ratio`, `return_1`, `return_2`, `return_3`, `return_6`, `return_12`, `return_24`.
 
 The XGBoost cell inherits all Phase 1 parameters, including `random_state = 42`. The logistic cell preserves the Phase 1 constructor (`max_iter=1000`, `random_state=42`) and freezes every effective scikit-learn 1.9.0 parameter in the JSON, including the version's `penalty="deprecated"` default sentinel, plus all three `StandardScaler` parameters. The scaler is fitted only on each training fold. No hyperparameter, threshold, horizon, feature-window, missingness, or cost tuning occurs in the first news ablation.
+
+The separately authorized M6 synthetic engine preserves these controls. Its explicitly
+recorded smaller fixture validation blocks are engineering checks necessitated by the
+accepted generator's size cap, not a change to the 2,098-row research fold contract.
 
 ### Phase 1 evidence that motivates Phase 2
 
@@ -971,6 +1042,12 @@ unsynchronized availability evidence.
 
 ## Four-cell development experiment
 
+This section specifies the eventual real prospective research experiment; it does not
+authorize execution. The current M6 synthetic engineering scope exercises its unchanged
+classifier/feature/purge contracts and classification outputs only. Smaller explicit
+fixture folds, synthetic importance and temporary artifacts are not the real ablation,
+and the trading backtests/gates described below remain unauthorized.
+
 | Cell | Classifier | Inputs | Direct comparison |
 |---|---|---|---|
 | A | Logistic regression | 24 technical features | Control for C |
@@ -1156,10 +1233,12 @@ For the rolling 30-day gate, align the augmented and control ledgers on the sort
 Batch A approval is deliberately narrower than research approval. The article/score schemas
 and storage/provider-fixture contracts are accepted. The synthetic/mock Milestone 3
 foundation is accepted at `d129094`; Milestone 4 synthetic aggregation is accepted at
-`c177a76`. Milestone 5 integration is `ACCEPTED_OFFLINE_ONLY`; the latest human authority
-permits acceptance governance updates, final verification and one local commit of its
-unchanged reviewed source/tests. The prior docs/config freeze is preserved. Push, real
-dataset/feature use and next-milestone work are not authorized. The live pilot remains deferred without
+`c177a76`. Milestone 5 integration is `ACCEPTED_OFFLINE_ONLY` at `d7cfa575`. The latest
+human authority permits the M6 specification freeze and direct offline synthetic engine
+implementation, including frozen local classifier training and OOF classification.
+Historical docs/config freezes and acceptance records are preserved. Push, real
+dataset/feature use, real training, trading backtests, research gates and holdout work
+remain unauthorized. The live pilot remains deferred without
 backfill. Historical internal-use/retention rights remain recorded, but do not
 override disabled network authority. Real scorer/model choice and scoring, numerical
 research gates and future-holdout policy still require their own approvals.
@@ -1173,13 +1252,14 @@ research gates and future-holdout policy still require their own approvals.
 | Milestone 3 real sentiment scoring | `milestone_3_scoring_authorized: false`; `approved_scorer: null` |
 | Milestone 4 specification | Frozen at `683f76d`; numerical, causal, coverage and storage requirements unchanged |
 | Milestone 4 implementation/feature aggregation | `milestone_4_status: ACCEPTED` at `c177a76`; synthetic-only, real feature use `false` |
-| Milestone 5 dataset integration | `milestone_5_status: ACCEPTED_OFFLINE_ONLY`; offline implementation and dataset-integration authority `true` only for `offline_synthetic_only`; real dataset/feature use `false`; one local acceptance commit authorized, no push; next action is `await_human_next_milestone_specification_authorization` |
+| Milestone 5 dataset integration | `milestone_5_status: ACCEPTED_OFFLINE_ONLY` at `d7cfa575`; offline implementation and dataset-integration authority `true` only for `offline_synthetic_only`; real dataset/feature use `false` |
+| Milestone 6 specification and engine | Specification frozen; `milestone_6_status: ACCEPTED_OFFLINE_ONLY` after independent review and September 24 human sign-off; shared synthetic folds, frozen local classifier fitting, OOF classification, tree importance and atomic Phase 2 artifacts accepted for offline engineering only; Milestone 7 not authorized |
 | Download/query GDELT or any provider data | Not authorized while pilot is deferred |
 | Call a provider API or fetch a publisher page | Not authorized; all implementation and verification remain offline |
 | Fetch or alter market data | Not authorized |
 | Create an account, accept a model/provider license, or request credentials | Not authorized; preserve the previously provisioned isolated Ed25519 pilot key |
 | Start a paid service or incur third-party spend | Not authorized |
-| Download model weights, score real articles, build/join real features, train, or backtest | Not authorized; only offline synthetic/mock scoring, aggregation and dataset-integration implementation/tests are in scope |
+| Download model weights, score real articles, build/join real features, train on real data, or run trading backtests | Not authorized; only prior synthetic/mock foundations and current M6 synthetic-only classifier fitting/classification tests are in scope |
 | Start future-holdout collection | Not authorized; requires approved frozen protocol/generation |
 | Claim or evaluate the future holdout | Separate explicit authorization required after readiness |
 
