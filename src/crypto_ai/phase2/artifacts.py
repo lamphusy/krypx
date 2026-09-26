@@ -329,13 +329,13 @@ class ArtifactStore:
             _semantic_replay(self.experiments, dict(checked_files), deepcopy(checked_metadata))
             _require_metadata_unchanged(metadata, metadata_bytes)
             _require_descriptor_relative_mutations()
-            _require_atomic_rename_directory_no_replace_at()
             parent = _open_directory_path(
                 self.root, description="phase2 runs", expected_identity=self._identity
             )
             stage_name = ".staging-" + run_id + "-" + uuid.uuid4().hex
             stage = None
             try:
+                _require_atomic_rename_directory_no_replace_at(parent)
                 os.mkdir(stage_name, mode=0o700, dir_fd=parent)
                 stage = _open_directory_at(parent, stage_name, description="report staging")
                 for name, raw in sorted(checked_files.items()):

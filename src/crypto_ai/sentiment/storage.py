@@ -6,8 +6,10 @@ import ctypes
 import errno
 import json
 import os
+import platform
 import stat
 import sys
+import tempfile
 import uuid
 from collections.abc import Callable, Mapping
 from contextlib import ExitStack
@@ -207,7 +209,6 @@ class ContentAddressedStore:
             raise SentimentStorageError("publication paths are not unique after normalization")
 
         _require_descriptor_relative_mutations()
-        _require_atomic_rename_directory_no_replace_at()
         final_directory = self.publications_root / publication_id
         staging_name = f".staging-{publication_id}-{uuid.uuid4().hex}"
         with ExitStack() as descriptors:
@@ -219,6 +220,7 @@ class ContentAddressedStore:
                 description="content store publications directory",
             )
             descriptors.callback(os.close, publications_descriptor)
+            _require_atomic_rename_directory_no_replace_at(publications_descriptor)
             staging_descriptor: int | None = None
             staging_exists = False
             try:
@@ -1167,25 +1169,80 @@ def _cleanup_staging_at(publications_descriptor: int, staging_name: str) -> None
         pass
 
 
-def _require_atomic_rename_directory_no_replace_at() -> None:
-    libc = ctypes.CDLL(None, use_errno=True)
-    symbol = "renameatx_np" if sys.platform == "darwin" else "renameat2"
-    if sys.platform != "darwin" and not sys.platform.startswith("linux"):
-        raise SentimentStorageError(
-            "platform lacks descriptor-relative atomic no-replace directory rename"
-        )
-    if not hasattr(libc, symbol):
-        raise SentimentStorageError("atomic no-replace rename is unavailable")
-
-
-def _atomic_rename_directory_no_replace(
+def _linux_rename_noreplace(
+    libc: ctypes.CDLL,
     parent_descriptor: int,
-    source_name: str,
-    destination_name: str,
-) -> None:
-    """Atomically rename below one anchored parent without replacing a destination."""
-    source_bytes = os.fsencode(source_name)
-    destination_bytes = os.fsencode(destination_name)
+    source_bytes: bytes,
+    destination_bytes: bytes,
+) -> int:
+    """Use glibc renameat2, or the Linux syscall on supported architectures."""
+    try:
+        rename_no_replace = libc.renameat2
+    except AttributeError:
+        rename_no_replace = None
+    if rename_no_replace is not None:
+        rename_no_replace.argtypes = [
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        ]
+        rename_no_replace.restype = ctypes.c_int
+        ctypes.set_errno(0)
+        result = rename_no_replace(
+            parent_descriptor,
+            source_bytes,
+            parent_descriptor,
+            destination_bytes,
+            0x00000001,  # RENAME_NOREPLACE
+        )
+        if result == 0 or ctypes.get_errno() != errno.ENOSYS:
+            return result
+
+    architecture = platform.machine().lower()
+    syscall_number = {
+        "x86_64": 316,
+        "amd64": 316,
+        "aarch64": 276,
+        "arm64": 276,
+    }.get(architecture)
+    if syscall_number is None:
+        raise SentimentStorageError(
+            f"atomic no-replace rename is unavailable on Linux {architecture}"
+        )
+    try:
+        syscall = libc.syscall
+    except AttributeError as exc:
+        raise SentimentStorageError("atomic no-replace rename is unavailable") from exc
+    syscall.argtypes = [
+        ctypes.c_long,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
+    ]
+    syscall.restype = ctypes.c_long
+    ctypes.set_errno(0)
+    return int(
+        syscall(
+            syscall_number,
+            parent_descriptor,
+            source_bytes,
+            parent_descriptor,
+            destination_bytes,
+            0x00000001,  # RENAME_NOREPLACE
+        )
+    )
+
+
+def _atomic_rename_directory_no_replace_status(
+    parent_descriptor: int,
+    source_bytes: bytes,
+    destination_bytes: bytes,
+) -> int:
+    """Return the native call status, retaining its errno for the caller."""
     if sys.platform == "darwin":
         libc = ctypes.CDLL(None, use_errno=True)
         try:
@@ -1201,39 +1258,107 @@ def _atomic_rename_directory_no_replace(
         ]
         rename_exclusive.restype = ctypes.c_int
         ctypes.set_errno(0)
-        result = rename_exclusive(
+        return rename_exclusive(
             parent_descriptor,
             source_bytes,
             parent_descriptor,
             destination_bytes,
-            0x00000004,
+            0x00000004,  # RENAME_EXCL (descriptor-relative renamex_np variant)
         )
-    elif sys.platform.startswith("linux"):
-        libc = ctypes.CDLL(None, use_errno=True)
+    if sys.platform.startswith("linux"):
         try:
-            rename_no_replace = libc.renameat2
-        except AttributeError as exc:
-            raise SentimentStorageError("atomic no-replace rename is unavailable") from exc
-        rename_no_replace.argtypes = [
-            ctypes.c_int,
-            ctypes.c_char_p,
-            ctypes.c_int,
-            ctypes.c_char_p,
-            ctypes.c_uint,
-        ]
-        rename_no_replace.restype = ctypes.c_int
-        ctypes.set_errno(0)
-        result = rename_no_replace(
-            parent_descriptor,
-            source_bytes,
-            parent_descriptor,
-            destination_bytes,
-            0x00000001,
-        )
+            libc = ctypes.CDLL("libc.so.6", use_errno=True)
+        except OSError:
+            libc = ctypes.CDLL(None, use_errno=True)
+        return _linux_rename_noreplace(libc, parent_descriptor, source_bytes, destination_bytes)
+    raise SentimentStorageError(
+        "platform lacks descriptor-relative atomic no-replace directory rename"
+    )
+
+
+def _probe_atomic_rename_directory_no_replace_at(descriptor: int) -> None:
+    """Exercise success and collision with temporary children on one filesystem."""
+    os.mkdir("source", dir_fd=descriptor)
+    result = _atomic_rename_directory_no_replace_status(descriptor, b"source", b"destination")
+    if result != 0:
+        reason = os.strerror(ctypes.get_errno())
+        raise SentimentStorageError(f"atomic no-replace rename is unavailable: {reason}")
+    try:
+        os.stat("source", dir_fd=descriptor, follow_symlinks=False)
+    except FileNotFoundError:
+        pass
     else:
+        raise SentimentStorageError("atomic no-replace rename did not move source")
+    os.stat("destination", dir_fd=descriptor, follow_symlinks=False)
+    os.mkdir("collision", dir_fd=descriptor)
+    result = _atomic_rename_directory_no_replace_status(descriptor, b"collision", b"destination")
+    if result == 0 or ctypes.get_errno() not in {errno.EEXIST, errno.ENOTEMPTY}:
+        raise SentimentStorageError("atomic no-replace rename did not reject collision")
+    os.stat("collision", dir_fd=descriptor, follow_symlinks=False)
+    os.stat("destination", dir_fd=descriptor, follow_symlinks=False)
+
+
+def _require_atomic_rename_directory_no_replace_at(parent_descriptor: int | None = None) -> None:
+    """Probe no-replace support on the target filesystem when its parent is open."""
+    if parent_descriptor is None:
+        try:
+            with tempfile.TemporaryDirectory(prefix="krypx-rename-probe-") as probe_path:
+                descriptor = os.open(
+                    probe_path,
+                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_CLOEXEC", 0),
+                )
+                try:
+                    _probe_atomic_rename_directory_no_replace_at(descriptor)
+                finally:
+                    os.close(descriptor)
+        except OSError as exc:
+            raise SentimentStorageError(
+                f"atomic no-replace rename capability probe failed: {exc}"
+            ) from exc
+        return
+
+    probe_name = f".rename-probe-{uuid.uuid4().hex}"
+    descriptor: int | None = None
+    try:
+        try:
+            os.mkdir(probe_name, mode=0o700, dir_fd=parent_descriptor)
+            descriptor = _open_directory_at(
+                parent_descriptor, probe_name, description="atomic rename capability probe"
+            )
+            _probe_atomic_rename_directory_no_replace_at(descriptor)
+        finally:
+            try:
+                if descriptor is not None:
+                    try:
+                        for child_name in ("source", "destination", "collision"):
+                            try:
+                                os.rmdir(child_name, dir_fd=descriptor)
+                            except FileNotFoundError:
+                                pass
+                    finally:
+                        os.close(descriptor)
+            finally:
+                try:
+                    os.rmdir(probe_name, dir_fd=parent_descriptor)
+                except FileNotFoundError:
+                    pass
+    except OSError as exc:
         raise SentimentStorageError(
-            "platform lacks descriptor-relative atomic no-replace directory rename"
-        )
+            f"atomic no-replace rename capability probe failed: {exc}"
+        ) from exc
+
+
+def _atomic_rename_directory_no_replace(
+    parent_descriptor: int,
+    source_name: str,
+    destination_name: str,
+) -> None:
+    """Atomically rename below one anchored parent without replacing a destination."""
+    source_bytes = os.fsencode(source_name)
+    destination_bytes = os.fsencode(destination_name)
+    result = _atomic_rename_directory_no_replace_status(
+        parent_descriptor, source_bytes, destination_bytes
+    )
     if result == 0:
         return
     error_number = ctypes.get_errno()

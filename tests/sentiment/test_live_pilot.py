@@ -4,11 +4,13 @@ import base64
 import json
 import os
 import plistlib
+import sys
 from contextlib import nullcontext
 from copy import deepcopy
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
@@ -389,7 +391,13 @@ def test_complete_runner_arming_and_first_worker_are_offline(tmp_path, monkeypat
     monkeypatch.setattr(runner.time, "sleep", clock.sleep)
     launch = Mock(return_value=Mock(returncode=0))
     monkeypatch.setattr(runner.subprocess, "run", launch)
-    monkeypatch.setattr(runner.sys, "platform", "darwin")
+    # Keep the scheduler's simulated platform local to this module. Mutating
+    # runner.sys.platform would also change storage.sys.platform on Linux.
+    monkeypatch.setattr(
+        runner,
+        "sys",
+        SimpleNamespace(platform="darwin", executable=sys.executable, stderr=sys.stderr),
+    )
     armed = runner.arm(tmp_path)
     assert armed["status"] == "ARMED" and launch.call_count == 96
     for call in launch.call_args_list:

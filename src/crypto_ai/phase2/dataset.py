@@ -868,7 +868,6 @@ def _verify(store, artifact, *, require_clean=False):
 def _publish_verified(store, publication_id, files, metadata):
     """Read back every staged byte BEFORE creating the outer completion manifest."""
     _require_descriptor_relative_mutations()
-    _require_atomic_rename_directory_no_replace_at()
     staging_name = ".staging-" + publication_id + "-" + uuid.uuid4().hex
     with ExitStack() as descriptors:
         parent = _open_store_directory(
@@ -878,6 +877,7 @@ def _publish_verified(store, publication_id, files, metadata):
             expected_root_identity=store._root_identity,
         )
         descriptors.callback(os.close, parent)
+        _require_atomic_rename_directory_no_replace_at(parent)
         os.mkdir(staging_name, mode=0o700, dir_fd=parent)
         stage = None
         exists = True

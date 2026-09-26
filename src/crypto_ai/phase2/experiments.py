@@ -914,13 +914,13 @@ class ExperimentStore:
             _verify(self.parents, artifact)
             files, _ = _candidate(artifact)
             _require_descriptor_relative_mutations()
-            _require_atomic_rename_directory_no_replace_at()
             parent = _open_directory_path(
                 self.root, description="experiment runs", expected_identity=self._identity
             )
             name = ".staging-" + run_id + "-" + uuid.uuid4().hex
             stage = None
             try:
+                _require_atomic_rename_directory_no_replace_at(parent)
                 os.mkdir(name, mode=0o700, dir_fd=parent)
                 stage = _open_directory_at(parent, name, description="experiment staging")
                 for filename, raw in sorted(files.items()):
