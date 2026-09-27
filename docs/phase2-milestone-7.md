@@ -2,12 +2,14 @@
 
 Specification ID: `phase2-milestone7-offline-development-backtests-v1`
 
-Status: **SPECIFICATION_FROZEN** on 2026-09-24. This is a documentation and
-protocol-configuration freeze only. Milestone 7 source, tests, backtest execution,
-artifact publication, and research reporting are **NOT AUTHORIZED** by this step.
-`next_action: implement_milestone_7_backtests_offline` names the next proposed task,
-which requires separate human authorization. The accepted Milestone 6 parent is
+Specification status: **SPECIFICATION_FROZEN** on 2026-09-24. That historical
+documentation-only freeze did not authorize source, tests or backtest execution;
+a separate September 26 human instruction authorized verified synthetic-only
+implementation. Current Milestone 7 engineering status: **ACCEPTED_OFFLINE_ONLY**
+by human sign-off on 2026-09-27. The accepted Milestone 6 parent is
 `b3726f3c02587b470ab85e552559091e7aeeaa42` on `main` (1,425 passing tests).
+The next proposed action is `prepare_milestone_8_specification`, which requires
+separate human authorization and does not permit holdout access.
 
 ## 1. Authority and input boundary
 
@@ -221,9 +223,9 @@ verification) from **Research Outcome** (`NOT_EVALUATED_SYNTHETIC_ONLY`). Do not
 call a synthetic PnL, gate, benchmark win or apparent alpha real research
 evidence. No model choice, production claim or holdout result belongs here.
 
-## 8. Future offline acceptance tests and stop conditions
+## 8. Frozen offline acceptance tests and stop conditions
 
-Before any later implementation is accepted, synthetic fixture tests must prove
+Before the later implementation could be accepted, synthetic fixture tests had to prove
 identical A/B/C/D and baseline windows, exact `i+1`/`i+5` execution boundaries,
 exit-before-entry ordering, full-equity no-overlap behavior, final exit context,
 and no trades on excluded provider-gap decisions. Perturbing prices or scores
@@ -236,8 +238,41 @@ ledger/equity/cost reconciliation, collision and post-rename failure handling,
 and deterministic byte-identical reruns. Fail closed on malformed timestamps,
 rates, prices, ordinals, labels, gaps, metrics, JSON or provenance.
 
-This freeze **does not** authorize those tests or the engine to be written or run
-now. It does not authorize real collection, scoring, model downloads, real-data
-training/backtests, approved research gates, future collection, holdout access,
-paid services or Git push. The live pilot stays `DEFERRED_WITHOUT_BACKFILL` with
-`network_pilot_authorized: false` and `real_network_calls_prohibited: true`.
+The September 24 freeze **alone did not** authorize those tests or the engine.
+The separate September 26 instruction authorized them on verified synthetic
+fixtures, and the September 27 human sign-off accepts that engineering result
+offline only. None of these steps authorizes real collection, scoring, model
+downloads, real-data training/backtests, research gates, future collection,
+holdout access, paid services or Git push. The live pilot stays
+`DEFERRED_WITHOUT_BACKFILL` with `network_pilot_authorized: false` and
+`real_network_calls_prohibited: true`.
+
+## 9. Final offline engineering acceptance
+
+Human authority accepted the fixed-horizon four-cell backtest engine, low/base/high
+cost sensitivity, five trading baselines, side-by-side C–A and D–B ablations,
+reconciliation diagnostics, immutable report publication and cross-platform
+atomic no-replace storage. The implementation and report commit is
+`e84944721f5ba2199992c7fc547bc0c868436056`; the subsequent storage-fix
+commit is `29f311660c047cc31b365fd4029e788bff9150a9`. This is an
+**engineering acceptance on verified synthetic inputs**, not a research outcome,
+model selection, real-data backtest or holdout result.
+
+Final verification: **1,481/1,481** repository tests passed, including **253/253**
+Phase 1 tests. Against base `43889acff2651c696f318ff6780455a06bbfcb35`,
+the selected **50/50** source/test/fixture blobs remain byte-identical: **48/48**
+existing non-Phase-2 source/test paths and two GSG fixture JSONL files. This
+selected baseline is not a claim that all 50 were part of the original Phase 1 tree.
+Strict repository JSON validation passed, and the local Node.js RFC 8785
+binary64 differential matched **49,972/49,972** cases. Atomic no-replace
+publication uses descriptor-relative macOS `renameatx_np(RENAME_EXCL)` and Linux
+`renameat2(RENAME_NOREPLACE)`, with a syscall fallback on supported Linux
+architectures and an on-filesystem success/collision capability probe. Linux
+paths were exercised with offline simulations; the final full suite ran on
+Darwin arm64. No real network call, model download, real-data backtest, holdout
+access or push was performed as part of this acceptance.
+
+`next_action: prepare_milestone_8_specification` is a governance placeholder,
+not authorization to begin Milestone 8. Its specification, any future holdout
+planning or execution, and live-pilot resumption each require separate explicit
+human authorization.

@@ -1,6 +1,6 @@
 # KrypX Phase 2 — Milestone 0 Research Protocol and News-Source Feasibility
 
-**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**; the live pilot **DEFERRED WITHOUT BACKFILL**; Milestone 3 foundation **ACCEPTED_OFFLINE_ONLY**; Milestone 4 **ACCEPTED** for offline synthetic aggregation; Milestone 5 dataset integration **ACCEPTED_OFFLINE_ONLY**. Milestone 6 is **ACCEPTED** for offline synthetic engineering only at `b3726f3c02587b470ab85e552559091e7aeeaa42`. Milestone 7 has a frozen specification and is **IN_PROGRESS_OFFLINE_ONLY**: its source, adversarial tests and backtest/report execution are authorized solely on verified synthetic Milestone 5/6 parents, not yet accepted. Real dataset integration, real scoring/feature use, real training/backtests, research gates and holdout evaluation remain **NOT AUTHORIZED**.
+**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**; the live pilot **DEFERRED WITHOUT BACKFILL**; Milestone 3 foundation **ACCEPTED_OFFLINE_ONLY**; Milestone 4 **ACCEPTED** for offline synthetic aggregation; Milestone 5 dataset integration **ACCEPTED_OFFLINE_ONLY**. Milestone 6 is **ACCEPTED** for offline synthetic engineering only at `b3726f3c02587b470ab85e552559091e7aeeaa42`. Milestone 7 has a frozen specification and is **ACCEPTED_OFFLINE_ONLY** for verified synthetic Milestone 5/6 backtests and reports at `e84944721f5ba2199992c7fc547bc0c868436056` and `29f311660c047cc31b365fd4029e788bff9150a9`. Real dataset integration, real scoring/feature use, real training/backtests, research gates, Milestone 8 work and holdout evaluation remain **NOT AUTHORIZED**.
 
 **Research decision:** `PROCEED_WITH_FORWARD_ONLY_COLLECTION`
 
@@ -31,9 +31,15 @@
 **Milestone 6 completion commit:** `b3726f3c02587b470ab85e552559091e7aeeaa42`; 1,425 passing tests, no push.
 **Milestone 7 specification freeze:** 2026-09-24; [offline development backtest and report specification](phase2-milestone-7.md); documentation/configuration only, no source, test or backtest-execution authority.
 **Milestone 7 offline implementation authority:** separate 2026-09-26 human instruction; frozen-spec backtest engine, costs, five baselines, ablations, immutable report, adversarial tests and governance updates on verified synthetic M5/M6 fixtures only; no real data, real backtests, live pilot or push.
+**Milestone 7 final offline sign-off:** 2026-09-27 human authority accepted the verified synthetic-only implementation and cross-platform storage corrections after 1,481 passing repository tests, 253 passing Phase 1 tests, 50/50 byte-identical selected source/test/fixture blobs against `43889ac` (48 existing non-Phase-2 source/test paths and two GSG fixtures) and 49,972/49,972 local RFC 8785 differential matches. Completion commits: `e84944721f5ba2199992c7fc547bc0c868436056` and `29f311660c047cc31b365fd4029e788bff9150a9`; no new live-network, real-research or holdout authority.
 **Companion machine-readable protocol:** `config/phase2_protocol.json`
 
 **Approval boundary:** The human authority accepted offline Batch A at canonical `main` commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`; its original limited sign-off remains unchanged. The historical September 13 pilot instruction separately authorized the exact bounded GSG HTTPS window, real transport/runner setup and Ed25519 key provisioning. Explicit actual-product rights approval covers internal title metadata and incidental exact raw fields, retained immutably through review with GDELT attribution and no redistribution. The later deferral disables network authority without backfill; the offline/mock Milestone 3 and synthetic Milestone 4 foundations are accepted. The September 18 instructions authorized the reviewed Milestone 4 commit, separate Milestone 5 freeze and later synthetic-only dataset implementation. September 19 final sign-off authorized the accepted Milestone 5 local commit. September 20 separately permitted the Milestone 6 freeze and direct offline synthetic four-cell engine implementation, including local fitting of the already installed frozen classifiers; September 24 accepted and committed that implementation. The September 24 instruction froze only the Milestone 7 documentation/configuration specification; the separate September 26 instruction now authorizes the Milestone 7 implementation and synthetic-only backtest/report tests on verified M5/M6 fixtures. Neither instruction authorizes real market/news or pilot-data access, real dataset construction or joins, real scoring/features, model/scorer selection or downloads, external APIs, publisher scraping/body-text collection, research gates, real training or trading backtests, future collection, holdout access/evaluation, paid services or push. Historical no-training/no-next-milestone clauses below retain their original scope and are superseded only for the authorized synthetic engineering work.
+
+The September 27 human sign-off accepts the completed Milestone 7 synthetic
+engineering only; it does not relax the real-data, live-network, research-gate,
+Milestone 8 or holdout boundaries above. The named next action requires separate
+human authorization before specification work begins.
 
 The Batch A governance sign-off commit is `e7c189bf180c9b3fd72892544fa72805998f765d`.
 The 2026-09-07 freeze and 2026-09-08 GSG reconciliation instructions authorized Batch B
@@ -62,19 +68,20 @@ Current fields are `batch_b_status: SPECIFICATION_FROZEN_COMPATIBLE`,
 `milestone_6_synthetic_training_authorized: true`,
 `milestone_6_real_training_authorized: false`,
 `milestone_6_research_evaluation_authorized: false`,
-`milestone_7_status: IN_PROGRESS_OFFLINE_ONLY`,
+`milestone_7_status: ACCEPTED_OFFLINE_ONLY`,
 `milestone_7_specification_authorized: true`,
 `milestone_7_implementation_authorized: true`,
 `milestone_7_offline_implementation_authorized: true`,
 `milestone_7_offline_backtests_authorized: true`,
 `milestone_7_real_backtests_authorized: false`,
 `real_network_calls_prohibited: true`, and
-`next_action: implement_milestone_7_backtests_offline`. The separate human
-instruction now authorizes that action for verified synthetic M5/M6 inputs only.
+`next_action: prepare_milestone_8_specification`. That action is proposed only;
+Milestone 8 specification work requires separate explicit human authorization.
 September 20 explicitly authorized the M6 specification and implementation together;
 September 24 independently accepted the offline result and authorized one local commit.
 The first M7 instruction froze only its specification; the next authorized
-synthetic-only implementation. Neither real research execution nor push is inferred.
+synthetic-only implementation, and the September 27 human sign-off accepted it
+offline only. Neither real research execution nor push is inferred.
 Historical freeze/acceptance records remain preserved. The live-pilot status is
 `DEFERRED_WITHOUT_BACKFILL`; it is neither completed nor accepted. Historical setup
 verification and its then-current `VERIFIED_SETUP_NOT_ARMED` status remain audit records,
@@ -535,7 +542,7 @@ use real data or access a holdout. Its next action proposed offline implementati
 and required the separate instruction recorded below. Engineering status and any
 synthetic demonstration must remain distinct from a real research outcome.
 
-### Current Milestone 7 offline implementation authority
+### Historical Milestone 7 offline implementation authority
 
 The subsequent September 26 human instruction authorizes implementation of
 [`phase2-milestone7-offline-development-backtests-v1`](phase2-milestone-7.md)
@@ -552,6 +559,27 @@ model downloads, paid scoring, training/backtests on real or unverified data,
 holdout access, live-pilot resumption or Git push are authorized. The live pilot
 remains `DEFERRED_WITHOUT_BACKFILL` with network authorization disabled.
 
+### Current Milestone 7 offline engineering acceptance
+
+The September 27 human sign-off marks Milestone 7 `ACCEPTED_OFFLINE_ONLY` after
+the independent final review and the 1,481-test offline suite. The source/report
+commit is `e84944721f5ba2199992c7fc547bc0c868436056`; the cross-platform
+storage correction is `29f311660c047cc31b365fd4029e788bff9150a9`.
+All 253 Phase 1 tests passed. Against base `43889ac`, the selected 50-file
+source/test/fixture inventory was byte-identical: 48 existing non-Phase-2
+source/test paths and two GSG fixture JSONL files. This selected inventory is
+not an original Phase 1 tree count. Local RFC 8785 differential verification
+matched 49,972 of 49,972 binary64 values. Publication uses descriptor-relative
+macOS `renameatx_np(RENAME_EXCL)` and Linux `renameat2(RENAME_NOREPLACE)` with
+the supported-architecture syscall fallback. The Linux branches were verified
+with offline simulations; the full suite ran on Darwin arm64.
+
+`next_action: prepare_milestone_8_specification` is a proposed governance next
+step, not authorization to start Milestone 8. Its planning, future holdout
+work, real-data backtests and live-pilot resumption each require separate
+explicit human authority. The pilot remains `DEFERRED_WITHOUT_BACKFILL` with
+`network_pilot_authorized: false` and `real_network_calls_prohibited: true`.
+
 ## Executive decision
 
 No candidate clears the retrospective historical-and-immutable gate. GDELT GSG is the closest: its archived records couple URL, title, language, and a GDELT first-seen claim, but official sources do not promise append-only history, publish provider checksums/version IDs, or describe a correction/rewrite policy. KrypX must therefore never use historical GSG rows to rescore the consumed Phase 1 period. Prospectively, however, GDELT's open title metadata can be snapshotted on receipt, content-addressed, and assigned KrypX's own durable `first_seen_at`; that forward path is feasible without publisher-body retrieval.
@@ -561,7 +589,7 @@ This recommendation is deliberately title-only. It does not authorize fetching p
 | Decision item | Milestone 0 result |
 |---|---|
 | Exact verdict | `PROCEED_WITH_FORWARD_ONLY_COLLECTION` |
-| Engineering-specification approval | Milestone 0 frozen; offline Milestones 1 and 2 accepted at `bb6d4d`; Milestone 3 synthetic/mock foundation accepted at `d129094`; Milestone 4 synthetic aggregation accepted at `c177a76`; Milestone 5 synthetic integration accepted at `d7cfa575`; Milestone 6 synthetic four-cell engine accepted at `b3726f3`; Milestone 7 specification frozen and its separate synthetic-only implementation now in progress; no real research execution authorized |
+| Engineering-specification approval | Milestone 0 frozen; offline Milestones 1 and 2 accepted at `bb6d4d`; Milestone 3 synthetic/mock foundation accepted at `d129094`; Milestone 4 synthetic aggregation accepted at `c177a76`; Milestone 5 synthetic integration accepted at `d7cfa575`; Milestone 6 synthetic four-cell engine accepted at `b3726f3`; Milestone 7 synthetic-only backtest/report engineering accepted at `e849447` and `29f3116`; no real research execution or Milestone 8 work authorized |
 | Recommended provider | GDELT GSG, title-only, with KrypX receipt time and exact raw-byte hashes; live pilot deferred without backfill; no current network authority |
 | Historical feasibility | `REJECTED`: no retrospective news scoring/backtest for the Phase 1 period |
 | Main blocker to outcomes | A newly collected development corpus does not yet exist; scorer, gates, budget, and later holdout are unapproved |
@@ -1284,8 +1312,8 @@ and storage/provider-fixture contracts are accepted. The synthetic/mock Mileston
 foundation is accepted at `d129094`; Milestone 4 synthetic aggregation is accepted at
 `c177a76`. Milestone 5 integration is `ACCEPTED_OFFLINE_ONLY` at `d7cfa575` and M6
 synthetic four-cell engineering is accepted at `b3726f3`. The latest human authority
-permits M7 implementation and synthetic-only backtest/report tests using verified
-M5/M6 parents; this remains `IN_PROGRESS_OFFLINE_ONLY`, not accepted research.
+accepts M7 synthetic-only backtest/report engineering at `e849447` and `29f3116`
+using verified M5/M6 parents; this is `ACCEPTED_OFFLINE_ONLY`, not accepted research.
 Historical docs/config freezes and acceptance records are preserved. Push, real
 dataset/feature use, real training and trading backtests, research gates and holdout
 work remain unauthorized. The live pilot remains deferred without
@@ -1304,7 +1332,7 @@ research gates and future-holdout policy still require their own approvals.
 | Milestone 4 implementation/feature aggregation | `milestone_4_status: ACCEPTED` at `c177a76`; synthetic-only, real feature use `false` |
 | Milestone 5 dataset integration | `milestone_5_status: ACCEPTED_OFFLINE_ONLY` at `d7cfa575`; offline implementation and dataset-integration authority `true` only for `offline_synthetic_only`; real dataset/feature use `false` |
 | Milestone 6 specification and engine | Specification frozen; root `milestone_6_status: ACCEPTED` at `b3726f3`; historical implementation record remains `ACCEPTED_OFFLINE_ONLY`, limited to synthetic engineering |
-| Milestone 7 specification and implementation | Frozen spec; root `milestone_7_status: IN_PROGRESS_OFFLINE_ONLY` and `milestone_7_offline_implementation_authorized: true` under the separate instruction; verified synthetic M5/M6 backtests and reports only, no acceptance or real research outcome |
+| Milestone 7 specification and implementation | Frozen spec; root `milestone_7_status: ACCEPTED_OFFLINE_ONLY` after human sign-off, 1,481 tests and commits `e849447`/`29f3116`; verified synthetic M5/M6 backtests and reports only, no real research outcome |
 | Download/query GDELT or any provider data | Not authorized while pilot is deferred |
 | Call a provider API or fetch a publisher page | Not authorized; all implementation and verification remain offline |
 | Fetch or alter market data | Not authorized |
