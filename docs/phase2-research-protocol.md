@@ -1,6 +1,6 @@
 # KrypX Phase 2 — Milestone 0 Research Protocol and News-Source Feasibility
 
-**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**; the live pilot **DEFERRED WITHOUT BACKFILL**; Milestone 3 foundation **ACCEPTED_OFFLINE_ONLY**; Milestone 4 **ACCEPTED** for offline synthetic aggregation; Milestone 5 dataset integration **ACCEPTED_OFFLINE_ONLY**. Milestone 6 is **ACCEPTED** for offline synthetic engineering only at `b3726f3c02587b470ab85e552559091e7aeeaa42`. Milestone 7 is **ACCEPTED** within its verified synthetic-only scope at `e84944721f5ba2199992c7fc547bc0c868436056` and `29f311660c047cc31b365fd4029e788bff9150a9`. Milestone 8 is **ACCEPTED_OFFLINE_ONLY** for synthetic claim, zero-outcome readiness and boundary-purge engineering against its frozen specification. Milestone 9 workflow execution, real dataset integration, real scoring/feature use, real training/backtests, research gates, future collection and holdout access/evaluation remain **NOT AUTHORIZED**.
+**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**; the live pilot **DEFERRED WITHOUT BACKFILL**; Milestone 3 foundation **ACCEPTED_OFFLINE_ONLY**; Milestone 4 **ACCEPTED** for offline synthetic aggregation; Milestone 5 dataset integration **ACCEPTED_OFFLINE_ONLY**. Milestone 6 is **ACCEPTED** for offline synthetic engineering only at `b3726f3c02587b470ab85e552559091e7aeeaa42`. Milestone 7 is **ACCEPTED** within its verified synthetic-only scope at `e84944721f5ba2199992c7fc547bc0c868436056` and `29f311660c047cc31b365fd4029e788bff9150a9`. Milestone 8 is **ACCEPTED**, with engineering acceptance limited to offline synthetic claim, zero-outcome readiness and boundary-purge infrastructure. Milestone 9 is **SPECIFICATION_FROZEN** for the one-time future-evaluation workflow in documentation/configuration only. Milestone 9 implementation or workflow execution, real dataset integration, real scoring/feature use, real training/backtests, research-gate execution, future collection and holdout access/evaluation remain **NOT AUTHORIZED**.
 
 **Research decision:** `PROCEED_WITH_FORWARD_ONLY_COLLECTION`
 
@@ -35,6 +35,8 @@
 **Milestone 8 specification freeze:** 2026-09-27 from signed-off Milestone 7 `main` commit `42f41ecbdadae6d048d2095ec71477591cea7385`; [future holdout accumulation and protocol-freeze specification](phase2-milestone-8.md); docs/config only. At that freeze, offline claim/readiness implementation required separate human authorization. This freeze does not choose `d`, fit real models, approve numerical gates, create a claim or inspect holdout data.
 **Milestone 8 offline implementation authority:** 2026-09-27 human instruction after the frozen-spec `main` commit `4253ebfd0abb76734e71dc3d628d107f7e0b8937`; offline synthetic-only `src/crypto_ai/phase2/holdout.py`, adversarial `tests/phase2/test_holdout.py`, and governance updates. Claim creation and readiness checks are exercisable only with synthetic fixtures; no actual holdout may be unblinded or evaluated, and this instruction does not accept the implementation or authorize a push.
 **Milestone 8 final offline sign-off:** 2026-09-28 human authority accepted the synthetic-only implementation as `ACCEPTED_OFFLINE_ONLY` after 101 focused adversarial tests, 1,582 passing repository tests, 48/48 byte-identical existing non-Phase-2 source/test files, 50/50 byte-identical selected source/test/fixture files, and 49,972/49,972 local RFC 8785 differential matches. One local `main` commit is authorized; no push, real holdout access/evaluation or Milestone 9 workflow execution is authorized.
+**Milestone 8 completion commit:** `bf2cb8c179704fece6b5edbd3f95d8fe310a5aa4`; the root status is now `ACCEPTED`, while its engineering acceptance remains offline synthetic-only and grants no real-data authority.
+**Milestone 9 specification freeze:** 2026-09-28 human authority froze the [one-time future evaluation specification](phase2-milestone-9.md) in documentation/configuration only. The specified next action is `implement_milestone_9_evaluation_workflow_offline`, requiring separate human authorization; no Python source/tests, real data, network, model download, holdout access/evaluation, workflow execution or push is authorized by this freeze.
 **Companion machine-readable protocol:** `config/phase2_protocol.json`
 
 **Approval boundary:** The human authority accepted offline Batch A at canonical `main` commit `bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5`; its original limited sign-off remains unchanged. The historical September 13 pilot instruction separately authorized the exact bounded GSG HTTPS window, real transport/runner setup and Ed25519 key provisioning. Explicit actual-product rights approval covers internal title metadata and incidental exact raw fields, retained immutably through review with GDELT attribution and no redistribution. The later deferral disables network authority without backfill; the offline/mock Milestone 3 and synthetic Milestone 4 foundations are accepted. The September 18 instructions authorized the reviewed Milestone 4 commit, separate Milestone 5 freeze and later synthetic-only dataset implementation. September 19 final sign-off authorized the accepted Milestone 5 local commit. September 20 separately permitted the Milestone 6 freeze and direct offline synthetic four-cell engine implementation, including local fitting of the already installed frozen classifiers; September 24 accepted and committed that implementation. The September 24 instruction froze only the Milestone 7 documentation/configuration specification; the separate September 26 instruction now authorizes the Milestone 7 implementation and synthetic-only backtest/report tests on verified M5/M6 fixtures. Neither instruction authorizes real market/news or pilot-data access, real dataset construction or joins, real scoring/features, model/scorer selection or downloads, external APIs, publisher scraping/body-text collection, research gates, real training or trading backtests, future collection, holdout access/evaluation, paid services or push. Historical no-training/no-next-milestone clauses below retain their original scope and are superseded only for the authorized synthetic engineering work.
@@ -44,8 +46,12 @@ engineering only; it did not relax the real-data, live-network, research-gate
 or holdout boundaries above. A separate September 27 instruction froze only
 the Milestone 8 documentation/configuration specification; another authorized
 offline synthetic claim/readiness/boundary-purge implementation and tests. The
-September 28 human sign-off now accepts that engineering offline only, without
+September 28 human sign-off accepted that engineering offline only, without
 authorizing real collection, holdout access/evaluation or Milestone 9 workflow.
+The later September 28 human instruction freezes the Milestone 9
+documentation/configuration specification only. It authorizes no workflow
+implementation or execution and does not relax any real-data or live-network
+boundary.
 
 The Batch A governance sign-off commit is `e7c189bf180c9b3fd72892544fa72805998f765d`.
 The 2026-09-07 freeze and 2026-09-08 GSG reconciliation instructions authorized Batch B
@@ -80,14 +86,17 @@ Current fields are `batch_b_status: SPECIFICATION_FROZEN_COMPATIBLE`,
 `milestone_7_offline_implementation_authorized: true`,
 `milestone_7_offline_backtests_authorized: true`,
 `milestone_7_real_backtests_authorized: false`,
-`milestone_8_status: ACCEPTED_OFFLINE_ONLY`,
+`milestone_8_status: ACCEPTED`,
 `milestone_8_implementation_authorized: true` for synthetic-only engineering,
 `milestone_8_offline_implementation_authorized: true`,
 `milestone_8_holdout_access_authorized: false`,
+`milestone_9_status: SPECIFICATION_FROZEN`,
 `milestone_9_workflow_authorized: false`,
 `real_network_calls_prohibited: true`, and
-`next_action: await_separate_milestone_9_human_instruction`. The completed
-Milestone 8 implementation is accepted only for offline synthetic fixtures.
+`next_action: implement_milestone_9_evaluation_workflow_offline`. The completed
+Milestone 8 implementation is accepted only for offline synthetic fixtures;
+the Milestone 9 next action is a proposed offline implementation step and
+requires separate human authorization.
 September 20 explicitly authorized the M6 specification and implementation together;
 September 24 independently accepted the offline result and authorized one local commit.
 The first M7 instruction froze only its specification; the next authorized
@@ -595,7 +604,7 @@ explicit authority.
 The pilot remains `DEFERRED_WITHOUT_BACKFILL` with
 `network_pilot_authorized: false` and `real_network_calls_prohibited: true`.
 
-### Current Milestone 8 offline engineering acceptance
+### Milestone 8 offline engineering acceptance
 
 The September 28 human sign-off marks Milestone 8 `ACCEPTED_OFFLINE_ONLY` for
 synthetic-only holdout-claim, zero-outcome-readiness and boundary-purge
@@ -604,9 +613,31 @@ passing repository tests. The selected source/test/fixture inventory was
 byte-identical in 50/50 files, including 48/48 existing non-Phase-2 source/test
 files; local RFC 8785 differential checks matched 49,972/49,972 binary64
 values. This is engineering acceptance, not a real holdout claim or research
-outcome. The current action is to await a separate Milestone 9 human
-instruction; its workflow execution remains unauthorized. No network call,
-model download, real holdout access/evaluation or Git push is authorized.
+outcome. The completion commit is `bf2cb8c179704fece6b5edbd3f95d8fe310a5aa4`;
+the current root status is `ACCEPTED` without broadening the offline-only
+engineering scope. No network call, model download, real holdout
+access/evaluation or Git push is authorized.
+
+### Current Milestone 9 one-time evaluation specification freeze
+
+The September 28 human instruction freezes the
+[Milestone 9 specification](phase2-milestone-9.md) for the one-time
+`evaluate-holdout` workflow in documentation and protocol configuration only.
+The frozen implementation contract requires a zero-outcome preflight of
+snapshot hashes, frozen-model provenance, candle continuity and readiness;
+exclusive claim acquisition before any outcome read; frozen-model prediction,
+continuous market context through final required exit, Base/Low/High costs,
+five matched-window baselines, final gates and manifest-last artifacts. The
+final numerical gates in that specification are the current Milestone 9
+contract; older, different thresholds in the historical draft below are not
+Milestone 9 acceptance criteria. A failed gate means research `FAIL` and
+production `NO-GO`, with no post-hoc tuning. The status is
+`SPECIFICATION_FROZEN`; the next action
+`implement_milestone_9_evaluation_workflow_offline` identifies proposed
+offline implementation only and requires a separate human instruction. No
+workflow implementation or execution, real data, claim, holdout unblinding,
+network use, model download or push is authorized. The pilot remains
+`DEFERRED_WITHOUT_BACKFILL`.
 
 ## Executive decision
 
@@ -617,13 +648,13 @@ This recommendation is deliberately title-only. It does not authorize fetching p
 | Decision item | Milestone 0 result |
 |---|---|
 | Exact verdict | `PROCEED_WITH_FORWARD_ONLY_COLLECTION` |
-| Engineering-specification approval | Milestone 0 frozen; offline Milestones 1 and 2 accepted at `bb6d4d`; Milestone 3 synthetic/mock foundation accepted at `d129094`; Milestone 4 synthetic aggregation accepted at `c177a76`; Milestone 5 synthetic integration accepted at `d7cfa575`; Milestone 6 synthetic four-cell engine accepted at `b3726f3`; Milestone 7 synthetic-only backtest/report engineering accepted at `e849447` and `29f3116`; Milestone 8 specification frozen and synthetic claim/readiness/boundary-purge engineering `ACCEPTED_OFFLINE_ONLY`; no real research execution, holdout access or Milestone 9 workflow authorized |
+| Engineering-specification approval | Milestone 0 frozen; offline Milestones 1 and 2 accepted at `bb6d4d`; Milestone 3 synthetic/mock foundation accepted at `d129094`; Milestone 4 synthetic aggregation accepted at `c177a76`; Milestone 5 synthetic integration accepted at `d7cfa575`; Milestone 6 synthetic four-cell engine accepted at `b3726f3`; Milestone 7 synthetic-only backtest/report engineering accepted at `e849447` and `29f3116`; Milestone 8 root status `ACCEPTED` at `bf2cb8c` for offline-only engineering; Milestone 9 one-time evaluation specification `SPECIFICATION_FROZEN` in docs/config only; no real research execution, holdout access or Milestone 9 workflow authorized |
 | Recommended provider | GDELT GSG, title-only, with KrypX receipt time and exact raw-byte hashes; live pilot deferred without backfill; no current network authority |
 | Historical feasibility | `REJECTED`: no retrospective news scoring/backtest for the Phase 1 period |
-| Main blocker to outcomes | A newly collected development corpus does not yet exist; scorer, gates, budget, and later holdout are unapproved |
+| Main blocker to outcomes | A newly collected development corpus does not yet exist; scorer, remaining non-Milestone-9 gates, budget, and actual holdout use are unapproved |
 | Provider fee | GDELT datasets: $0; query infrastructure may cost money |
 | Planning cost | GDELT provider fee: $0. Low / expected / high remote-price scoring proxy: about $0.79 / $3.17 / $15.84; direct-archive storage, network, local compute, engineering, legal review, and hardware remain **UNVERIFIED** |
-| Required human decisions | Separately authorize a future prospective pilot before any network activity, then independently accept its evidence; scorer, research gates, disposal changes and future holdout remain unapproved |
+| Required human decisions | Separately authorize a future prospective pilot before any network activity, then independently accept its evidence; scorer, remaining development/operational gates, disposal changes and actual future-holdout use remain unapproved; Milestone 9 final numerical gates are frozen in docs/config only |
 
 The decision is not an empirical claim that news improves BTC trading. It authorizes nothing by itself and requires a long forward research sequence: collect development data, freeze/evaluate the four-cell ablation, then begin a separate future holdout.
 
@@ -1211,6 +1242,9 @@ Counterfactual concentration is measured without retraining. For a duplicate-gro
 
 ### Threshold tradeoffs
 
+This table preserves the original research-planning tradeoffs. Its final-gate
+draft values do not override the frozen Milestone 9 evaluation specification.
+
 | Proposed value | Why this value / cost of the choice |
 |---|---|
 | 99.5% interval retrieval and score success | Limits silent feed/model loss to roughly 1 in 200 intervals or selected versions; demanding 100% would let isolated infrastructure faults block years of research, while affected gap windows are still excluded. |
@@ -1228,23 +1262,24 @@ Counterfactual concentration is measured without retraining. For a duplicate-gro
 | High-cost return >=0 and > control | Protects against a fragile paper edge; Phase 1 deteriorated with costs, so this deliberately rejects marginal signals. |
 | Drawdown <=20% and no worse than control | Slightly improves on Phase 1's 20.94% development drawdown; it is an operational research bound, not investor advice. |
 | Source/day/group shares <=30%/20%/10% | Increasingly strict caps reflect decreasing unit granularity; computationally costly ablations prevent one publisher, day, or headline from masquerading as a general signal. |
-| Final +1.0% return, +1.0pp delta, Sharpe 0.20, PF 1.05 | Smaller holdout evidence gets lower floors than development, but epsilon wins still fail; confidence remains limited. |
+| Historical draft: final +1.0% return, +1.0pp delta, Sharpe 0.20, PF 1.05 | Former proposal only; superseded for the Milestone 9 gate specification by the frozen gates in [Milestone 9](phase2-milestone-9.md). |
 | Final drawdown <=20%, <=2pp worse than control | Keeps the absolute risk bound while allowing modest paired sampling noise. |
 | Final >=180 days and >=50 trades | Guarantees calendar exposure and a pragmatic minimum event count; a slow signal waits longer and 50 trades is not strong statistical proof. |
 | Rolling 30d share <=40% | Prevents one month from supplying most positive paired evidence while allowing seasonal clustering. |
 
 ## Future holdout policy
 
-The engineering mechanics below are frozen by the
-[Milestone 8 specification](phase2-milestone-8.md) on 2026-09-27. The
-operational future-holdout policy and numerical evidence gates remain an
-unapproved draft (`future-holdout-v1-draft`); its cutoff is `null`. The freeze
-alone did not authorize implementation; a later human instruction now permits
-offline synthetic claim/readiness/boundary-purge code and tests, now
-`ACCEPTED_OFFLINE_ONLY`, but not real collection, a real claim or evaluation.
-The dedicated exclusive claim filename
-is `holdout_evaluation_claim.json` under
-the frozen run directory, with the single-use semantics below.
+The claim/readiness/boundary-purge engineering mechanics below were frozen by
+the [Milestone 8 specification](phase2-milestone-8.md) on 2026-09-27 and
+implemented with offline synthetic fixtures only. The historical operational
+future-holdout policy and numerical evidence gates below are an unapproved
+planning draft (`future-holdout-v1-draft`); its cutoff is `null`. The
+[Milestone 9 specification](phase2-milestone-9.md) now supersedes that draft
+for the one-time evaluation workflow and its named final numerical gates.
+This docs/config freeze is not authority to implement or run the workflow,
+collect data, create a real claim or evaluate a holdout. The dedicated
+exclusive claim filename is `holdout_evaluation_claim.json` under the frozen
+run directory, with the single-use semantics below.
 
 ### Development cutoff and start
 
@@ -1303,9 +1338,18 @@ Freeze and transitively hash:
 
 The claim is atomic, irreversible, and scoped to one frozen research generation. It is acquired immediately before any outcome-bearing holdout read. The claim record is created with exclusive/no-replace semantics, fsynced, and included in the evaluation manifest. After acquisition, success, exception, crash, cancellation, timeout, or partial output all consume the claim. Evaluation publishes to a staging directory and makes the immutable result visible manifest-last. A routine retry is forbidden. A failed evaluation requires a documented incident, a new protocol/research generation, fresh code/artifact hashes, human authorization, and a new genuinely future holdout; the consumed data becomes development evidence.
 
-### Final evidence gates
+### Historical draft final evidence gates (not the Milestone 9 contract)
 
-The single frozen augmented model must satisfy all of these on the one claimed future holdout:
+The following thresholds remain for audit of the earlier
+`future-holdout-v1-draft`; they do not override the frozen
+[Milestone 9 final evidence gates](phase2-milestone-9.md). In particular, the
+draft's +1.0% return, +1.0pp control delta, 0.20 Sharpe, high-cost and
+source/day/group requirements are not silently imported into Milestone 9.
+The Milestone 9 gate inequalities and fail-closed `FAIL`/`NO-GO` semantics
+control its proposed offline implementation. No gate may be executed on real
+holdout outcomes under the current authorization.
+
+The historical draft proposed that a single frozen augmented model satisfy all of these on one claimed future holdout:
 
 1. Engineering, coverage, and integrity gates remain satisfied; collection interval retrieval is at least 99.5%, point-in-time eligibility at least 99.0%, scorer success at least 99.5%, and news-hour coverage at least 90.0%.
 2. At least `planned_minimum_days` and at least `50` completed trades.
@@ -1316,7 +1360,7 @@ The single frozen augmented model must satisfy all of these on the one claimed f
 7. No source exceeds 30.0%, no UTC first-seen day exceeds 20.0%, and no duplicate group exceeds 10.0% counterfactual dependence; no rolling 30-day block exceeds 40.0% of total positive incremental trade PnL under the exact aligned definition below.
 8. The result includes cash, buy-and-hold, EMA, momentum, random, and matched technical-control context.
 
-Failure of any gate is a research `FAIL` and production `NO-GO`. There is no post-holdout tuning or second look.
+Under that draft, failure of any gate would be research `FAIL` and production `NO-GO`. The frozen Milestone 9 specification independently requires `FAIL`/`NO-GO` for any of its current gates and forbids post-holdout tuning or a second look.
 
 For the rolling 30-day gate, align the augmented and control ledgers on the sorted union of UTC exit timestamps. At exit hour `e`, let `P_aug(e)` and `P_ctl(e)` be frozen-backtester net currency PnL for the strategy's trade exiting then, or zero when that strategy has no exit. Define `p(e) = max(0, P_aug(e) - P_ctl(e))`. The denominator is `sum_e p(e)` over the entire holdout; a zero denominator fails. For every UTC calendar date from the first through last exit date, the numerator is `sum p(e)` for `e` in `[date 00:00Z, date + 30 days 00:00Z)`, including zero-exit dates. The maximum numerator/denominator must be at most 40.0%; there is no trade matching, resampling, or selection beyond the union-exit alignment.
 
@@ -1329,7 +1373,10 @@ For the rolling 30-day gate, align the augmented and control ledgers on the sort
 - The forward recommendation is title-only. Publisher bodies remain unlicensed and out of scope.
 - The recommended scorer is gated, its files are not hashed locally, and its BTC-title quality and exact hardware determinism are untested.
 - Direct-term corpus selection trades recall for auditability; exact-only deduplication can miss paraphrased syndication.
-- Every numerical gate is a draft, and the Phase 2 development cutoff is intentionally unresolved.
+- Development, coverage and other still-unapproved numerical gates remain
+  draft, while the Milestone 9 final numerical gates are frozen as an offline
+  specification only; the Phase 2 development cutoff is intentionally
+  unresolved.
 - Cost figures are assumptions based on observed public prices and can change.
 
 ### Unresolved decisions that remain human-owned
@@ -1340,7 +1387,10 @@ For the rolling 30-day gate, align the augmented and control ledgers on the sort
    The historical September 13 network/rights authority is not a coverage pass or research
    approval. Retention/disposal changes or expanded scope also require separate approval.
 3. Approve the scorer. The recommendation is gated Llama 2 subject to Meta license/account approval and deterministic validation; FinBERT is the financial-news alternative, CryptoBERT the crypto benchmark, and VADER a lexicon sanity baseline.
-4. Approve or revise the proposed engineering, coverage, development, concentration, and final gates before any outcomes.
+4. Approve or revise any still-unapproved development, coverage or operational
+   gates before real outcomes. The Milestone 9 final numerical gates are frozen
+   as a documentation/configuration specification only; any revision or actual
+   holdout-gate execution requires separate human authority.
 5. Approve the $100 third-party compute ceiling or a lower ceiling.
 6. Later approve the exact development cutoff, frozen model/control, and future-holdout start before future-holdout collection.
 
@@ -1354,9 +1404,13 @@ synthetic four-cell engineering is accepted at `b3726f3`. September 27 human aut
 accepts M7 synthetic-only backtest/report engineering at `e849447` and `29f3116`
 using verified M5/M6 parents; the Milestone 7 root status is `ACCEPTED`, strictly within
 the already accepted offline synthetic-only scope and not as research evidence.
-The separate Milestone 8 docs/config specification is frozen; its synthetic-only
-claim/readiness/boundary-purge implementation is `ACCEPTED_OFFLINE_ONLY`.
-Real collection and holdout access remain unauthorized.
+The separate Milestone 8 docs/config specification remains frozen; its
+synthetic-only claim/readiness/boundary-purge implementation was accepted as
+`ACCEPTED_OFFLINE_ONLY` at `bf2cb8c`, with current root status `ACCEPTED`.
+Milestone 9's one-time evaluation specification is `SPECIFICATION_FROZEN` in
+docs/config only; the proposed next step is offline implementation after a
+separate human instruction. Real collection and holdout access remain
+unauthorized.
 Historical docs/config freezes and acceptance records are preserved. Push, real
 dataset/feature use, real training and trading backtests and numerical research
 gates remain unauthorized. The live pilot remains deferred without
@@ -1377,7 +1431,8 @@ require their own approvals.
 | Milestone 5 dataset integration | `milestone_5_status: ACCEPTED_OFFLINE_ONLY` at `d7cfa575`; offline implementation and dataset-integration authority `true` only for `offline_synthetic_only`; real dataset/feature use `false` |
 | Milestone 6 specification and engine | Specification frozen; root `milestone_6_status: ACCEPTED` at `b3726f3`; historical implementation record remains `ACCEPTED_OFFLINE_ONLY`, limited to synthetic engineering |
 | Milestone 7 specification and implementation | Frozen spec; root `milestone_7_status: ACCEPTED` after human sign-off, 1,481 tests and commits `e849447`/`29f3116`; scope remains verified synthetic M5/M6 backtests and reports only, no real research outcome |
-| Milestone 8 future-holdout specification and implementation | Specification `SPECIFICATION_FROZEN` on 2026-09-27; root `milestone_8_status: ACCEPTED_OFFLINE_ONLY` after 101 focused and 1,582 repository tests, for synthetic claim/readiness/boundary-purge engineering only; real claim creation, collection, holdout access/evaluation and Milestone 9 workflow remain unauthorized |
+| Milestone 8 future-holdout specification and implementation | Specification `SPECIFICATION_FROZEN` on 2026-09-27; root `milestone_8_status: ACCEPTED` at `bf2cb8c` after 101 focused and 1,582 repository tests, for offline synthetic claim/readiness/boundary-purge engineering only; no real claim, collection, holdout access/evaluation |
+| Milestone 9 one-time evaluation specification | `milestone_9_status: SPECIFICATION_FROZEN` in docs/config only; `next_action: implement_milestone_9_evaluation_workflow_offline` requires separate human authorization; implementation and workflow execution remain unauthorized |
 | Download/query GDELT or any provider data | Not authorized while pilot is deferred |
 | Call a provider API or fetch a publisher page | Not authorized; all implementation and verification remain offline |
 | Fetch or alter market data | Not authorized |
