@@ -115,3 +115,19 @@ It requires **separate human authorization** and, if approved, is limited to
 synthetic fixtures and mock-only, outcome-free tests. This document creates no
 claim and authorizes no live collection, real fitting, real-data backtest,
 holdout inspection/evaluation, network call, model download or Git push.
+
+## 7. Subsequent offline-only implementation acceptance
+
+The frozen specification above remains a historical record of its September 27
+authority boundary. A separate human instruction later authorized synthetic-only
+claim, zero-outcome readiness and boundary-purge implementation. On 2026-09-28,
+human authority accepted that implementation as **ACCEPTED_OFFLINE_ONLY** after
+101 focused adversarial tests and 1,582 passing repository tests. The selected
+source/test/fixture inventory remained byte-identical in 50/50 files, including
+48/48 existing non-Phase-2 source/test files; local RFC 8785 differential
+checks matched 49,972/49,972 binary64 values. This acceptance authorizes one
+local `main` commit and no push. It does not choose `d`, start future collection,
+create a claim on a real holdout, inspect or evaluate real outcomes, approve
+research gates, or authorize Milestone 9 workflow execution. The live pilot
+remains `DEFERRED_WITHOUT_BACKFILL`, with `network_pilot_authorized: false` and
+`real_network_calls_prohibited: true`.
