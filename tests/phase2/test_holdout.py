@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import secrets
+import shutil
 import socket
 import stat
 from concurrent.futures import ThreadPoolExecutor
@@ -32,6 +34,7 @@ CLAIM_HASHES = {
     "input_inventory_sha256": "2" * 64,
     "code_commit": "3" * 40,
     "dependency_lock_sha256": "4" * 64,
+    "development_dataset_manifest_sha256": "5" * 64,
 }
 OUTCOME_NAMES = (
     "forward_return",
@@ -64,6 +67,16 @@ def prohibit_network(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(socket.socket, "connect", forbidden)
     monkeypatch.setattr(socket.socket, "connect_ex", forbidden)
     monkeypatch.setattr(socket, "create_connection", forbidden)
+
+
+@pytest.fixture(autouse=True)
+def isolate_synthetic_generation_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Synthetic cases share frozen models but must not share their claim registry."""
+    monkeypatch.setattr(
+        holdout,
+        "_generation_registry_path",
+        lambda: tmp_path / holdout.GENERATION_REGISTRY_NAME,
+    )
 
 
 @pytest.fixture(scope="module")
@@ -636,7 +649,11 @@ def test_claim_is_canonical_exclusive_and_binds_frozen_proofs(
     raw = path.read_bytes()
     value = json.loads(raw)
     assert raw == canonicalize(value)
-    assert all(digest in raw.decode() for digest in CLAIM_HASHES.values())
+    assert all(
+        digest in raw.decode()
+        for key, digest in CLAIM_HASHES.items()
+        if key != "development_dataset_manifest_sha256"
+    )
     assert boundary.frozen_fit.augmented_model_sha256 in raw.decode()
     assert boundary.frozen_fit.control_model_sha256 in raw.decode()
     assert b"planned_minimum_days" in raw
@@ -645,6 +662,179 @@ def test_claim_is_canonical_exclusive_and_binds_frozen_proofs(
     with pytest.raises(holdout.HoldoutError):
         manager.acquire(boundary=boundary, readiness=readiness, **CLAIM_HASHES)
     assert path.read_bytes() == raw
+
+
+def test_evaluation_generation_claim_survives_development_directory_clone(
+    tmp_path: Path, boundary: holdout.BoundaryPurgePlan, readiness: holdout.ReadinessReport
+) -> None:
+    generation_name = f"synthetic-development-{secrets.token_hex(16)}"
+    original = tmp_path / "original" / generation_name
+    original.mkdir(parents=True)
+    (original / "development_manifest.json").write_bytes(b"synthetic immutable manifest")
+    cloned = tmp_path / "copied" / generation_name
+    shutil.copytree(original, cloned)
+    first = holdout.HoldoutClaimManager(original).acquire(
+        boundary=boundary,
+        readiness=readiness,
+        evaluation_run_id="synthetic-evaluation-one",
+        **CLAIM_HASHES,
+    )
+    assert first.path.is_file()
+    # Neither a different output name nor a copied development directory is a
+    # fresh research generation. The copied tree has no local claim file.
+    assert not (cloned / holdout.CLAIM_NAME).exists()
+    with pytest.raises(holdout.HoldoutClaimError, match="generation claim already consumed"):
+        holdout.HoldoutClaimManager(cloned).acquire(
+            boundary=boundary,
+            readiness=readiness,
+            evaluation_run_id="synthetic-evaluation-two",
+            **CLAIM_HASHES,
+        )
+    assert not (cloned / holdout.CLAIM_NAME).exists()
+    marker = holdout._generation_registry_path() / (
+        holdout._generation_claim_sha256(
+            protocol_sha256=CLAIM_HASHES["protocol_sha256"],
+            development_dataset_manifest_sha256=CLAIM_HASHES["development_dataset_manifest_sha256"],
+            augmented_model_sha256=boundary.frozen_fit.augmented_model_sha256,
+            control_model_sha256=boundary.frozen_fit.control_model_sha256,
+            development_cutoff_iso=format_utc_timestamp(
+                boundary.first_holdout_decision_at - (holdout.PURGE_ROWS + 1) * HOUR
+            ),
+        )
+        + ".claim"
+    )
+    assert marker.is_file()
+    marker_payload = json.loads(marker.read_bytes())
+    assert marker_payload["claim_sha256"] == sha256_bytes(first.raw_bytes)
+    assert marker_payload["development_run_path"] == str(original.resolve())
+    assert marker_payload["development_run_device"] == original.stat().st_dev
+    assert marker_payload["development_run_inode"] == original.stat().st_ino
+
+
+def test_generation_key_uses_exact_immutable_invariant_byte_formula(
+    boundary: holdout.BoundaryPurgePlan,
+) -> None:
+    fit = boundary.frozen_fit
+    cutoff_iso = format_utc_timestamp(
+        boundary.first_holdout_decision_at - (holdout.PURGE_ROWS + 1) * HOUR
+    )
+    expected = sha256_bytes(
+        (
+            "holdout-generation-v1\n"
+            f"{CLAIM_HASHES['protocol_sha256']}\n"
+            f"{CLAIM_HASHES['development_dataset_manifest_sha256']}\n"
+            f"{fit.augmented_model_sha256}\n"
+            f"{fit.control_model_sha256}\n"
+            f"{cutoff_iso}"
+        ).encode()
+    )
+    assert (
+        holdout._generation_claim_sha256(
+            protocol_sha256=CLAIM_HASHES["protocol_sha256"],
+            development_dataset_manifest_sha256=CLAIM_HASHES["development_dataset_manifest_sha256"],
+            augmented_model_sha256=fit.augmented_model_sha256,
+            control_model_sha256=fit.control_model_sha256,
+            development_cutoff_iso=cutoff_iso,
+        )
+        == expected
+    )
+    with pytest.raises(holdout.HoldoutInputError, match="canonical UTC"):
+        holdout._generation_claim_sha256(
+            protocol_sha256=CLAIM_HASHES["protocol_sha256"],
+            development_dataset_manifest_sha256=CLAIM_HASHES["development_dataset_manifest_sha256"],
+            augmented_model_sha256=fit.augmented_model_sha256,
+            control_model_sha256=fit.control_model_sha256,
+            development_cutoff_iso=cutoff_iso.replace("Z", ".000000Z"),
+        )
+
+
+def test_renamed_development_clone_cannot_obtain_second_generation_claim(
+    tmp_path: Path, boundary: holdout.BoundaryPurgePlan, readiness: holdout.ReadinessReport
+) -> None:
+    original = tmp_path / "synthetic-original-development"
+    original.mkdir()
+    cloned = tmp_path / "renamed-synthetic-development"
+    shutil.copytree(original, cloned)
+    original_claim = holdout.HoldoutClaimManager(original).acquire(
+        boundary=boundary,
+        readiness=readiness,
+        evaluation_run_id="synthetic-evaluation-one",
+        **CLAIM_HASHES,
+    )
+    assert original_claim.path.is_file()
+    with pytest.raises(holdout.HoldoutClaimError, match="generation claim already consumed"):
+        holdout.HoldoutClaimManager(cloned).acquire(
+            boundary=boundary,
+            readiness=readiness,
+            evaluation_run_id="synthetic-evaluation-two",
+            **CLAIM_HASHES,
+        )
+    assert not (cloned / holdout.CLAIM_NAME).exists()
+
+
+def test_evaluation_generation_claim_is_consumed_when_local_claim_write_fails(
+    tmp_path: Path,
+    boundary: holdout.BoundaryPurgePlan,
+    readiness: holdout.ReadinessReport,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    generation_name = f"synthetic-development-{secrets.token_hex(16)}"
+    original = tmp_path / "original" / generation_name
+    original.mkdir(parents=True)
+    cloned = tmp_path / "copied" / generation_name
+    cloned.mkdir(parents=True)
+    real_open = os.open
+
+    def fail_local_claim_open(
+        path: str | bytes | os.PathLike[str], *args: Any, **kwargs: Any
+    ) -> int:
+        if path == holdout.CLAIM_NAME:
+            raise OSError("synthetic interruption after generation claim")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(holdout.os, "open", fail_local_claim_open)
+    with pytest.raises(holdout.HoldoutClaimError, match="exclusive holdout claim failed"):
+        holdout.HoldoutClaimManager(original).acquire(
+            boundary=boundary,
+            readiness=readiness,
+            evaluation_run_id="synthetic-evaluation-one",
+            **CLAIM_HASHES,
+        )
+    assert not (original / holdout.CLAIM_NAME).exists()
+    monkeypatch.setattr(holdout.os, "open", real_open)
+    with pytest.raises(holdout.HoldoutClaimError, match="generation claim already consumed"):
+        holdout.HoldoutClaimManager(cloned).acquire(
+            boundary=boundary,
+            readiness=readiness,
+            evaluation_run_id="synthetic-evaluation-two",
+            **CLAIM_HASHES,
+        )
+
+
+def test_concurrent_copied_generation_claim_has_one_winner(
+    tmp_path: Path, boundary: holdout.BoundaryPurgePlan, readiness: holdout.ReadinessReport
+) -> None:
+    generation_name = f"synthetic-development-{secrets.token_hex(16)}"
+    directories = tuple(tmp_path / f"copy-{index}" / generation_name for index in range(8))
+    for directory in directories:
+        directory.mkdir(parents=True)
+
+    def contender(index: int) -> bool:
+        try:
+            holdout.HoldoutClaimManager(directories[index]).acquire(
+                boundary=boundary,
+                readiness=readiness,
+                evaluation_run_id=f"synthetic-evaluation-{index}",
+                **CLAIM_HASHES,
+            )
+        except holdout.HoldoutClaimError:
+            return False
+        return True
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        won = list(pool.map(contender, range(8)))
+    assert won.count(True) == 1
+    assert sum((directory / holdout.CLAIM_NAME).exists() for directory in directories) == 1
 
 
 def test_failed_evaluation_cannot_retry_consumed_claim(

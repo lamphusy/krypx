@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 import os
 import re
+import stat
 import tempfile
 import weakref
 from collections.abc import Sequence
@@ -18,7 +19,7 @@ from pathlib import Path
 
 from crypto_ai.exceptions import CryptoAIError
 from crypto_ai.sentiment.canonical import MAX_SAFE_INTEGER, canonicalize, sha256_bytes
-from crypto_ai.sentiment.contracts import format_utc_timestamp
+from crypto_ai.sentiment.contracts import format_utc_timestamp, parse_utc_timestamp
 from crypto_ai.sentiment.storage import (
     _fsync_directory_descriptor,
     _open_directory_path,
@@ -29,8 +30,10 @@ from crypto_ai.sentiment.storage import (
 
 SPECIFICATION_ID = "phase2-milestone8-future-holdout-v1"
 CLAIM_SCHEMA = "phase2-synthetic-holdout-claim-v1"
+EVALUATION_CLAIM_SCHEMA = "phase2-synthetic-holdout-evaluation-claim-v2"
 FIT_SCHEMA = "phase2-synthetic-frozen-fit-v1"
 CLAIM_NAME = "holdout_evaluation_claim.json"
+GENERATION_REGISTRY_NAME = ".krypx-phase2-synthetic-generation-claims-v1"
 OOF_FOLDS = 5
 PURGE_ROWS = 5
 HORIZON = 4
@@ -205,7 +208,151 @@ class ClaimRecord:
     raw_bytes: bytes
 
 
+def _generation_claim_sha256(
+    *,
+    protocol_sha256: str,
+    development_dataset_manifest_sha256: str,
+    augmented_model_sha256: str,
+    control_model_sha256: str,
+    development_cutoff_iso: str,
+) -> str:
+    """Identify a generation solely by its immutable, verified research inputs.
+
+    In particular, neither a copyable development-run name nor a fit manifest
+    containing that name can confer a fresh single-use holdout claim.
+    """
+    if any(
+        not _sha256(value)
+        for value in (
+            protocol_sha256,
+            development_dataset_manifest_sha256,
+            augmented_model_sha256,
+            control_model_sha256,
+        )
+    ):
+        raise HoldoutInputError("generation parent hashes must be lowercase SHA-256")
+    try:
+        cutoff = parse_utc_timestamp(development_cutoff_iso, field="development cutoff")
+    except (TypeError, ValueError) as exc:
+        raise HoldoutInputError("development cutoff must be canonical UTC") from exc
+    if format_utc_timestamp(cutoff) != development_cutoff_iso:
+        raise HoldoutInputError("development cutoff must be canonical UTC")
+    payload = (
+        "holdout-generation-v1\n"
+        f"{protocol_sha256}\n"
+        f"{development_dataset_manifest_sha256}\n"
+        f"{augmented_model_sha256}\n"
+        f"{control_model_sha256}\n"
+        f"{development_cutoff_iso}"
+    )
+    return sha256_bytes(payload.encode("utf-8"))
+
+
+def _generation_registry_path() -> Path:
+    """Return the single process-independent synthetic claim authority."""
+    return Path(tempfile.gettempdir()).resolve() / GENERATION_REGISTRY_NAME
+
+
+def _generation_marker_bytes(
+    raw_claim: bytes, run_path: Path, run_identity: tuple[int, int]
+) -> bytes:
+    """Bind a consumed generation to the original directory inode and claim."""
+    return canonicalize(
+        {
+            "schema_version": "phase2-synthetic-generation-marker-v1",
+            "claim_sha256": sha256_bytes(raw_claim),
+            "development_run_path": os.fspath(run_path),
+            "development_run_device": run_identity[0],
+            "development_run_inode": run_identity[1],
+        }
+    )
+
+
+def _consume_generation_claim_once(
+    generation_sha256: str,
+    raw_claim: bytes,
+    run_path: Path,
+    run_identity: tuple[int, int],
+) -> None:
+    """Durably consume a generation before exposing any holdout outcome bytes.
+
+    The registry is outside development runs, so copying a run cannot copy away
+    the consumed state. A partially written marker is itself consumed: failures
+    after O_EXCL creation never remove it or authorize a retry.
+    """
+    registry = _generation_registry_path()
+    marker_raw = _generation_marker_bytes(raw_claim, run_path, run_identity)
+    temp_descriptor: int | None = None
+    registry_descriptor: int | None = None
+    marker_descriptor: int | None = None
+    marker_created = False
+    try:
+        _require_descriptor_relative_mutations()
+        temp_descriptor = _open_directory_path(
+            registry.parent, description="synthetic generation registry parent"
+        )
+        try:
+            os.mkdir(GENERATION_REGISTRY_NAME, 0o700, dir_fd=temp_descriptor)
+        except FileExistsError:
+            pass
+        else:
+            _fsync_directory_descriptor(
+                temp_descriptor, description="synthetic generation registry parent"
+            )
+        registry_descriptor = _open_directory_path(
+            registry, description="synthetic generation claim registry"
+        )
+        registry_stat = os.fstat(registry_descriptor)
+        if (
+            registry_stat.st_uid != os.geteuid()
+            or not stat.S_ISDIR(registry_stat.st_mode)
+            or stat.S_IMODE(registry_stat.st_mode) & 0o077
+        ):
+            raise HoldoutClaimError("synthetic generation registry is not private")
+        marker_name = f"{generation_sha256}.claim"
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        flags |= getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        marker_descriptor = os.open(marker_name, flags, 0o600, dir_fd=registry_descriptor)
+        marker_created = True
+        with os.fdopen(marker_descriptor, "wb") as handle:
+            marker_descriptor = None
+            handle.write(marker_raw)
+            handle.flush()
+            os.fsync(handle.fileno())
+        _fsync_directory_descriptor(
+            registry_descriptor, description="exclusive synthetic generation claim registry"
+        )
+        captured, _ = _read_regular_file_at_once(
+            registry_descriptor,
+            marker_name,
+            description="exclusive synthetic generation claim marker",
+        )
+        if captured != marker_raw:
+            raise HoldoutClaimError("generation claim marker bytes changed")
+    except FileExistsError as exc:
+        raise HoldoutClaimError("research generation claim already consumed") from exc
+    except HoldoutClaimError:
+        raise
+    except (CryptoAIError, OSError, ValueError, TypeError) as exc:
+        raise HoldoutClaimError("generation claim registry failed closed") from exc
+    finally:
+        if marker_descriptor is not None:
+            os.close(marker_descriptor)
+        if registry_descriptor is not None:
+            if marker_created:
+                try:
+                    os.fsync(registry_descriptor)
+                except OSError:
+                    pass  # Once O_EXCL succeeds, a failed claim remains consumed.
+            os.close(registry_descriptor)
+        if temp_descriptor is not None:
+            os.close(temp_descriptor)
+
+
 _issued_readiness_reports: weakref.WeakKeyDictionary[ReadinessReport, tuple[object, ...]] = (
+    weakref.WeakKeyDictionary()
+)
+_issued_readiness_evidence: weakref.WeakKeyDictionary[ReadinessReport, bytes] = (
     weakref.WeakKeyDictionary()
 )
 _issued_boundaries: weakref.WeakKeyDictionary[BoundaryPurgePlan, tuple[object, ...]] = (
@@ -535,6 +682,7 @@ class ZeroOutcomeReadinessInspector:
             evidence_sha256,
         )
         _issued_readiness_reports[report] = _readiness_snapshot(report)
+        _issued_readiness_evidence[report] = canonicalize(operational_evidence)
         return report
 
 
@@ -666,7 +814,7 @@ class BoundaryPurgeManager:
 class HoldoutClaimManager:
     """Create one durable, no-replace claim in an existing synthetic temp run."""
 
-    def __init__(self, run_dir: Path):
+    def __init__(self, run_dir: Path, *, expected_identity: tuple[int, int] | None = None):
         if not isinstance(run_dir, Path) or not run_dir.is_absolute():
             raise HoldoutInputError("claim run directory must be an absolute Path")
         temp_root = Path(tempfile.gettempdir()).resolve()
@@ -677,9 +825,15 @@ class HoldoutClaimManager:
         if not resolved.is_relative_to(temp_root) or resolved == temp_root:
             raise HoldoutAuthorizationError("claims are limited to temporary synthetic runs")
         try:
-            descriptor = _open_directory_path(run_dir, description="synthetic holdout run")
-            self._identity = _stat_identity(os.fstat(descriptor))
-            os.close(descriptor)
+            descriptor = _open_directory_path(
+                run_dir,
+                description="synthetic holdout run",
+                expected_identity=expected_identity,
+            )
+            try:
+                self._identity = _stat_identity(os.fstat(descriptor))
+            finally:
+                os.close(descriptor)
         except (CryptoAIError, OSError) as exc:
             raise HoldoutClaimError("synthetic claim run directory is unsafe") from exc
         self._run_dir = resolved
@@ -693,6 +847,8 @@ class HoldoutClaimManager:
         input_inventory_sha256: str,
         code_commit: str,
         dependency_lock_sha256: str,
+        evaluation_run_id: str | None = None,
+        development_dataset_manifest_sha256: str | None = None,
     ) -> ClaimRecord:
         if type(boundary) is not BoundaryPurgePlan or boundary.synthetic is not True:
             raise HoldoutClaimError("validated synthetic boundary evidence is required")
@@ -736,11 +892,25 @@ class HoldoutClaimManager:
             or COMMIT_PATTERN.fullmatch(code_commit) is None
         ):
             raise HoldoutInputError("claim parent hashes or code commit are invalid")
+        if evaluation_run_id is not None and (
+            type(evaluation_run_id) is not str
+            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", evaluation_run_id) is None
+            or evaluation_run_id == self._run_dir.name
+        ):
+            raise HoldoutInputError("destination evaluation run ID is invalid")
+        if development_dataset_manifest_sha256 is not None and not _sha256(
+            development_dataset_manifest_sha256
+        ):
+            raise HoldoutInputError("development dataset manifest hash is invalid")
+        if evaluation_run_id is not None and development_dataset_manifest_sha256 is None:
+            raise HoldoutInputError("verified development dataset manifest hash is required")
         fit = boundary.frozen_fit
         if type(fit) is not FrozenFitProof or fit.synthetic is not True:
             raise HoldoutClaimError("synthetic single-fit proof is required")
         payload = {
-            "schema_version": CLAIM_SCHEMA,
+            "schema_version": (
+                EVALUATION_CLAIM_SCHEMA if evaluation_run_id is not None else CLAIM_SCHEMA
+            ),
             "specification_id": SPECIFICATION_ID,
             "synthetic": True,
             "run_id": self._run_dir.name,
@@ -766,6 +936,12 @@ class HoldoutClaimManager:
             "readiness": readiness.to_dict(),
             "claimed_at_utc": format_utc_timestamp(datetime.now(UTC)),
         }
+        if evaluation_run_id is not None:
+            payload["evaluation_run_id"] = evaluation_run_id
+            payload["development_dataset_manifest_sha256"] = development_dataset_manifest_sha256
+            payload["development_cutoff_iso"] = format_utc_timestamp(
+                boundary.first_holdout_decision_at - (PURGE_ROWS + 1) * ONE_HOUR
+            )
         try:
             raw = canonicalize(payload)
             _require_descriptor_relative_mutations()
@@ -785,6 +961,17 @@ class HoldoutClaimManager:
                 pass
             else:
                 raise HoldoutClaimError("holdout claim already exists and is consumed")
+            if evaluation_run_id is not None:
+                generation_sha256 = _generation_claim_sha256(
+                    protocol_sha256=protocol_sha256,
+                    development_dataset_manifest_sha256=development_dataset_manifest_sha256,
+                    augmented_model_sha256=fit.augmented_model_sha256,
+                    control_model_sha256=fit.control_model_sha256,
+                    development_cutoff_iso=payload["development_cutoff_iso"],
+                )
+                _consume_generation_claim_once(
+                    generation_sha256, raw, self._run_dir, self._identity
+                )
             flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
             flags |= getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
             file_descriptor = os.open(CLAIM_NAME, flags, 0o600, dir_fd=run_descriptor)

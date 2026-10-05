@@ -13,6 +13,15 @@ fitting or downloading a real model, running a real backtest, or pushing Git.
 The live pilot remains `DEFERRED_WITHOUT_BACKFILL` and there is no backfill
 exception. All Phase 1 files and semantics remain unchanged.
 
+**Current implementation status: ACCEPTED_OFFLINE_ONLY.** The 2026-10-04
+human sign-off authorizes final verification, governance finalization and one
+local `main` commit of the synthetic-only implementation against specification
+commit `54978ada26a472c4cdacf8cb0e614aacf2f25d1a`. The completion commit is the
+commit containing this acceptance record. The original specification-freeze
+authority above is historical; it did not grant the later implementation
+authority. This acceptance does not authorize real holdout access/evaluation,
+network collection, model downloads, production training or Git push.
+
 ## 1. Frozen inputs and zero-outcome preflight
 
 An eventual, separately authorized `evaluate-holdout` invocation accepts one
@@ -222,13 +231,34 @@ listed payload, and fail on mutation, missing or extra entries. A publication
 failure must not expose a valid-looking manifest-bearing partial evaluation;
 it never restores the consumed claim or permits a routine retry.
 
-## 6. Authorization boundary
+## 6. Offline engineering acceptance and authorization boundary
 
-The next proposed action is
-`implement_milestone_9_evaluation_workflow_offline`, contingent on separate
-human authority and restricted to synthetic fixtures and offline tests.
-Neither this specification nor its repository commit creates a real claim,
-evaluates a holdout, approves a live pilot, authorizes network calls or model
-downloads, changes Phase 1, or permits a Git push. Real future collection,
-model fitting, one-time claim/evaluation, research verdict execution and any
-production decision each remain outside this documentation freeze.
+Milestone 9 is `ACCEPTED_OFFLINE_ONLY` after 1,693 passing repository tests,
+including all 253 Phase 1 tests, and 211 passing focused evaluation/dataset
+tests. Final checks also cover formatting, linting, compilation, dependency
+consistency, strict JSON/JSONL validation, and 49,972/49,972 local RFC 8785
+binary64 differential matches. Phase 1 preservation is 48/48 source/test
+blobs, or 50/50 including the two selected provider fixtures, byte-identical
+to `43889acff2651c696f318ff6780455a06bbfcb35`. The explicitly authorized removal
+of two incidental trailing spaces in `backtesting/baselines.py` restores the
+original blob; no Phase 1 behavior or test was changed.
+
+The accepted synthetic implementation pins the verified Development directory
+inode through preflight, claim acquisition and completion. Retrieval verifies
+all seven retained Development artifacts, including the frozen models and
+embedded scaler parameters, against their exact bytes and hashes. Immutable
+M4/M5 parents are cross-reconciled for shared minute chronology, article
+versions, permanent anchors and causal score records, including partial
+coverage overlaps; fully overlapping trailing windows must agree bit-for-bit
+on all 13 features and provider-gap exclusions. Prior claim-generation,
+source-binding, completion-rollback and fail-closed error contracts remain
+enforced.
+
+The next proposed action is `prepare_milestone_10_specification`, requiring
+separate human authority. This sign-off authorizes the local Milestone 9
+commit only after final checks pass; it does not authorize Milestone 10
+implementation or production training. The live pilot remains
+`DEFERRED_WITHOUT_BACKFILL`, `network_pilot_authorized` remains `false`, and
+`real_network_calls_prohibited` remains `true`. No real claim, holdout
+unblinding/evaluation, real-data research gate, model download, paid scoring,
+production decision or Git push is authorized by this offline acceptance.

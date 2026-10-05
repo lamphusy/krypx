@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import csv
 import gzip
+import io
 import json
 import os
+import shutil
 import socket
 from collections import Counter
 from dataclasses import dataclass, replace
@@ -22,6 +25,7 @@ from crypto_ai.exceptions import CryptoAIError
 from crypto_ai.features.build import compute_features, get_expected_feature_columns
 from crypto_ai.features.labels import add_labels
 from crypto_ai.phase2 import dataset as dataset_module
+from crypto_ai.phase2 import evaluation
 from crypto_ai.phase2.dataset import (
     COMBINED_COLUMNS,
     LABEL_COLUMNS,
@@ -40,7 +44,12 @@ from crypto_ai.sentiment.aggregation import (
     SyntheticAggregationInput,
 )
 from crypto_ai.sentiment.canonical import canonicalize, sha256_bytes
-from crypto_ai.sentiment.contracts import format_utc_timestamp
+from crypto_ai.sentiment.contracts import (
+    format_utc_timestamp,
+    validate_article_record,
+    validate_score_record,
+)
+from crypto_ai.sentiment.providers import gdelt_gsg
 from crypto_ai.sentiment.providers.gdelt_gsg import (
     GapAttempt,
     GSGAdapter,
@@ -81,6 +90,322 @@ CORE_HASHES = (
 
 def instant(value: datetime) -> str:
     return format_utc_timestamp(value)
+
+
+def evaluation_parent_case(
+    corpus: Corpus, tmp_path: Path, *, news: str, development: str
+) -> tuple[evaluation.VerifiedNewsParent, dict[str, Any]]:
+    """Retain actual immutable parents and the M5 artifact's frozen fit rows."""
+    copied_root = tmp_path / "isolated-verified-news-cas"
+    shutil.copytree(corpus.store.root, copied_root)
+    isolated = ContentAddressedStore(copied_root)
+    prepared = DatasetStore(isolated).publish(corpus.artifacts[development])
+    source_files = dict(corpus.artifacts[news].files)
+    articles = tuple(
+        validate_article_record(value)
+        for value in json.loads(source_files["parents/articles/articles.json"])
+    )
+    score_names = sorted(
+        name
+        for name in source_files
+        if name.startswith("parents/scores/") and name.endswith("/record.json")
+    )
+    scores = tuple(validate_score_record(json.loads(source_files[name])) for name in score_names)
+    terminal_intervals = json.loads(source_files["parents/articles/chronology.json"])[
+        "terminal_intervals"
+    ]
+    evidence_raw = canonicalize(
+        {
+            "coverage_start_at": terminal_intervals[0]["start_at"],
+            "coverage_end_at_exclusive": terminal_intervals[-1]["end_at_exclusive"],
+            "terminal_gap_evidence": json.loads(source_files["parents/articles/gap-evidence.json"]),
+        }
+    )
+    buffer = io.StringIO(newline="")
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerow(("market_ordinal", "timestamp", "open", "high", "low", "close", "volume"))
+    for ordinal, row in corpus.market.frame().iterrows():
+        writer.writerow(
+            (ordinal, instant(row.timestamp.to_pydatetime()))
+            + tuple(repr(float(row[name])) for name in ("open", "high", "low", "close", "volume"))
+        )
+    market_raw = buffer.getvalue().encode("utf-8")
+    fit_rows = {row["market_ordinal"]: row for row in prepared.labeled.to_dict("records")}
+    payload = evaluation._development_rows_payload(market_raw, corpus.market.hours - 6)
+    payload["rows"] = [
+        {
+            **row,
+            "features": [fit_rows[row["market_ordinal"]][name] for name in COMBINED_COLUMNS],
+        }
+        for row in payload["rows"]
+        if row["market_ordinal"] in fit_rows
+    ]
+    rows_raw = canonicalize(payload)
+    opened_at = [value.to_pydatetime() for value in corpus.market.frame().timestamp]
+    first = len(opened_at) - len(corpus.decisions)
+    last = len(opened_at) - 1
+    parent = evaluation.VerifiedNewsParent(
+        isolated.root, corpus.aggregations[news].aggregation_id, prepared.dataset_id
+    )
+    arguments = dict(
+        evidence_raw=evidence_raw,
+        articles=articles,
+        scores=scores,
+        opened_at=opened_at,
+        first_ordinal=first,
+        last_decision_ordinal=last,
+        development_market_raw=market_raw,
+        development_rows_raw=rows_raw,
+        protocol_sha256=sha256_bytes(PROTOCOL_BYTES),
+    )
+    return parent, arguments
+
+
+@pytest.mark.parametrize("name", ["empty", "populated", "gap"])
+def test_evaluation_news_parent_accepts_matching_m4_m5_causal_history(
+    corpus: Corpus, tmp_path: Path, name: str
+) -> None:
+    parent, arguments = evaluation_parent_case(corpus, tmp_path, news=name, development=name)
+    expected = evaluation._verified_news_parent_expectations(parent, **arguments)
+    first = arguments["first_ordinal"]
+    assert evaluation._feature_rows_bits(expected) == evaluation._feature_rows_bits(
+        {first + index: row.features for index, row in enumerate(corpus.aggregations[name].rows)}
+    )
+
+
+@pytest.mark.parametrize(
+    ("news", "development"),
+    [("populated", "empty"), ("empty", "populated"), ("gap", "empty"), ("empty", "gap")],
+)
+def test_evaluation_news_parent_rejects_contradictory_m4_m5_causal_history(
+    corpus: Corpus, tmp_path: Path, news: str, development: str
+) -> None:
+    """Separate authentic publications cannot certify conflicting news/gap histories."""
+    parent, arguments = evaluation_parent_case(corpus, tmp_path, news=news, development=development)
+    with pytest.raises(evaluation.EvaluationIntegrityError, match="M4/M5 overlapping"):
+        evaluation._verified_news_parent_expectations(parent, **arguments)
+
+
+def test_evaluation_news_parent_reconciles_coverage_outside_published_m4_grid(
+    corpus: Corpus, tmp_path: Path
+) -> None:
+    """A single published M4 decision cannot hide other contradictory covered windows."""
+    parent, arguments = evaluation_parent_case(
+        corpus, tmp_path, news="populated", development="empty"
+    )
+    isolated = ContentAddressedStore(parent.cas_root)
+    _, request, _ = dataset_module._parent(isolated, parent.aggregation_id)
+    last_only = OfflineFeatureAggregator(isolated).aggregate(request, corpus.decisions[-1:])
+    AggregationStore(isolated).publish(last_only)
+    assert len(last_only.rows) == 1
+    parent = replace(parent, aggregation_id=last_only.aggregation_id)
+    arguments["first_ordinal"] = arguments["last_decision_ordinal"]
+    with pytest.raises(evaluation.EvaluationIntegrityError, match="M4/M5 overlapping"):
+        evaluation._verified_news_parent_expectations(parent, **arguments)
+
+
+def test_evaluation_news_parent_rejects_changed_score_with_identical_counts(
+    corpus: Corpus, tmp_path: Path
+) -> None:
+    """Matching counts and missingness do not excuse different causal numeric features."""
+    parent, arguments = evaluation_parent_case(
+        corpus, tmp_path, news="populated", development="populated"
+    )
+    isolated = ContentAddressedStore(parent.cas_root)
+    _, request, _ = dataset_module._parent(isolated, parent.aggregation_id)
+    article = arguments["articles"][0]
+    score = OfflineScoringEngine(
+        ScoringStore(tmp_path / "alternate-scores"),
+        MockScorer((canonicalize({"sentiment_score": 0.25, "relevance_score": 0.5}),)),
+        clock=lambda: START,
+    ).score(SyntheticInput(source=article.source, title=article.title))
+    altered = OfflineFeatureAggregator(isolated).aggregate(
+        replace(request, score_artifacts=(score,)), corpus.decisions
+    )
+    AggregationStore(isolated).publish(altered)
+    original = corpus.aggregations["populated"].rows[0].features
+    assert altered.rows[0].features.news_count_24h == original.news_count_24h
+    assert altered.rows[0].features.news_missing_24h == original.news_missing_24h
+    assert altered.rows[0].features.sentiment_mean_24h != original.sentiment_mean_24h
+    parent = replace(parent, aggregation_id=altered.aggregation_id)
+    arguments["scores"] = (score.record,)
+    with pytest.raises(evaluation.EvaluationIntegrityError, match="M4/M5 overlapping"):
+        evaluation._verified_news_parent_expectations(parent, **arguments)
+
+
+@pytest.mark.parametrize(
+    ("news", "development", "matches"),
+    [
+        ("populated", "empty", False),
+        ("empty", "populated", False),
+        ("gap", "empty", False),
+        ("empty", "gap", False),
+        ("populated", "populated", True),
+        ("empty", "empty", True),
+        ("gap", "gap", True),
+        ("changed_score", "populated", False),
+        ("missing_score", "populated", False),
+    ],
+)
+def test_evaluation_news_parent_reconciles_partially_overlapping_chronology(
+    corpus: Corpus, tmp_path: Path, news: str, development: str, matches: bool
+) -> None:
+    """Shared authentic minute facts agree even without a complete common 24h window."""
+    source_name = "populated" if news in {"changed_score", "missing_score"} else news
+    parent, arguments = evaluation_parent_case(
+        corpus, tmp_path, news=source_name, development=development
+    )
+    isolated = ContentAddressedStore(parent.cas_root)
+    _, source, prepared = dataset_module._parent(isolated, parent.aggregation_id)
+    original = GSGNormalizer.hydrate(isolated, source.state_publication_id)
+    first = datetime.fromisoformat(corpus.decisions[0].replace("Z", "+00:00"))
+    partial_start = instant(first - timedelta(hours=3))
+    last = first + timedelta(hours=26)
+    coverage_end = instant(last + timedelta(minutes=1))
+    as_of = instant(last + timedelta(hours=1))
+    assert datetime.fromisoformat(corpus.decisions[-1].replace("Z", "+00:00")) < first + timedelta(
+        hours=21
+    )
+    intervals = tuple(
+        item for item in prepared.terminal_intervals if item.start_at >= partial_start
+    )
+    snapshots = []
+    raw_cache: dict[str, bytes] = {}
+    for interval in intervals:
+        if interval.snapshot_id is None:
+            continue
+        receipt, raw = gdelt_gsg._load_verified_snapshot_receipt(
+            isolated, interval.snapshot_id, raw_object_cache=raw_cache
+        )
+        adapter = GSGAdapter(
+            isolated,
+            clock=lambda receipt=receipt: datetime.fromisoformat(
+                receipt.raw_published_at.replace("Z", "+00:00")
+            ),
+        )
+        snapshots.append(
+            adapter.ingest_snapshot(
+                raw,
+                filename_timestamp=receipt.filename_timestamp,
+                ingested_at=receipt.ingested_at,
+                source_locator=receipt.source_locator,
+                collection_mode=receipt.collection_mode,
+                input_class=receipt.input_class,
+            )
+        )
+    # Extend only synthetic terminal coverage after Development; no market
+    # outcomes are needed to certify the later, holdout-only decision grid.
+    for interval in plan_retrieval(intervals[-1].end_at_exclusive, coverage_end).intervals:
+        source_at = datetime.fromisoformat(interval.filename_timestamp.replace("Z", "+00:00"))
+        published = source_at + timedelta(minutes=30)
+        adapter = GSGAdapter(isolated, clock=lambda published=published: published)
+        snapshots.append(
+            adapter.ingest_snapshot(
+                gzip.compress(b"", mtime=0),
+                filename_timestamp=interval.filename_timestamp,
+                ingested_at=instant(published),
+                source_locator=(
+                    "https://data.gdeltproject.org/gdeltv3/gsg/"
+                    f"{source_at.strftime('%Y%m%d%H%M%S')}.gsg.json.gz"
+                ),
+                collection_mode="prospective",
+                input_class="synthetic_fixture",
+            )
+        )
+    state = GSGNormalizer(
+        protocol_config_sha256=source.protocol_config_sha256,
+        rights_approval=original.rights_approval,
+    )
+    state.normalize(
+        snapshots,
+        retrieval_plan=plan_retrieval(partial_start, coverage_end),
+        terminal_as_of=as_of,
+        gap_evidence=tuple(
+            item for item in original.terminal_gap_evidence if item.interval_start >= partial_start
+        ),
+    )
+    state.publish_state(isolated, "dataset-partial-" + news)
+    partial_source = replace(
+        source,
+        state_publication_id="gsg-normalizer-state-dataset-partial-" + news,
+        coverage_as_of=as_of,
+    )
+    if news == "changed_score":
+        article = arguments["articles"][0]
+        altered = OfflineScoringEngine(
+            ScoringStore(tmp_path / "partial-alternate-scores"),
+            MockScorer((canonicalize({"sentiment_score": 0.25, "relevance_score": 0.5}),)),
+            clock=lambda: START,
+        ).score(SyntheticInput(source=article.source, title=article.title))
+        partial_source = replace(partial_source, score_artifacts=(altered,))
+        arguments["scores"] = (altered.record,)
+    elif news == "missing_score":
+        partial_source = replace(partial_source, score_artifacts=())
+        arguments["scores"] = ()
+    partial = OfflineFeatureAggregator(isolated).aggregate(partial_source, (instant(last),))
+    AggregationStore(isolated).publish(partial)
+    parent = replace(parent, aggregation_id=partial.aggregation_id)
+    ordinal = int((last - START).total_seconds() // 3600) - 1
+    arguments["opened_at"] = [START + timedelta(hours=index) for index in range(ordinal + 1)]
+    arguments["first_ordinal"] = arguments["last_decision_ordinal"] = ordinal
+    arguments["evidence_raw"] = canonicalize(
+        {
+            "coverage_start_at": intervals[0].start_at,
+            "coverage_end_at_exclusive": coverage_end,
+            "terminal_gap_evidence": json.loads(state.export_state_files()["gap-evidence.json"]),
+        }
+    )
+    # The original first Development decision has only three hours of shared
+    # source coverage. The final published M4 row does not itself expose news
+    # that was already over 24 hours old, so comparing published rows is insufficient.
+    assert first - timedelta(hours=24) < datetime.fromisoformat(
+        partial_start.replace("Z", "+00:00")
+    )
+    if news != "gap":
+        assert partial.rows[0].features.news_missing_24h == 1
+    if matches:
+        result = evaluation._verified_news_parent_expectations(parent, **arguments)
+        assert evaluation._feature_rows_bits(result) == evaluation._feature_rows_bits(
+            {arguments["last_decision_ordinal"]: partial.rows[0].features}
+        )
+    else:
+        with pytest.raises(evaluation.EvaluationIntegrityError, match="M4/M5 overlapping"):
+            evaluation._verified_news_parent_expectations(parent, **arguments)
+
+
+def test_evaluation_news_parent_replays_actual_m4_m5_publications(
+    corpus: Corpus, tmp_path: Path
+) -> None:
+    """The preclaim verifier uses real immutable GSG/score and prepared parents."""
+    parent, arguments = evaluation_parent_case(
+        corpus, tmp_path, news="populated", development="populated"
+    )
+    evaluation._verified_news_parent_expectations(parent, **arguments)
+    articles = arguments["articles"]
+    scores = arguments["scores"]
+    with pytest.raises(evaluation.EvaluationPreflightError, match="raw/response parents"):
+        evaluation._verified_news_parent_expectations(
+            parent,
+            **{
+                **arguments,
+                "articles": (replace(articles[0], raw_snapshot_sha256="a" * 64),),
+            },
+        )
+    with pytest.raises(evaluation.EvaluationPreflightError, match="raw/response parents"):
+        evaluation._verified_news_parent_expectations(
+            parent,
+            **{
+                **arguments,
+                "scores": (replace(scores[0], raw_response_sha256="b" * 64),),
+            },
+        )
+    forged_coverage = json.loads(arguments["evidence_raw"])
+    forged_coverage["coverage_start_at"] = instant(datetime(2099, 1, 1, tzinfo=UTC))
+    with pytest.raises(evaluation.EvaluationPreflightError, match="gap/coverage evidence"):
+        evaluation._verified_news_parent_expectations(
+            parent,
+            **{**arguments, "evidence_raw": canonicalize(forged_coverage)},
+        )
 
 
 @pytest.fixture(autouse=True)
