@@ -30,7 +30,7 @@ dev = [
 ]
 
 [project.scripts]
-krypx = "crypto_ai.cli:main"
+krypx = "crypto_ai.phase2.workflow:dispatch"
 
 [tool.setuptools.packages.find]
 where = ["src"]

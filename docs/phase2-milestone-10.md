@@ -2,20 +2,42 @@
 
 Specification ID: `phase2-milestone10-production-decision-registry-v1`
 
-Status: **SPECIFICATION_FROZEN** — documentation and protocol configuration only.
+Historical specification status: **SPECIFICATION_FROZEN** (2026-10-05).
+Current engineering status: **ACCEPTED_OFFLINE_ONLY** (2026-10-07); synthetic fixtures only.
 
 Human authorization recorded: **2026-10-05**. Accepted Milestone 9 implementation:
 `468e8221bd9a4566c75ce71818a25e8a7f23001b` on `main`, with 1,693 passing tests.
 
+**Publication amendment (2026-10-07, human authority):** Section 5 now specifies
+exclusive creation of the final version directory followed by writes through its
+pinned descriptor. This replaces the October 5 staging-directory/no-replace-rename
+mechanics for Milestone 10 only. The October 5 freeze and commit remain the historical
+specification baseline; this later amendment does not authorize real training,
+promotion, activation, network access, holdout evaluation or a push. The separately
+authorized offline synthetic implementation is accepted under the cooperative-writer
+threat model and parent-descriptor checks below.
+
+**Engineering sign-off (2026-10-07, human authority):** Milestone 10 registry and
+training-workflow engineering is accepted **only** for verified synthetic fixtures.
+Final offline verification: 1,865 repository tests and 60 focused production tests
+passed; all 253 Phase 1 tests passed with 50/50 selected blobs byte-identical,
+and the RFC 8785 binary64 differential matched 49,972/49,972 cases.
+The authorized local `main` commit records that acceptance; it is not a research
+verdict, production-training permission, model-promotion permission, activation,
+network-pilot approval or permission to push. The active next action is
+`phase2_offline_engineering_complete`; any real operation requires separate authority.
+
 ## 1. Authority and evidence boundary
 
-This instruction authorizes only this specification, changes to
-`config/phase2_protocol.json` and `docs/phase2-research-protocol.md`, offline
-verification, and a local documentation commit on `main`. It does not authorize
-Milestone 10 source/test implementation, production training, promotion, activation,
-deployment, or a Git push. `milestone_10_implementation_authorized`,
-`milestone_10_production_training_authorized`, `milestone_10_promotion_authorized`
-and `milestone_10_activation_authorized` remain `false`.
+The October 5 freeze instruction authorized only this specification,
+`config/phase2_protocol.json`, `docs/phase2-research-protocol.md`, offline
+verification and a local documentation commit. It did not authorize source/tests.
+Later human instructions separately authorized synthetic-only source/tests, the
+October 7 publication amendment, acceptance and one local `main` commit.
+`milestone_10_implementation_authorized` is now `true` only for offline synthetic
+fixtures; `milestone_10_production_training_authorized`,
+`milestone_10_promotion_authorized` and `milestone_10_activation_authorized`
+remain `false`. No instruction authorizes real training, deployment or a Git push.
 
 The active Milestone 9 status progresses to `ACCEPTED`; its accepted scope remains
 **OFFLINE_ONLY** synthetic engineering, not a real holdout result. Its immutable
@@ -59,13 +81,14 @@ the production manifest. Record engineering verification separately from researc
 verdict and operational permission. The current state authorizes none of these
 production operations.
 
-## 3. Future `train-production` contract
+## 3. `train-production` contract
 
-`train-production --evaluation-run-id <accepted-run-id>` is the specified future
-entry point, **not an implemented or authorized executable in this step**. The
-argument is required for provenance and authorization lookup; a run ID by itself
-is not human authority. Resolve it to the verified evidence in Section 2 and reject
-an absent, unaccepted, synthetic-for-real-production, incomplete or failed run.
+`train-production --evaluation-run-id <accepted-run-id>` is implemented for
+**offline verified synthetic fixtures only**, behind an explicit `--synthetic-only`
+guard. Its future real-data execution is not authorized. The run ID is required
+for provenance and authorization lookup but is not itself human authority. Resolve
+it to the verified evidence in Section 2 and reject an absent, unaccepted,
+synthetic-for-real-production, incomplete or failed run.
 
 Before fitting, freeze a training input snapshot and `training_as_of_utc`. Fit on
 all eligible currently labeled history in **Development plus verified holdout
@@ -155,36 +178,61 @@ errors on any metadata, model, inventory, provenance or hash mismatch. Define an
 version the concrete parser schema during separately authorized implementation;
 no silent legacy migration or replacement is permitted.
 
-## 5. Atomic publication and durability
+## 5. Atomic publication and durability — amended 2026-10-07
 
-The future publisher must implement all of the following in order:
+The October 5 freeze specified hidden staging followed by atomic no-replace rename.
+The human-approved October 7 amendment replaces that Milestone 10 publication
+sequence with exclusive reservation of the final version name. The publisher must
+implement all of the following in order:
 
-1. Acquire a **version-scoped exclusive filesystem lock**, anchored to the verified
-   `versions/` directory. Concurrent publishers of the same version cannot proceed.
-   A lock never grants permission to replace an existing directory.
-2. Fail if the final version path already exists, **including an empty directory**,
-   partial prior publication, symlink or other filesystem object. Do not delete it,
-   reuse it, merge into it or treat it as an idempotent replacement.
-3. Create hidden same-filesystem staging
-   `.staging-{model_version}-{random}` under `versions/`. Write and fsync all model,
-   schema and provenance payloads. Read back and verify their exact captured bytes,
-   lengths and SHA-256 hashes before creating the completion marker.
-4. Deep-snapshot metadata. Write and fsync canonical `manifest.json` **last**, with
-   `production_artifact_hashes`; verify its exact bytes and full inventory. Reject
-   symlinks, non-regular objects, extra/missing entries and concurrent mutations
-   through descriptor-anchored verification and two-pass directory inventory.
-5. Fsync the staging directory, atomically rename it with **no-replace** semantics
-   to `{model_version}`, then fsync the parent `versions/` directory. Use the accepted
-   cross-platform no-replace primitive; no check-then-overwriting-rename fallback.
-   Unsupported platform/filesystem capability fails closed.
-6. Re-verify exact manifest and payload bytes after rename through the owned directory
-   descriptor. Do not report success before verification and durability complete.
-   On failure, unpublish the owned completion marker with an ownership-safe rollback
-   so no invalid manifest-bearing version remains discoverable; preserve unrelated
-   collision or concurrently replaced directories. Release the version lock on exit.
+**Concurrency threat model.** Every authorized writer for a model version must
+honor the same version-scoped exclusive `flock`. This lock serializes cooperating
+publishers; exclusive directory reservation fails closed on a pre-existing version.
+Open `versions/` with `O_RDONLY | O_DIRECTORY | O_NOFOLLOW` and retain
+that parent descriptor for lock, reservation, lookup and verification. Descriptor-
+relative operations and no-follow opens prevent symlink traversal through the
+pinned parent and final directory. Compare the entry's no-follow `os.stat` result
+(with `dir_fd=parent_fd`, equivalent to `fstatat`) to `os.fstat(version_fd)`
+before payload writes and on subsequent verification. A mismatch fails closed.
+Uncooperative same-UID writers that ignore the lock and can mutate `versions/`
+are outside this guarantee: the separate `mkdir` and `open` calls cannot prove
+exclusive ownership against a swap between those calls. Restrict write access to
+the authorized cooperative publisher set; neither the lock nor the inode check
+alone supplies an atomic ownership proof against such writers.
 
-Failures and interrupted staging cannot yield a usable registry version. A visible
-directory without a verified manifest is not a completed model and cannot be loaded.
+1. Acquire a **version-scoped exclusive filesystem lock**, anchored to the pinned
+   `versions/` parent descriptor. Cooperating publishers of the same version cannot
+   proceed concurrently. A lock never grants permission to replace an existing directory.
+2. Atomically reserve the **final** `{model_version}` name by exclusive directory
+   creation with `os.mkdir(model_version, dir_fd=parent_fd)` relative to the verified
+   `versions/` descriptor. An existing final path,
+   including an empty or partial directory, symlink or other object, fails closed.
+   Never delete, merge, reuse or replace that path. Fsync the parent after reservation.
+3. Open and pin the newly reserved final directory with
+   `os.open(model_version, O_RDONLY | O_DIRECTORY | O_NOFOLLOW, dir_fd=parent_fd)`;
+   compare its inode/identity with the directory entry before every material write
+   and verification step. Write and fsync model, schema and provenance payloads
+   through that descriptor with exclusive file creation. Read back and verify the
+   exact captured bytes, lengths and SHA-256 hashes before creating the completion
+   marker. A reserved directory without a verified manifest is not a usable version.
+4. Deep-snapshot metadata. Write and fsync canonical `manifest.json` **last** through
+   the pinned directory descriptor, with `production_artifact_hashes`; verify its
+   exact bytes and full inventory. Reject symlinks, non-regular objects,
+   extra/missing entries and concurrent mutations through descriptor-anchored
+   verification and two-pass directory inventory.
+5. Fsync the reserved version directory and parent `versions/` directory, then
+   re-verify exact manifest and payload bytes through the owned descriptor and
+   confirm the final path still names that inode. Do not report success before
+   verification and durability complete. Exclusive directory creation supplies
+   no-replace publication; Milestone 10 does not require a staging-directory rename.
+6. On failure, unpublish the owned completion marker with descriptor-anchored,
+   ownership-safe rollback so no invalid manifest-bearing version remains
+   discoverable. Preserve unrelated collision or concurrently replaced directories.
+   An incomplete reserved directory may remain as a non-reusable tombstone; it must
+   never be loaded as a valid registry version. Release the version lock on exit.
+
+Failures and interrupted writes cannot yield a usable registry version. A visible
+directory without a fully verified manifest is not a completed model and cannot be loaded.
 Previously completed versions are immutable and retained for provenance. Recovery
 must not overwrite another version, bypass authorization or rewrite evaluation history.
 
@@ -199,13 +247,15 @@ missing/corrupted/FAIL evidence, absent human authority despite PASS, run-ID/man
 substitution, model-family/parameter/feature-order mismatches, training-row and
 label provenance, preservation of evaluation models, and separation from activation.
 Storage tests must cover version-lock contention, existing empty destinations,
-manifest-last ordering, exact-byte tampering, fsync/rename failures, replacement
-races and ownership-safe rollback. Synthetic acceptance cannot authorize real fitting.
+exclusive reservation collisions, manifest-last ordering, exact-byte tampering,
+fsync/write failures, replacement races and ownership-safe rollback. Synthetic
+acceptance cannot authorize real fitting.
 
-This docs/config-only freeze requires all 1,693 existing repository tests to pass,
-formatting/lint checks, strict repository JSON validation, local RFC 8785 differential
-checks, and unchanged Phase 1 bytes (48/48 source/test blobs; 50/50 including the two
-previously selected fixtures). No implementation acceptance is claimed by this file.
-
-Next proposed action: `implement_milestone_10_production_registry_offline`, **awaiting
-separate human authorization**. This freeze does not execute that action.
+The historical docs/config-only freeze required all 1,693 then-existing repository
+tests, formatting/lint, strict repository JSON, local RFC 8785 differential checks,
+and unchanged Phase 1 bytes (48/48 source/test blobs; 50/50 including two fixtures).
+Separate human instructions subsequently authorized synthetic-only implementation,
+the publication amendment, final acceptance review and this local sign-off. Current
+Milestone 10 status is `ACCEPTED_OFFLINE_ONLY`; the live pilot remains
+`DEFERRED_WITHOUT_BACKFILL`. No real production fit, promotion or activation follows
+from the synthetic engineering acceptance.

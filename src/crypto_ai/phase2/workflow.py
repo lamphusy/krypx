@@ -1,15 +1,18 @@
-"""Run the built-in, wholly offline synthetic Milestone 9 evaluation smoke fixture.
+"""Run explicitly synthetic, wholly offline Phase 2 fixture workflows.
 
 Usage: ``python -m crypto_ai.phase2.workflow evaluate-synthetic-fixture``.
-The command accepts no paths, models, endpoints, or real holdout inputs. It
+The evaluation smoke command accepts no paths, models, endpoints, or real holdout inputs. It
 creates and consumes its own deterministic evidence inside a fresh temporary
 directory, then prints a compact JSON summary before removing that directory.
+``krypx phase2 train-production`` admits verified synthetic artifacts only;
+real production training and automatic model activation remain prohibited.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 import tempfile
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
@@ -22,7 +25,7 @@ from crypto_ai.features.build import compute_features
 from crypto_ai.phase2 import evaluation, holdout
 from crypto_ai.phase2.dataset import COMBINED_COLUMNS, SENTIMENT_COLUMNS, TECHNICAL_COLUMNS
 from crypto_ai.sentiment.canonical import canonicalize, sha256_bytes
-from crypto_ai.sentiment.contracts import format_utc_timestamp
+from crypto_ai.sentiment.contracts import format_utc_timestamp, parse_utc_timestamp
 
 _MARKET_START = datetime(2025, 12, 1, tzinfo=UTC)
 _OOF_START = datetime(2025, 1, 1, tzinfo=UTC)
@@ -297,15 +300,76 @@ def _build_fixture(root: Path) -> evaluation.SyntheticEvaluationRequest:
     )
 
 
+def _utc_argument(value: str) -> datetime:
+    """Accept only an unambiguous, valid RFC3339 UTC timestamp."""
+    try:
+        parsed = parse_utc_timestamp(value, field="timestamp")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+    assert parsed is not None
+    return parsed
+
+
+def _train_production(args: argparse.Namespace) -> int:
+    """Dispatch only after explicit synthetic opt-in and argument validation."""
+    from crypto_ai.phase2 import production
+
+    try:
+        authorization = production.load_synthetic_authorization(args.authorization_file)
+        request = production.SyntheticProductionRequest(
+            evaluation_root=args.evaluation_root,
+            development_run_dir=args.development_run_dir,
+            versions_root=args.versions_root,
+            evaluation_run_id=args.evaluation_run_id,
+            model_version=args.model_version,
+            authorization=authorization,
+            training_as_of_utc=args.training_as_of_utc,
+            created_at_utc=args.created_at_utc,
+        )
+        artifact = production.OfflineProductionEngine().train(request)
+    except production.ProductionError as exc:
+        print(f"Production fixture rejected: {exc}", file=sys.stderr)
+        return 1
+    print(
+        json.dumps(
+            {
+                "activated": False,
+                "artifact_count": len(artifact.files),
+                "evaluation_run_id": args.evaluation_run_id,
+                "model_version": args.model_version,
+                "synthetic": True,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run the sole fixed synthetic fixture command; reject all other inputs."""
+    """Run synthetic-only Phase 2 workflows; never enable real-data execution."""
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser(
         "evaluate-synthetic-fixture",
         help="evaluate the built-in temporary synthetic fixture only",
     )
-    parser.parse_args(argv)
+    production_parser = commands.add_parser(
+        "train-production",
+        help="fit and publish a verified synthetic-only production registry fixture",
+    )
+    production_parser.add_argument("--evaluation-run-id", required=True)
+    production_parser.add_argument("--synthetic-only", action="store_true", required=True)
+    production_parser.add_argument("--evaluation-root", type=Path, required=True)
+    production_parser.add_argument("--development-run-dir", type=Path, required=True)
+    production_parser.add_argument("--versions-root", type=Path, required=True)
+    production_parser.add_argument("--model-version", required=True)
+    production_parser.add_argument("--authorization-file", type=Path, required=True)
+    production_parser.add_argument("--training-as-of-utc", type=_utc_argument, required=True)
+    production_parser.add_argument("--created-at-utc", type=_utc_argument, required=True)
+    args = parser.parse_args(argv)
+    if args.command == "train-production":
+        return _train_production(args)
 
     with tempfile.TemporaryDirectory(prefix="krypx-phase2-synthetic-") as temporary:
         request = _build_fixture(Path(temporary).resolve(strict=True))
@@ -319,6 +383,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         }
         print(json.dumps(summary, sort_keys=True, separators=(",", ":")))
     return 0
+
+
+def dispatch(argv: Sequence[str] | None = None) -> int:
+    """Preserve Phase 1 CLI delegation; route only an explicit phase2 prefix."""
+    arguments = sys.argv[1:] if argv is None else argv
+    if arguments and arguments[0] == "phase2":
+        return main(arguments[1:])
+    from crypto_ai.cli import main as phase1_main
+
+    return phase1_main(argv)
 
 
 if __name__ == "__main__":
