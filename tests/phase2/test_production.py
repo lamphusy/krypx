@@ -54,18 +54,19 @@ def _passing_request(root: Path) -> evaluation.SyntheticEvaluationRequest:
     """Build an independently replayable D/B research PASS using only made-up data.
 
     Constant no-news features remain truthful. Frozen XGBoost feature subsampling
-    differs between D's 37 columns and B's 24 columns; the generated fixture gives
-    both many profitable trades and a small, dispersed incremental D advantage.
+    differs between D's 37 columns and B's 24 columns; the fixed generated path
+    gives both many profitable trades and a dispersed incremental D advantage
+    with room below the frozen 30-day concentration limit on the tested host.
     This is fixture design, never evidence that news creates real trading value.
     """
     request = _synthetic_request(root)
-    rng = np.random.default_rng(0)
+    rng = np.random.default_rng(69)
     previous = 100.0
     records: list[dict[str, Any]] = []
     lines = ["market_ordinal,timestamp,open,high,low,close,volume"]
     for ordinal in range(LAST_MARKET + 1):
         body_return = float(
-            0.00085 + 0.0025 * np.sin(ordinal * 2.0 * np.pi / 24.0) + rng.normal(0.0, 0.0012)
+            0.0002 + 0.0025 * np.sin(ordinal * 2.0 * np.pi / 24.0) + rng.normal(0.0, 0.0012)
         )
         close = previous * (1.0 + body_return)
         at = MARKET_START + ordinal * HOUR
@@ -186,7 +187,7 @@ def passing_evaluation(tmp_path_factory: pytest.TempPathFactory) -> ProductionCa
         request = _passing_request(root)
         artifact = evaluation.OfflineEvaluationEngine().evaluate(request)
         metrics = json.loads(artifact.files["metrics.json"])
-        assert metrics["research_verdict"] == "PASS"
+        assert metrics["research_verdict"] == "PASS", metrics["final_gates"]
         assert all(metrics["final_gates"]["gates"].values())
         assert metrics["production_decision"] == "NO-GO"
         assert metrics["engineering_status"] == "REDUCED_SYNTHETIC_FIXTURE"
