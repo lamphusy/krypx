@@ -26,7 +26,7 @@ import pytest
 from crypto_ai.costs import minimum_gross_return_for_net_edge
 from crypto_ai.exceptions import CryptoAIError
 from crypto_ai.features.build import compute_features
-from crypto_ai.phase2 import evaluation, holdout, production, production_store
+from crypto_ai.phase2 import backtests, evaluation, holdout, production, production_store
 from crypto_ai.phase2.dataset import COMBINED_COLUMNS, SENTIMENT_COLUMNS, TECHNICAL_COLUMNS
 from crypto_ai.sentiment.canonical import canonicalize, sha256_bytes
 from crypto_ai.sentiment.contracts import format_utc_timestamp
@@ -50,23 +50,24 @@ class ProductionCase:
     registry_path: Path
 
 
-def _passing_request(root: Path) -> evaluation.SyntheticEvaluationRequest:
-    """Build an independently replayable D/B research PASS using only made-up data.
+def _passing_request(
+    root: Path, *, seed: int, drift: float
+) -> evaluation.SyntheticEvaluationRequest:
+    """Build an independently replayable D/B case using only made-up data.
 
     Constant no-news features remain truthful. Frozen XGBoost feature subsampling
-    differs between D's 37 columns and B's 24 columns; the fixed generated path
-    gives both many profitable trades and a dispersed incremental D advantage
-    with room below the frozen 30-day concentration limit on the tested host.
-    This is fixture design, never evidence that news creates real trading value.
+    differs between D's 37 columns and B's 24 columns. A bounded test-only
+    selector below finds a generated path with a genuine final-gate PASS on the
+    test host. This is fixture design, not evidence of real news trading value.
     """
     request = _synthetic_request(root)
-    rng = np.random.default_rng(69)
+    rng = np.random.default_rng(seed)
     previous = 100.0
     records: list[dict[str, Any]] = []
     lines = ["market_ordinal,timestamp,open,high,low,close,volume"]
     for ordinal in range(LAST_MARKET + 1):
         body_return = float(
-            0.0002 + 0.0025 * np.sin(ordinal * 2.0 * np.pi / 24.0) + rng.normal(0.0, 0.0012)
+            drift + 0.0025 * np.sin(ordinal * 2.0 * np.pi / 24.0) + rng.normal(0.0, 0.0012)
         )
         close = previous * (1.0 + body_return)
         at = MARKET_START + ordinal * HOUR
@@ -171,6 +172,61 @@ def _passing_request(root: Path) -> evaluation.SyntheticEvaluationRequest:
     return _reissue_readiness(request, feature_raw=("\n".join(feature_lines) + "\n").encode())
 
 
+_PASS_CANDIDATES = (
+    (69, 0.0002),
+    (0, 0.00085),
+    (69, 0.0005),
+    (0, 0.0005),
+) + tuple((seed, (0.0002, 0.0005, 0.00085)[(seed - 1) % 3]) for seed in range(1, 37))
+
+
+def _screen_final_gates(request: evaluation.SyntheticEvaluationRequest) -> dict[str, Any]:
+    """Run the frozen base-cost models and gate arithmetic before the full M9 claim."""
+    market = evaluation._market_frame(request.market_snapshot.path.read_bytes(), LAST_MARKET)
+    features = evaluation._feature_frame(
+        request.feature_snapshot.path.read_bytes(), market, request.boundary
+    )
+    fit = request.boundary.frozen_fit
+    first_open = int(features.market_ordinal.iloc[0]) + 1
+    final_open = int(features.market_ordinal.iloc[-1]) + holdout.HORIZON + 1
+
+    def base_payload(scores: pd.Series) -> dict[str, Any]:
+        result = backtests._simulate(
+            market,
+            scores,
+            None,
+            backtests.SCENARIOS["base"],
+            expected_start=first_open,
+            expected_end=final_open,
+        )
+        return backtests._result_payload(result)
+
+    augmented = base_payload(
+        evaluation._predict(
+            features,
+            COMBINED_COLUMNS,
+            evaluation._verified_model(fit.augmented_model_bytes, COMBINED_COLUMNS),
+        )
+    )
+    control = base_payload(
+        evaluation._predict(
+            features,
+            TECHNICAL_COLUMNS,
+            evaluation._verified_model(fit.control_model_bytes, TECHNICAL_COLUMNS),
+        )
+    )
+    cash = base_payload(pd.Series(0.0, index=features.market_ordinal.to_numpy(dtype=np.int64)))
+    return evaluation.evaluate_final_gates(
+        augmented_metrics=augmented["metrics"],
+        control_metrics=control["metrics"],
+        cash_metrics=cash["metrics"],
+        augmented_ledger=augmented["trade_ledger"],
+        control_ledger=control["trade_ledger"],
+        elapsed_days=request.readiness.elapsed_days,
+        planned_minimum_days=request.readiness.planned_minimum_days,
+    )
+
+
 @pytest.fixture(scope="module")
 def passing_evaluation(tmp_path_factory: pytest.TempPathFactory) -> ProductionCase:
     root = tmp_path_factory.mktemp("production-genuine-synthetic-pass").resolve()
@@ -184,7 +240,31 @@ def passing_evaluation(tmp_path_factory: pytest.TempPathFactory) -> ProductionCa
         patch.setattr(socket.socket, "connect_ex", forbidden)
         patch.setattr(socket, "create_connection", forbidden)
         patch.setattr(holdout, "_generation_registry_path", lambda: registry)
-        request = _passing_request(root)
+        diagnostics = []
+        for index, (seed, drift) in enumerate(_PASS_CANDIDATES):
+            candidate_root = root / f"candidate-{index:02d}"
+            candidate_root.mkdir()
+            try:
+                candidate = _passing_request(candidate_root, seed=seed, drift=drift)
+                gates = _screen_final_gates(candidate)
+            except CryptoAIError as exc:
+                diagnostics.append(f"{seed}/{drift:g}: {type(exc).__name__}: {exc}")
+                continue
+            operands = gates["operands"]
+            diagnostics.append(
+                f"{seed}/{drift:g}: {gates['research_verdict']} "
+                f"D-B={operands['augmented_total_return'] - operands['control_total_return']:.3f} "
+                f"concentration={operands['rolling_incremental_concentration']}"
+            )
+            if gates["research_verdict"] == "PASS":
+                request = candidate
+                break
+        else:
+            pytest.fail(
+                "no synthetic production PASS after "
+                f"{len(_PASS_CANDIDATES)} predeclared candidates: " + "; ".join(diagnostics),
+                pytrace=False,
+            )
         artifact = evaluation.OfflineEvaluationEngine().evaluate(request)
         metrics = json.loads(artifact.files["metrics.json"])
         assert metrics["research_verdict"] == "PASS", metrics["final_gates"]
