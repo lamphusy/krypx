@@ -45,8 +45,11 @@ def historical_authorized_configuration():
 
 def configuration():
     config = historical_authorized_configuration()
-    config["batch_b_live_pilot"]["public_key_hex"] = PUBLIC.public_bytes_raw().hex()
-    config["batch_b_live_pilot"]["signer_key_id"] = sha256_bytes(PUBLIC.public_bytes_raw())
+    pilot = config["batch_b_live_pilot"]
+    pilot["pilot_id"] = "phase2-batch-b-20260913"
+    pilot["store_path"] = runner.DEFAULT_ROOT
+    pilot["public_key_hex"] = PUBLIC.public_bytes_raw().hex()
+    pilot["signer_key_id"] = sha256_bytes(PUBLIC.public_bytes_raw())
     # Synthetic tests retain their fixed midnight plan independently of a human
     # changing the actual future operational schedule in governance.
     for field, value in {
@@ -54,11 +57,10 @@ def configuration():
         "end_exclusive_utc": "2026-09-14T00:00:00Z",
         "closeout_deadline_utc": "2026-09-14T00:45:00Z",
     }.items():
-        config["batch_b_live_pilot"][field] = value
-        config["batch_b_live_pilot"]["approval_record"][field] = value
-    config["batch_b_live_pilot"]["approval_record"][
-        "window_authorized_at_utc"
-    ] = "2026-09-12T17:46:20Z"
+        pilot[field] = value
+        pilot["approval_record"][field] = value
+    pilot["approval_record"]["approved_at_utc"] = "2026-09-12T17:46:20Z"
+    pilot["approval_record"]["window_authorized_at_utc"] = "2026-09-12T17:46:20Z"
     return config
 
 
@@ -243,14 +245,19 @@ def test_malformed_live_byte_counts_fail_with_project_exception(tmp_path, bad):
 
 def test_real_replacement_schedule_is_exact_and_authority_bound():
     config = json.loads((Path(__file__).parents[2] / "config/phase2_protocol.json").read_bytes())
-    assert config["network_pilot_authorized"] is False
-    with pytest.raises(NetworkSafetyError, match="not authorized"):
-        LiveAuthority.from_config(config)
+    assert config["network_pilot_authorized"] is True
     pilot = config["batch_b_live_pilot"]
-    authority = LiveAuthority.from_config(historical_authorized_configuration())
-    assert authority.value["approval_record"]["anchor_utc"] == "2026-09-13T14:00:00Z"
-    assert pilot["end_exclusive_utc"] == "2026-09-14T14:00:00Z"
-    assert pilot["closeout_deadline_utc"] == "2026-09-14T14:45:00Z"
+    assert pilot["network_pilot_authorized"] is True
+    assert pilot["real_provider_rights_approved"] is True
+    assert config["milestone_3_scoring_authorized"] is False
+    authority = LiveAuthority.from_config(config)
+    assert authority.value["approval_record"]["anchor_utc"] == "2026-10-10T20:00:00Z"
+    assert pilot["end_exclusive_utc"] == "2026-10-11T20:00:00Z"
+    assert pilot["closeout_deadline_utc"] == "2026-10-11T20:45:00Z"
+    assert (
+        authority.value["plan_sha256"]
+        == plan_retrieval(pilot["anchor_utc"], pilot["end_exclusive_utc"]).plan_id
+    )
     assert len(runner.calendar_jobs(Path("/example"), pilot, "/python")) == 96
 
 

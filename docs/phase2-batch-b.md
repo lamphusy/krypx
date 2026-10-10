@@ -3,11 +3,53 @@
 Current live specification ID: `phase2-batch-b-live-prospective-v1`.
 Base specification ID: `phase2-batch-b-prospective-ingestion-v2`, reconciled on 2026-09-08.
 Supersedes v1, frozen on 2026-09-07 in commit `b8b72d50133647ebc99846bfd69bb8866d185136`.
-Base status: `SPECIFICATION_FROZEN_COMPATIBLE`. Live setup: `VERIFIED_SETUP_NOT_ARMED`.
-`network_pilot_authorized: true`; `real_provider_rights_approved: true`;
-`milestone_3_scoring_authorized: false`. No collection or scheduler arming occurs during setup.
+Base status: `SPECIFICATION_FROZEN_COMPATIBLE`. The September 13 setup described below
+is historical and was deferred without backfill. The newly authorized October 10
+prospective window is specified below; authorization alone is not arming, collection,
+coverage verification, or pilot acceptance.
 
-## September 13 live pilot authority and setup
+## October 10 replacement prospective pilot authority
+
+The human authority approved a new, forward-only 24-hour GDELT GSG pilot with UTC
+anchor `2026-10-10T20:00:00Z`, observation window
+`[2026-10-10T20:00:00Z, 2026-10-11T20:00:00Z)`, and final retrieval and signed
+closeout deadline `2026-10-11T20:45:00Z`. The pilot identity is
+`phase2-batch-b-20261010` and its isolated, Git-ignored storage namespace is
+`data/phase2-pilot-20261010` (mode `0700`). Its first scheduled worker would start
+at `2026-10-10T20:45:00Z`; the last would start at `2026-10-11T20:30:00Z`.
+The plan remains 96 fifteen-minute reporting slots and 1,440 exact one-minute
+gzip locators. No missed September window or October slot may be backfilled.
+
+The human specifically approved internal English Bitcoin GSG title-metadata
+research and immutable local CAS retention of exact raw responses, including
+incidental fields and unrelated titles, through review. GDELT attribution is
+required. No raw-response redistribution, public publication, publisher-page
+scraping, or body-text collection is approved. The sole endpoint remains
+`https://data.gdeltproject.org/gdeltv3/gsg/{timestamp}.gsg.json.gz`.
+This approval sets `real_provider_rights_approved: true` and
+`network_pilot_authorized: true` for this bounded prospective pilot only;
+`milestone_3_scoring_authorized: false` remains unchanged. No real scoring,
+model download, indicators/features, market-data join, training, backtest,
+research-gate execution, or holdout evaluation is authorized.
+
+The approved hard caps remain 500,000,000 cumulative downloaded bytes,
+2,000,000,000 retained bytes, 900 seconds per worker, one request start per
+five seconds, 10-second HTTP timeout, at most three retries (four attempts),
+and $0.00 incremental cost. The Ed25519 private key must be provisioned under
+the isolated pilot root at `data/phase2-pilot-20261010/secrets/pilot_ed25519.key`
+with mode `0600`; this is the existing runner's required relative
+`secrets/pilot_ed25519.key` layout, not a repository-root secret. Pin its public
+key and SHA-256 key ID in the protocol before readiness checks. Never print or
+commit the private key. Provisioning, successful preflight, scheduler arming,
+network dispatch, signed receipts, coverage, and closeout are not established by
+this authorization record. After setup and a clean local `main` commit, use
+`.venv/bin/python scripts/run_phase2_pilot.py check` for offline readiness and,
+only before the anchor, `.venv/bin/python scripts/run_phase2_pilot.py arm` to
+install the bounded schedule. Do not shift the anchor automatically if it is
+missed. The next action is `execute_live_prospective_pilot` only while all
+authorization, key-custody, local safety, and pre-anchor conditions hold.
+
+## Historical September 13 live pilot authority and setup
 
 The human approved a replacement anchor of `2026-09-13T14:00:00Z`, recorded at
 `2026-09-13T13:03:24Z`. The previously authorized midnight September 13 anchor was
@@ -219,10 +261,11 @@ isolated pilot namespace and keep all records local and outside Git.
 Historical schedule status: `MISSED_UNAUTHORIZED_NOT_EXECUTED`, recorded on 2026-09-10.
 The September 9 anchor elapsed without network authorization or execution. Preserve these
 dates solely as the historical frozen plan and synthetic test fixtures; never backfill or
-shift them automatically. The human has now approved the September 13 successor anchor.
+shift them automatically. The later September 13 successor was also deferred without
+backfill. The separately approved October 10 successor is the active schedule.
 
-The current fixed prospective UTC anchor is `2026-09-13T14:00:00Z`. Its observation window
-is half-open: `[2026-09-13T14:00:00Z, 2026-09-14T14:00:00Z)`. Freeze 96 reporting
+The current fixed prospective UTC anchor is `2026-10-10T20:00:00Z`. Its observation window
+is half-open: `[2026-10-10T20:00:00Z, 2026-10-11T20:00:00Z)`. Freeze 96 reporting
 intervals, each 900 seconds, with interval `i` equal to
 `[anchor + i*900s, anchor + (i+1)*900s)` for `0 <= i < 96`.
 

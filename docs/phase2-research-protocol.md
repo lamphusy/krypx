@@ -1,6 +1,6 @@
 # KrypX Phase 2 — Milestone 0 Research Protocol and News-Source Feasibility
 
-**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**; the live pilot **DEFERRED WITHOUT BACKFILL**; Milestone 3 foundation **ACCEPTED_OFFLINE_ONLY**; Milestone 4 **ACCEPTED** for offline synthetic aggregation; Milestone 5 dataset integration **ACCEPTED_OFFLINE_ONLY**. Milestone 6 is **ACCEPTED** for offline synthetic engineering only at `b3726f3c02587b470ab85e552559091e7aeeaa42`. Milestone 7 is **ACCEPTED** within its verified synthetic-only scope at `e84944721f5ba2199992c7fc547bc0c868436056` and `29f311660c047cc31b365fd4029e788bff9150a9`. Milestone 8 is **ACCEPTED**, with engineering acceptance limited to offline synthetic claim, zero-outcome readiness and boundary-purge infrastructure. Milestone 9 is **ACCEPTED** at `468e8221bd9a4566c75ce71818a25e8a7f23001b`; its historical engineering acceptance remains **ACCEPTED_OFFLINE_ONLY** and grants no real holdout authority. Milestone 10 is **ACCEPTED_OFFLINE_ONLY** for synthetic production-registry/training-workflow engineering under the October 7 cooperative-lock and parent-descriptor publication amendment to the frozen specification at `9affa48b198f4a68566800fff71300ab4d398aaf`. The active action is `phase2_offline_engineering_complete`. A local acceptance commit is authorized; a push, real production training, promotion, activation, real dataset integration, real scoring/feature use, real training/backtests, real research-gate execution, future collection and holdout access/evaluation remain **NOT AUTHORIZED**.
+**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**. The historical September live pilot remains **DEFERRED WITHOUT BACKFILL**; a separate, bounded October 10 prospective GSG pilot is now human-authorized but not yet armed, executed, or accepted. Milestone 3 foundation **ACCEPTED_OFFLINE_ONLY**; Milestone 4 **ACCEPTED** for offline synthetic aggregation; Milestone 5 dataset integration **ACCEPTED_OFFLINE_ONLY**. Milestone 6 is **ACCEPTED** for offline synthetic engineering only at `b3726f3c02587b470ab85e552559091e7aeeaa42`. Milestone 7 is **ACCEPTED** within its verified synthetic-only scope at `e84944721f5ba2199992c7fc547bc0c868436056` and `29f311660c047cc31b365fd4029e788bff9150a9`. Milestone 8 is **ACCEPTED**, with engineering acceptance limited to offline synthetic claim, zero-outcome readiness and boundary-purge infrastructure. Milestone 9 is **ACCEPTED** at `468e8221bd9a4566c75ce71818a25e8a7f23001b`; its historical engineering acceptance remains **ACCEPTED_OFFLINE_ONLY** and grants no real holdout authority. Milestone 10 is **ACCEPTED_OFFLINE_ONLY** for synthetic production-registry/training-workflow engineering under the October 7 cooperative-lock and parent-descriptor publication amendment to the frozen specification at `9affa48b198f4a68566800fff71300ab4d398aaf`. The active action is `execute_live_prospective_pilot` only if pre-anchor readiness succeeds. No push, real production training, promotion, activation, real dataset integration, real scoring/feature use, real training/backtests, real research-gate execution, or holdout access/evaluation is authorized.
 
 **Research decision:** `PROCEED_WITH_FORWARD_ONLY_COLLECTION`
 
@@ -17,6 +17,7 @@
 **Batch B live authority and explicit rights record:** `2026-09-12T17:46:20Z`; `phase2-batch-b-live-prospective-v1`
 **Replacement window authority:** `2026-09-13T13:03:24Z`; anchor `2026-09-13T14:00:00Z`. The midnight September 13 anchor was missed without arming or collection; no backfill is authorized.
 **Current deferral and offline Milestone 3 authority:** recorded 2026-09-14; live prospective pilot deferred without backfill; synthetic fixtures and mock scorers only.
+**October 10 successor pilot authority:** the human separately approved the prospective anchor `2026-10-10T20:00:00Z`, observation window `[2026-10-10T20:00:00Z, 2026-10-11T20:00:00Z)`, and signed closeout deadline `2026-10-11T20:45:00Z`. This does not backfill September, claim a completed live run, or authorize real scoring, models, features, research gates, or holdout use.
 **Final offline Milestone 3 acceptance:** 2026-09-15; human-authorized independent verification against `c12aa01705712e53f65206c064248ef9fdc964ce` found zero blocking findings after the binary64 hydration fix; local commit on `main` authorized, no push.
 **Milestone 3 completion commit:** `d129094c9483f69431eeb6e3698e52ee273d5d0e`; 1,003 passing tests.
 **Milestone 4 specification freeze:** 2026-09-15; [offline point-in-time aggregation specification](phase2-milestone-4.md); documentation/configuration only, no implementation authority.
@@ -80,7 +81,8 @@ the September 10 instruction permitted adapter, circuit-breaker and Ed25519 sour
 implementation using synthetic mocks only. That historical amendment remains mock-only;
 the separate `batch_b_live_pilot` authority subsequently permitted production-input implementation.
 Current fields are `batch_b_status: SPECIFICATION_FROZEN_COMPATIBLE`,
-`network_pilot_authorized: false`, `real_provider_rights_approved: true`,
+`network_pilot_authorized: true` for the bounded October 10 GSG pilot,
+`real_provider_rights_approved: true`,
 `milestone_3_status: ACCEPTED_OFFLINE_ONLY`,
 `milestone_3_offline_foundation_authorized: true`,
 `milestone_3_scoring_authorized: false`, `milestone_4_feature_aggregation_authorized: true`,
@@ -123,8 +125,9 @@ Current fields are `batch_b_status: SPECIFICATION_FROZEN_COMPATIBLE`,
 `milestone_10_production_training_authorized: false`,
 `milestone_10_promotion_authorized: false`,
 `milestone_10_activation_authorized: false`,
-`real_network_calls_prohibited: true`, and
-`next_action: phase2_offline_engineering_complete`. The completed
+`real_network_calls_prohibited: false` only within that pilot's strict endpoint,
+schedule, and caps, and `next_action: execute_live_prospective_pilot` while the
+anchor remains future. The completed
 Milestone 8, Milestone 9 and Milestone 10 implementations are accepted only for
 offline synthetic fixtures. A separate October 7 human sign-off authorizes
 one local acceptance commit, not a push. Real production training, promotion,
@@ -135,28 +138,44 @@ September 24 independently accepted the offline result and authorized one local 
 The first M7 instruction froze only its specification; the next authorized
 synthetic-only implementation, and the September 27 human sign-off accepted it
 offline only. Neither real research execution nor push is inferred.
-Historical freeze/acceptance records remain preserved. The live-pilot status is
-`DEFERRED_WITHOUT_BACKFILL`; it is neither completed nor accepted. Historical setup
-verification and its then-current `VERIFIED_SETUP_NOT_ARMED` status remain audit records,
-not a statement of current scheduler state or a new collection authorization.
+Historical freeze/acceptance records remain preserved. The September pilot
+status is `DEFERRED_WITHOUT_BACKFILL`; it is neither completed nor accepted.
+Historical setup verification and its then-current `VERIFIED_SETUP_NOT_ARMED`
+status remain audit records, not a statement of current scheduler state.
+The separately approved October 10 prospective pilot is authorized but has
+not been armed, executed, or accepted.
 
 The historically approved observation window was `[2026-09-13T14:00:00Z, 2026-09-14T14:00:00Z)`:
 96 reporting intervals, 1,440 one-minute files, first worker at `2026-09-13T14:45:00Z`,
 last worker at `2026-09-14T14:30:00Z`, and signed closeout deadline
 `2026-09-14T14:45:00Z`. No part of this deferred window may be backfilled. The historical
 arming command and execution guidance in [the Batch B specification](phase2-batch-b.md)
-are inactive under this newer human deferral. No runner is to be armed or dispatched.
-Any resumption requires separate explicit network authority and a genuinely future
-prospective observation window; no dates are shifted automatically.
+are inactive for that September window. The new, separate observation window is
+`[2026-10-10T20:00:00Z, 2026-10-11T20:00:00Z)` with closeout deadline
+`2026-10-11T20:45:00Z`. Its first and last scheduled worker starts are
+`2026-10-10T20:45:00Z` and `2026-10-11T20:30:00Z`. It may be armed only
+after key-pinned, clean-main offline readiness checks and before its anchor;
+otherwise it is missed and cannot be backfilled or automatically shifted.
 
-The exclusive namespace is `data/phase2-pilot-20260913` (ignored by Git, mode `0700`), with
+The historical September namespace is `data/phase2-pilot-20260913` (ignored by Git, mode `0700`), with
 private key `secrets/pilot_ed25519.key` (mode `0600`), raw CAS, receipts, control files and
 bounded status records all included in retained-storage accounting. The public key and
-its SHA-256 key ID are independently pinned in `batch_b_live_pilot`. The canonical historical
-approval record is retained unchanged; changing current governance does not rewrite old
+its SHA-256 key ID were pinned in the prior protocol commit. Historical approval evidence
+remains in Git history; updating the active `batch_b_live_pilot` record does not rewrite old
 pinned protocol hashes, receipts, launch records, raw snapshots or signing keys. The old
 embedded `approval_record.network_pilot_authorized: true` is historical evidence, not
-operative permission. Synthetic receipt/gap identities cannot be relabeled as live evidence.
+operative permission for September. Synthetic receipt/gap identities cannot be relabeled
+as live evidence. The October pilot ID is `phase2-batch-b-20261010`, with its own
+ignored `data/phase2-pilot-20261010` root (mode `0700`). Its Ed25519 private
+key belongs at `data/phase2-pilot-20261010/secrets/pilot_ed25519.key` (mode
+`0600`), the existing runner's required relative `secrets/pilot_ed25519.key`
+location. The new 32-byte public key and SHA-256 key ID must be pinned in the
+active protocol before arming. The approved rights cover internal English
+Bitcoin GSG title metadata and immutable exact raw-response CAS retention
+through review, including incidental fields and unrelated titles, with GDELT
+attribution and no external redistribution. Only the exact timestamped HTTPS
+GSG gzip endpoint is permitted. Publisher scraping, body-text collection,
+real scoring, model downloads and downstream research remain prohibited.
 
 All caps remain strict: 500,000,000 cumulative received bytes, 2,000,000,000 retained
 logical/allocated bytes, at least five seconds between dispatches, 10-second HTTP timeout,
@@ -239,8 +258,10 @@ out-of-range scores, invalid storage paths, clock failures, backwards attempt ch
 recomputed semantic-hash forgeries, cache collisions and injected publication races,
 manifest-only early metadata rejection, raw CAS tampering, FIFO/symlink rejection and
 interrupted publication recovery. Tests deny network connections and use synthetic
-temporary stores only. Current governance rejects live authority before operational key,
-storage or transport access. The historical approval-record digest is unchanged.
+temporary stores only. Governance at that September 15 checkpoint rejected live
+authority before operational key, storage or transport access; the separate October
+10 prospective authorization supersedes that then-current network status. The
+historical approval-record digest is unchanged.
 
 The final P2 fix normalizes verified in-memory payload numbers to Python `float` after
 semantic reconstruction and validation. Fresh outputs, store reloads and cache hits now
@@ -476,7 +497,7 @@ commit or push. At that pre-review checkpoint, six repository files were locally
 and unstaged on `main`, whose HEAD was `06e87999fa7ddcf8a434fe9c52096816f0dfe575`.
 The action then was `review_milestone_5_offline_dataset_integration`; the sign-off below
 supersedes that pending-review state without erasing its history.
-The live pilot stays `DEFERRED_WITHOUT_BACKFILL`; no network call, pilot dispatch,
+At that September 19 checkpoint, the live pilot stayed `DEFERRED_WITHOUT_BACKFILL`; no network call, pilot dispatch,
 backfill, real data access/scoring/join, model download, training, research backtest/gate,
 future collection, holdout access/evaluation or paid service is authorized. Historical
 rights, signed approval records and acceptance evidence remain unchanged.
@@ -514,7 +535,7 @@ commit operation complete. No push is authorized.
 At that sign-off, the next action was `await_human_next_milestone_specification_authorization`.
 Neither the next specification nor its implementation was authorized by the September 19
 sign-off; the separate September 20 instruction below supplies the new synthetic authority.
-Live collection stays `DEFERRED_WITHOUT_BACKFILL`, with `network_pilot_authorized: false`
+At that September 19 sign-off, live collection stayed `DEFERRED_WITHOUT_BACKFILL`, with `network_pilot_authorized: false`
 and `real_network_calls_prohibited: true`. No real scoring, model download, real dataset
 join, training, backtest, research-gate execution or holdout access is authorized. Offline
 engineering acceptance is not evidence of a live pilot, real research dataset or model
@@ -609,8 +630,10 @@ This authorization changes the root status to `IN_PROGRESS_OFFLINE_ONLY` and
 `milestone_7_offline_implementation_authorized: true`; it does **not** pre-accept
 the implementation or establish a real research result. No real network calls,
 model downloads, paid scoring, training/backtests on real or unverified data,
-holdout access, live-pilot resumption or Git push are authorized. The live pilot
-remains `DEFERRED_WITHOUT_BACKFILL` with network authorization disabled.
+holdout access, live-pilot resumption or Git push were authorized by that
+September 26 instruction. The live pilot then remained
+`DEFERRED_WITHOUT_BACKFILL` with network authorization disabled; the later
+October 10 prospective pilot approval is separate.
 
 ### Current Milestone 7 offline engineering acceptance
 
@@ -634,7 +657,7 @@ source/tests and temporary fixture artifacts. The
 authority did not permit a claim on or access to a real holdout. Future
 collection, real-data backtests and live-pilot resumption each require further
 explicit authority.
-The pilot remains `DEFERRED_WITHOUT_BACKFILL` with
+At that September 27 sign-off, the pilot remained `DEFERRED_WITHOUT_BACKFILL` with
 `network_pilot_authorized: false` and `real_network_calls_prohibited: true`.
 
 ### Milestone 8 offline engineering acceptance
@@ -682,8 +705,9 @@ the historical next action. A separate instruction now authorizes Milestone 10
 implementation only on verified synthetic fixtures; real production training,
 promotion and activation remain unauthorized.
 Actual real-data workflow execution, a real claim, holdout unblinding, network
-use, model download and push remain unauthorized. The pilot remains
-`DEFERRED_WITHOUT_BACKFILL`.
+use, model download and push were unauthorized under that Milestone 9
+instruction. The September pilot remained `DEFERRED_WITHOUT_BACKFILL`;
+the later October 10 authority covers only its newly approved window.
 
 The current CLI is an ephemeral, built-in synthetic fixture, not the future
 `evaluate-holdout` command. Its explicit reduced-random fixture mode is labeled
@@ -793,9 +817,11 @@ production training and must never activate a model or modify
 remain preserved. The verified synthetic implementation is accepted and one
 local `main` acceptance commit is authorized; no push is requested. Real
 production training, promotion, activation,
-network access and holdout evaluation remain unauthorized. The live pilot remains
+network access and holdout evaluation were unauthorized under that Milestone
+10 synthetic-engineering instruction. The September live pilot then remained
 `DEFERRED_WITHOUT_BACKFILL`, with `network_pilot_authorized: false` and
-`real_network_calls_prohibited: true`.
+`real_network_calls_prohibited: true`; the separate October 10 instruction
+subsequently authorizes only its bounded prospective GSG pilot.
 
 The synthetic command is `krypx phase2 train-production`, requiring
 `--evaluation-run-id`, explicit `--synthetic-only`, `--evaluation-root`,
@@ -818,7 +844,7 @@ This recommendation is deliberately title-only. It does not authorize fetching p
 |---|---|
 | Exact verdict | `PROCEED_WITH_FORWARD_ONLY_COLLECTION` |
 | Engineering-specification approval | Milestone 0 frozen; offline Milestones 1 and 2 accepted at `bb6d4d`; Milestone 3 synthetic/mock foundation accepted at `d129094`; Milestone 4 synthetic aggregation accepted at `c177a76`; Milestone 5 synthetic integration accepted at `d7cfa575`; Milestone 6 synthetic four-cell engine accepted at `b3726f3`; Milestone 7 synthetic-only backtest/report engineering accepted at `e849447` and `29f3116`; Milestone 8 root status `ACCEPTED` at `bf2cb8c` for offline-only engineering; Milestone 9 root status `ACCEPTED` at `468e822` with historical `ACCEPTED_OFFLINE_ONLY` scope; Milestone 10 specification frozen at `9affa48` and synthetic-only engineering accepted under the October 7 cooperative-lock amendment; no real research execution or holdout access authorized |
-| Recommended provider | GDELT GSG, title-only, with KrypX receipt time and exact raw-byte hashes; live pilot deferred without backfill; no current network authority |
+| Recommended provider | GDELT GSG, title-only, with KrypX receipt time and exact raw-byte hashes; at the earlier Milestone 0/September deferral checkpoint no live network authority existed; the October 10 bounded successor is separately authorized above |
 | Historical feasibility | `REJECTED`: no retrospective news scoring/backtest for the Phase 1 period |
 | Main blocker to outcomes | A newly collected development corpus does not yet exist; scorer, remaining non-Milestone-9 gates, budget, and actual holdout use are unapproved |
 | Provider fee | GDELT datasets: $0; query infrastructure may cost money |
@@ -1598,9 +1624,9 @@ require their own approvals.
 
 | Action | Current state |
 |---|---|
-| Batch B specification | Base `SPECIFICATION_FROZEN_COMPATIBLE`; offline correction `ACCEPTED_OFFLINE_ONLY`; live pilot `DEFERRED_WITHOUT_BACKFILL`, not completed or accepted |
-| Batch B source/test execution | Accepted offline implementation and historical runner/key setup preserved; no current live execution |
-| Batch B network pilot | `network_pilot_authorized: false`; separate future prospective authorization required; no backfill |
+| Batch B specification | Base `SPECIFICATION_FROZEN_COMPATIBLE`; offline correction `ACCEPTED_OFFLINE_ONLY`; September live pilot deferred without backfill; October 10 successor authorized, not armed or accepted |
+| Batch B source/test execution | Accepted offline implementation and historical runner/key setup preserved; October setup and preflight require independent verification before arming |
+| Batch B network pilot | `network_pilot_authorized: true` only for the fixed October 10–11 prospective window, exact GSG endpoint and frozen caps; no September backfill |
 | Milestone 3 offline foundation | `milestone_3_status: ACCEPTED_OFFLINE_ONLY`; Scorer Protocol, strict JSON validation/errors, immutable CAS/cache and synthetic/mock tests accepted at `d129094` |
 | Milestone 3 real sentiment scoring | `milestone_3_scoring_authorized: false`; `approved_scorer: null` |
 | Milestone 4 specification | Frozen at `683f76d`; numerical, causal, coverage and storage requirements unchanged |
@@ -1611,10 +1637,10 @@ require their own approvals.
 | Milestone 8 future-holdout specification and implementation | Specification `SPECIFICATION_FROZEN` on 2026-09-27; root `milestone_8_status: ACCEPTED` at `bf2cb8c` after 101 focused and 1,582 repository tests, for offline synthetic claim/readiness/boundary-purge engineering only; no real claim, collection, holdout access/evaluation |
 | Milestone 9 one-time evaluation specification and implementation | Specification frozen at `54978ada`; active `milestone_9_status: ACCEPTED` at `468e822` after 1,693 repository tests and corrective verification; historical acceptance `ACCEPTED_OFFLINE_ONLY`, synthetic-fixture workflow only, no real holdout evaluation or push |
 | Milestone 10 production decision and registry | Specification frozen at `9affa48`; October 7 publication amendment establishes a cooperative version-lock boundary, exclusive parent-descriptor relative final-directory reservation, inode verification and manifest-last writes; `milestone_10_status: ACCEPTED_OFFLINE_ONLY` and `milestone_10_offline_implementation_authorized: true`; verified synthetic registry/workflow engineering accepted, with one local acceptance commit authorized but no push, real production training, promotion or activation |
-| Download/query GDELT or any provider data | Not authorized while pilot is deferred |
-| Call a provider API or fetch a publisher page | Not authorized; all implementation and verification remain offline |
+| Download/query GDELT or any provider data | GSG HTTPS retrieval only after verified pre-anchor arming of the October pilot; all other providers and out-of-window/backfill access prohibited |
+| Call a provider API or fetch a publisher page | Only the exact timestamped GSG archive endpoint is in scope; publisher pages and other APIs prohibited |
 | Fetch or alter market data | Not authorized |
-| Create an account, accept a model/provider license, or request credentials | Not authorized; preserve the previously provisioned isolated Ed25519 pilot key |
+| Create an account, accept a model/provider license, or request credentials | Not authorized; preserve the previously provisioned September signing key and isolate the new October key |
 | Start a paid service or incur third-party spend | Not authorized |
 | Download model weights, score real articles, build/join real features, train on real data, or run real trading backtests | Not authorized; M7 synthetic-only backtest engineering is authorized, not real-data research execution |
 | Start future-holdout collection | Not authorized; requires approved frozen protocol/generation |
