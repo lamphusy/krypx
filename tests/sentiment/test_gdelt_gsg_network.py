@@ -261,7 +261,7 @@ def test_four_attempt_exhaustion_bound_to_versioned_terminal_evidence(tmp_path):
     assert GSGRetryPolicy.maximum_attempts == 3  # Accepted Batch A is untouched.
 
 
-@pytest.mark.parametrize("status", [301, 400, 401, 402, 403, 404, 408])
+@pytest.mark.parametrize("status", [301, 400, 401, 402, 403, 408])
 def test_permanent_http_errors_do_not_retry_and_halt(tmp_path, status):
     client, _, transport = client_at(tmp_path, Response(b"no", status))
     with client:
@@ -270,6 +270,72 @@ def test_permanent_http_errors_do_not_retry_and_halt(tmp_path, status):
         assert failure.value.result.gap_evidence.attempt_count == 1
         assert client.budget.halted
     transport.open.assert_called_once()
+
+
+def test_complete_http_404_records_gap_and_continues_without_stopping_budget(tmp_path):
+    client, _, transport = client_at(
+        tmp_path, Response(b"", 404, {"Content-Length": "0"}), Response()
+    )
+    with client:
+        missing = client.retrieve(minute())
+        assert missing.snapshot is None
+        assert missing.gap_evidence is not None
+        assert missing.gap_evidence.attempt_count == 1
+        assert missing.gap_evidence.final_terminal_disposition == "non_retryable"
+        assert not client.budget.halted
+        verify_terminal_gap_evidence(
+            missing.gap_evidence,
+            plan=PLAN,
+            filename_timestamp=minute(),
+            receipts=client.receipts,
+            public_key=PUBLIC,
+            protocol_sha256="a" * 64,
+        )
+        found = client.retrieve(minute(1))
+        assert found.snapshot is not None and found.snapshot.state == "complete"
+        assert found.gap_evidence is None
+        assert not client.budget.halted
+        bodies = verify_receipt_chain(client.receipts, PUBLIC)
+        assert [body["http_status"] for body in bodies] == [404, 200]
+        assert [body["filename_timestamp"] for body in bodies] == [minute(), minute(1)]
+    assert transport.open.call_count == 2
+
+
+def test_truncated_http_404_remains_a_fatal_transfer_failure(tmp_path):
+    client, _, transport = client_at(tmp_path, Response(b"", 404, {"Content-Length": "1"}))
+    with client:
+        with pytest.raises(RetrievalFailure) as failure:
+            client.retrieve(minute())
+        assert failure.value.result.gap_evidence is not None
+        assert client.budget.halted
+    transport.open.assert_called_once()
+
+
+def test_fifth_distinct_404_reporting_slot_stops_unattainable_pilot(tmp_path):
+    for slot in range(5):
+        clock = Clock()
+        clock.start += timedelta(minutes=15 * slot)
+        client, _, transport = client_at(
+            tmp_path,
+            Response(b"", 404, {"Content-Length": "0"}),
+            clock=clock,
+            create_pilot=slot == 0,
+        )
+        with client:
+            if slot < 4:
+                result = client.retrieve(minute(slot * 15))
+                assert result.gap_evidence is not None
+                assert not client.budget.halted
+            else:
+                with pytest.raises(NetworkSafetyError, match="92/96 unattainable"):
+                    client.retrieve(minute(slot * 15))
+                assert client.budget.halted
+        transport.open.assert_called_once()
+    resumed, _, resumed_transport = client_at(tmp_path, Response(), create_pilot=False)
+    with pytest.raises(NetworkSafetyError):
+        with resumed:
+            pass
+    resumed_transport.open.assert_not_called()
 
 
 @pytest.mark.parametrize("raw", [b"", b"not gzip", RAW[:-3], gzip.compress(b"{bad json}", mtime=0)])

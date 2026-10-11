@@ -233,6 +233,39 @@ def test_nonredirect_http_errors_are_returned_to_signed_retry_policy(monkeypatch
     response.close()
 
 
+def test_empty_404_requires_and_accepts_clean_peer_eof(monkeypatch):
+    connection, _ = _connection(monkeypatch, body=b"", status="404 Missing")
+    response = RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    assert response.status == 404
+    assert response.headers["content-length"] == "0"
+    assert response.transfer_complete is False
+    assert response.read(65536, timeout=1.0) == b""
+    assert response.transfer_complete is True
+    assert connection.sock.timeouts == [1.0]
+    response.close()
+
+
+def test_empty_404_with_ragged_tls_eof_fails_closed(monkeypatch):
+    connection, _ = _connection(monkeypatch, body=b"", status="404 Missing")
+    response = RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    stream = Mock()
+    stream.read1.side_effect = ssl.SSLEOFError("TLS peer omitted close_notify")
+    connection.response.fp = stream
+    with pytest.raises(NetworkSafetyError, match="body read failed"):
+        response.read(65536, timeout=1.0)
+    assert response.transfer_complete is False
+    connection.close.assert_called_once()
+
+
+def test_empty_404_with_malformed_length_fails_before_body_read(monkeypatch):
+    connection, _ = _connection(
+        monkeypatch, body=b"", status="404 Missing", headers=[("Content-Length", "00")]
+    )
+    with pytest.raises(NetworkSafetyError, match="failed closed"):
+        RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    connection.close.assert_called_once()
+
+
 @pytest.mark.parametrize("maximum_bytes", [0, -1, 65537, True, 1.5])
 def test_read_bound_is_enforced(monkeypatch, maximum_bytes):
     _connection(monkeypatch)

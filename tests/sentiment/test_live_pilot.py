@@ -124,15 +124,10 @@ def test_live_snapshots_are_not_fixtures_and_closeout_replays(tmp_path):
         assert result["live_authority_sha256"] == authority.sha256
 
 
-@pytest.mark.parametrize(
-    "response",
-    [
-        lambda: Response(status=404),
-        lambda: Response(headers={"Content-Length": str(len(RAW) + 10)}),
-    ],
-)
-def test_live_terminal_gap_early_closeout_is_signed_and_replayable(tmp_path, response):
-    client, _, transport, authority, plan = live_client(tmp_path, response())
+def test_live_terminal_invalid_transfer_early_closeout_is_signed_and_replayable(tmp_path):
+    client, _, transport, authority, plan = live_client(
+        tmp_path, Response(headers={"Content-Length": str(len(RAW) + 10)})
+    )
     with client:
         with pytest.raises(RetrievalFailure) as failure:
             client.retrieve(plan.intervals[0].filename_timestamp)
@@ -162,6 +157,31 @@ def test_live_terminal_gap_early_closeout_is_signed_and_replayable(tmp_path, res
         assert verified["slot_outcomes"][0]["outcome"] == "provider_gap"
         assert all(s["outcome"] != "verified" for s in verified["slot_outcomes"])
         transport.open.assert_called_once()
+
+
+def test_live_http_404_is_authenticated_gap_without_stopping_session(tmp_path):
+    client, _, transport, authority, plan = live_client(
+        tmp_path, Response(raw=b"", status=404, headers={"Content-Length": "0"}), Response()
+    )
+    with client:
+        missing = client.retrieve(plan.intervals[0].filename_timestamp)
+        assert missing.snapshot is None
+        assert missing.gap_evidence is not None
+        assert missing.gap_evidence.version == LIVE_GAP_SCHEMA
+        verify_terminal_gap_evidence(
+            missing.gap_evidence,
+            plan=plan,
+            filename_timestamp=plan.intervals[0].filename_timestamp,
+            receipts=client.receipts,
+            public_key=PUBLIC,
+            protocol_sha256=client.context["protocol_sha256"],
+            live_authority=authority,
+        )
+        assert not client.budget.halted
+        assert client.retrieve(plan.intervals[1].filename_timestamp).snapshot is not None
+        assert not client.budget.halted
+        assert len(verify_receipt_chain(client.receipts, PUBLIC, live_authority=authority)) == 2
+    assert transport.open.call_count == 2
 
 
 def test_live_restart_keeps_budget_pacing_and_signer(tmp_path):
@@ -410,14 +430,22 @@ def test_complete_runner_arming_and_first_worker_are_offline(tmp_path, monkeypat
     for call in launch.call_args_list:
         assert call.args[0][:2] == ["/bin/launchctl", "bootstrap"]
     clock.start = datetime(2026, 9, 13, 0, 45, tzinfo=UTC)
-    responses = [Response(status=404)] if terminal else [Response() for _ in range(15)]
+    responses = (
+        [Response(raw=b"", status=404, headers={"Content-Length": "0"})] if terminal else []
+    ) + [Response() for _ in range(29 if terminal else 15)]
     fake = Transport(clock, *responses)
     monkeypatch.setattr(
         RealGSGTransport, "open", lambda self, url, *, timeout: fake.open(url, timeout=timeout)
     )
     result = runner.worker(tmp_path, 0)
-    assert result["status"] == ("HALTED_CLOSED_OUT_NOT_ACCEPTED" if terminal else "WORKER_FINISHED")
-    assert fake.open.call_count == (1 if terminal else 15)
+    assert result["status"] == "WORKER_FINISHED"
+    assert fake.open.call_count == 15
+    if terminal:
+        clock.start = datetime(2026, 9, 13, 1, tzinfo=UTC)
+        clock.seconds = 0.0
+        later = runner.worker(tmp_path, 1)
+        assert later["status"] == "WORKER_FINISHED"
+        assert fake.open.call_count == 30
     with pytest.raises(NetworkSafetyError):
         runner.worker(tmp_path, 0)
-    assert fake.open.call_count == (1 if terminal else 15)
+    assert fake.open.call_count == (30 if terminal else 15)

@@ -754,6 +754,12 @@ class GSGNetworkClient:
             )
             self._remaining()
             result = RetrievalResult(snapshot, tuple(deepcopy(result_receipts)), evidence)
+            if status == 404 and transfer.complete:
+                # A complete, signed 404 is a terminal fact about this minute, not
+                # a session-safety failure. The reporting slot remains uncovered;
+                # the fixed 92/96 gate still stops the pilot after five lost slots.
+                self._require_attainable_coverage()
+                return result
             if not _retryable_receipt(body):
                 raise RetrievalFailure(result)
             self._require_attainable_coverage()
