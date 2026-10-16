@@ -4,11 +4,53 @@ Current live specification ID: `phase2-batch-b-live-prospective-v1`.
 Base specification ID: `phase2-batch-b-prospective-ingestion-v2`, reconciled on 2026-09-08.
 Supersedes v1, frozen on 2026-09-07 in commit `b8b72d50133647ebc99846bfd69bb8866d185136`.
 Base status: `SPECIFICATION_FROZEN_COMPATIBLE`. The September 13 setup described below
-is historical and was deferred without backfill. The newly authorized October 10
-prospective window is specified below; authorization alone is not arming, collection,
-coverage verification, or pilot acceptance.
+is historical and was deferred without backfill. The October 10 prospective attempt
+is also historical and stopped without accepted coverage or backfill. The separately
+authorized October 16 replacement window is specified below; authorization alone is
+not arming, collection, coverage verification, or pilot acceptance.
 
-## October 10 replacement prospective pilot authority
+## October 16 replacement prospective pilot authority
+
+The human authority approved a new, forward-only 24-hour GDELT GSG pilot with UTC
+anchor `2026-10-16T17:00:00Z`, observation window
+`[2026-10-16T17:00:00Z, 2026-10-17T17:00:00Z)`, and final retrieval and signed
+closeout deadline `2026-10-17T17:45:00Z`. The pilot identity is
+`phase2-batch-b-20261016` and its isolated, Git-ignored storage namespace is
+`data/phase2-pilot-20261016` (mode `0700`). Its first scheduled worker starts
+at `2026-10-16T17:45:00Z`; the last starts at `2026-10-17T17:30:00Z`.
+The plan remains 96 fifteen-minute reporting slots and 1,440 exact one-minute
+gzip locators. Neither September nor October 10 may be backfilled.
+
+The human specifically approved internal English Bitcoin GSG title-metadata
+research and immutable local CAS retention of exact raw responses, including
+incidental fields and unrelated titles, through review. GDELT attribution is
+required. No raw-response redistribution, public publication, publisher-page
+scraping, or body-text collection is approved. The sole endpoint remains
+`https://data.gdeltproject.org/gdeltv3/gsg/{timestamp}.gsg.json.gz`.
+This approval sets `real_provider_rights_approved: true` and
+`network_pilot_authorized: true` for this bounded prospective pilot only;
+`milestone_3_scoring_authorized: false` remains unchanged. No real scoring,
+model download, indicators/features, market-data join, training, backtest,
+research-gate execution, or holdout evaluation is authorized.
+
+The approved hard caps remain 500,000,000 cumulative downloaded bytes,
+2,000,000,000 retained bytes, 900 seconds per worker, one request start per
+five seconds, 10-second HTTP timeout, at most three retries (four attempts),
+and $0.00 incremental cost. The Ed25519 private key belongs under the isolated
+pilot root at `data/phase2-pilot-20261016/secrets/pilot_ed25519.key` with mode
+`0600`; this is the runner-required relative `secrets/pilot_ed25519.key` layout,
+not a repository-root secret. Pin its public key and SHA-256 key ID in the
+protocol before readiness checks. Never print or commit the private key.
+Provisioning, successful preflight, scheduler arming, network dispatch, signed
+receipts, coverage, and closeout are not established by this authorization
+record. After setup and a clean local `main` commit, use
+`.venv/bin/python scripts/run_phase2_pilot.py check` for offline readiness and,
+only before the anchor, `.venv/bin/python scripts/run_phase2_pilot.py arm` to
+install the bounded schedule. Do not shift the anchor automatically if it is
+missed. The next action is `execute_live_prospective_pilot` only while all
+authorization, key-custody, local safety, and pre-anchor conditions hold.
+
+## Historical October 10 replacement pilot authority and incident
 
 The human authority approved a new, forward-only 24-hour GDELT GSG pilot with UTC
 anchor `2026-10-10T20:00:00Z`, observation window
@@ -48,6 +90,16 @@ only before the anchor, `.venv/bin/python scripts/run_phase2_pilot.py arm` to
 install the bounded schedule. Do not shift the anchor automatically if it is
 missed. The next action is `execute_live_prospective_pilot` only while all
 authorization, key-custody, local safety, and pre-anchor conditions hold.
+
+This October 10 authority is historical, not authority to relaunch the same
+generation. The pilot was armed; its first worker logged one request intent at
+`2026-10-10T20:45:06Z` for the planned `20:00` minute, then durable
+`retrieval_failed` and `session_failed` stops. It produced no completed signed
+HTTP response or terminal gap evidence for that attempt and no accepted pilot
+coverage. A separate diagnostic observed HTTP 404, but it does not prove what
+the worker's request received. Preserve the stopped journal and all claims;
+do not reset, replay, or backfill this generation. The October 16 pilot has a
+new identity, isolated storage, key, and prospective window.
 
 ## Historical September 13 live pilot authority and setup
 
@@ -262,10 +314,11 @@ Historical schedule status: `MISSED_UNAUTHORIZED_NOT_EXECUTED`, recorded on 2026
 The September 9 anchor elapsed without network authorization or execution. Preserve these
 dates solely as the historical frozen plan and synthetic test fixtures; never backfill or
 shift them automatically. The later September 13 successor was also deferred without
-backfill. The separately approved October 10 successor is the active schedule.
+backfill. The October 10 successor stopped without accepted coverage. The
+separately approved October 16 successor is the active schedule.
 
-The current fixed prospective UTC anchor is `2026-10-10T20:00:00Z`. Its observation window
-is half-open: `[2026-10-10T20:00:00Z, 2026-10-11T20:00:00Z)`. Freeze 96 reporting
+The current fixed prospective UTC anchor is `2026-10-16T17:00:00Z`. Its observation window
+is half-open: `[2026-10-16T17:00:00Z, 2026-10-17T17:00:00Z)`. Freeze 96 reporting
 intervals, each 900 seconds, with interval `i` equal to
 `[anchor + i*900s, anchor + (i+1)*900s)` for `0 <= i < 96`.
 
@@ -304,8 +357,8 @@ and preserve Batch A's terminal watermark and strictly increasing publication ch
 Batch A's frozen `PROVIDER_LAG` is 1,800 seconds: a file timestamp `t` is due at `t+30m`.
 The schedule accommodates this release-arrival allowance by starting each worker at its
 reporting interval's end plus 30 minutes, when all 15 files are due. The first worker
-starts `2026-09-13T14:45:00Z`; the last starts `2026-09-14T14:30:00Z` and must finish,
-including closeout, by `2026-09-14T14:45:00Z`. This explicitly specified 45-minute
+starts `2026-10-16T17:45:00Z`; the last starts `2026-10-17T17:30:00Z` and must finish,
+including closeout, by `2026-10-17T17:45:00Z`. This explicitly specified 45-minute
 retrieval/closeout tail does not extend the 24-hour observation window or admit next-day
 file timestamps. No later catch-up is allowed. The 30-minute value is the accepted
 engineering policy, not a newly verified provider SLA; late files remain subject to
@@ -327,8 +380,12 @@ not waive the cap. Honor a valid longer `Retry-After`; if it cannot fit the rema
 and process budget, stop without retrying early. The September 10 implementation amendment
 uses `batch-b-gsg-retry-policy-v1`: only HTTP 429 and 5xx retry, for four total attempts
 with delays 5, 10 and 20 seconds after prior completion. Transport failures, HTTP 408,
-other client errors and malformed payloads fail closed without retries. HTTP 200 proceeds
-to bounded parsing. Preserve global five-second request-start spacing and valid longer
+other client errors and malformed payloads fail closed without retries. A fully received,
+authenticated HTTP 404 is a terminal gap for that planned minute, recorded with its signed
+receipt and `TerminalGapEvidence`; it does not by itself stop the session or skip the other
+14 minutes. Incomplete transfers remain fatal, and five lost reporting intervals make the
+92-of-96 gate unattainable and stop the pilot. HTTP 200 proceeds to bounded parsing.
+Preserve global five-second request-start spacing and valid longer
 `Retry-After` for 429/503 in addition to completion-relative delays. Authentication, payment,
 redirect and scope violations stop the pilot. A restart cannot reset per-file attempts;
 deadline/cap cancellation is not retry exhaustion. Accepted Batch A `GSGRetryPolicy`
