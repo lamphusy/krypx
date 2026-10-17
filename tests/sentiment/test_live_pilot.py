@@ -271,9 +271,14 @@ def test_real_replacement_schedule_is_exact_and_authority_bound():
     assert pilot["real_provider_rights_approved"] is True
     assert config["milestone_3_scoring_authorized"] is False
     authority = LiveAuthority.from_config(config)
-    assert authority.value["approval_record"]["anchor_utc"] == "2026-10-17T11:00:00Z"
-    assert pilot["end_exclusive_utc"] == "2026-10-18T11:00:00Z"
-    assert pilot["closeout_deadline_utc"] == "2026-10-18T11:45:00Z"
+    assert authority.value["approval_record"]["anchor_utc"] == "2026-10-17T16:00:00Z"
+    assert pilot["end_exclusive_utc"] == "2026-10-18T16:00:00Z"
+    assert pilot["closeout_deadline_utc"] == "2026-10-18T16:45:00Z"
+    assert pilot["pilot_id"] == "phase2-batch-b-20261017b"
+    assert pilot["store_path"] == "data/phase2-pilot-20261017b"
+    assert pilot["prior_october_17_11utc_generation"]["status"] == (
+        "ARMED_HALTED_AFTER_REQUEST_INTENT_RETRIEVAL_FAILED_SESSION_FAILED"
+    )
     assert pilot["prior_october_17_10utc_window"]["status"] == "MISSED_NOT_ARMED_NO_COLLECTION"
     assert pilot["prior_october_16_generation"]["anchor_utc"] == "2026-10-16T17:00:00Z"
     assert (

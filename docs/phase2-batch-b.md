@@ -7,28 +7,38 @@ Base status: `SPECIFICATION_FROZEN_COMPATIBLE`. The September 13 setup described
 is historical and was deferred without backfill. The October 10 prospective attempt
 is also historical and stopped without accepted coverage or backfill. The
 separately authorized October 16 replacement was armed but halted after a TLS
-verification failure without accepted coverage. The distinct October 17
-replacement below is authorized but not armed, collected, or accepted. Its
-earlier October 17 10:00 UTC window elapsed without arming or collection and
-cannot be backfilled.
+verification failure without accepted coverage. The October 17 10:00 UTC
+window elapsed without arming or collection and cannot be backfilled. The
+separate October 17 11:00 UTC generation was armed, but its first worker
+stopped without accepted coverage. The fresh 16:00 UTC replacement below is
+authorized but not armed, collected, or accepted.
 
-## October 17 replacement prospective pilot authority
+## October 17 16:00 UTC replacement prospective pilot authority
 
 The human authority approved a new, forward-only 24-hour GDELT GSG pilot with UTC
-anchor `2026-10-17T11:00:00Z`, observation window
-`[2026-10-17T11:00:00Z, 2026-10-18T11:00:00Z)`, and final retrieval and signed
-closeout deadline `2026-10-18T11:45:00Z`. The pilot identity is
-`phase2-batch-b-20261017` and its isolated, Git-ignored storage namespace is
-`data/phase2-pilot-20261017` (mode `0700`). Its first scheduled worker starts
-at `2026-10-17T11:45:00Z`; the last starts at `2026-10-18T11:30:00Z`.
+anchor `2026-10-17T16:00:00Z`, observation window
+`[2026-10-17T16:00:00Z, 2026-10-18T16:00:00Z)`, and final retrieval and signed
+closeout deadline `2026-10-18T16:45:00Z`. The pilot identity is
+`phase2-batch-b-20261017b` and its isolated, Git-ignored storage namespace is
+`data/phase2-pilot-20261017b` (mode `0700`). Its first scheduled worker starts
+at `2026-10-17T16:45:00Z`; the last starts at `2026-10-18T16:30:00Z`.
 The plan remains 96 fifteen-minute reporting slots and 1,440 exact one-minute
-gzip locators. The stopped October 16 generation and all earlier generations
-remain immutable and cannot be backfilled or replayed. The two nominal windows
-overlap, but the October 16 pilot halted without accepted coverage; this new
-authority does not revive or merge its evidence.
+gzip locators. The stopped October 16 and October 17 11:00 UTC generations and
+all earlier generations remain immutable and cannot be backfilled or replayed.
+The nominal windows overlap, but neither stopped generation established
+accepted coverage; this new authority does not revive or merge their evidence.
 The prior October 17 10:00 UTC window passed without scheduler arming, budget
 journal, or accepted evidence. It is a missed, uncollected window, not a source
-of historical minutes for this 11:00 UTC successor; no backfill is authorized.
+of historical minutes for this 16:00 UTC successor; no backfill is authorized.
+The distinct 11:00 UTC generation was armed with its own key and namespace. Its
+first worker logged request intent for the first planned minute at
+`2026-10-17T11:45:07Z`, followed by durable `retrieval_failed` and
+`session_failed` budget stops. There is no journaled completed HTTP status or
+accepted coverage for that attempt. Preserve its launch authority, worker
+claim, budget journal, scheduler files, signer and any retained evidence
+without reset, relabeling, replay, or backfill. Live diagnostics attributed
+the transport failure to repeated `x-goog-hash` response headers; this does
+not turn the failed attempt into verified response or terminal gap evidence.
 
 The human specifically approved internal English Bitcoin GSG title-metadata
 research and immutable local CAS retention of exact raw responses, including
@@ -46,7 +56,7 @@ The approved hard caps remain 500,000,000 cumulative downloaded bytes,
 2,000,000,000 retained bytes, 900 seconds per worker, one request start per
 five seconds, 10-second HTTP timeout, at most three retries (four attempts),
 and $0.00 incremental cost. The Ed25519 private key belongs under the isolated
-pilot root at `data/phase2-pilot-20261017/secrets/pilot_ed25519.key` with mode
+pilot root at `data/phase2-pilot-20261017b/secrets/pilot_ed25519.key` with mode
 `0600`; this is the runner-required relative `secrets/pilot_ed25519.key` layout,
 not a repository-root secret. Its public key and SHA-256 key ID are pinned in the
 protocol. Never print or commit the private key. Provisioning and successful
@@ -57,6 +67,19 @@ only before the anchor, `.venv/bin/python scripts/run_phase2_pilot.py arm` to
 install the bounded schedule. Do not shift the anchor automatically if missed.
 The next action is `execute_live_prospective_pilot` only while all authorization,
 key-custody, local safety, and pre-anchor conditions hold.
+
+## Historical October 17 11:00 UTC pilot authority and incident
+
+The prior prospective anchor was `2026-10-17T11:00:00Z`, with observation
+window `[2026-10-17T11:00:00Z, 2026-10-18T11:00:00Z)` and closeout deadline
+`2026-10-18T11:45:00Z`. It used pilot ID `phase2-batch-b-20261017`, isolated
+root `data/phase2-pilot-20261017`, its separately pinned Ed25519 signer,
+first worker at `2026-10-17T11:45:00Z`, and last planned worker at
+`2026-10-18T11:30:00Z`. It was armed and its first worker logged request
+intent, followed by `retrieval_failed` and `session_failed` stops. No accepted
+coverage or closeout was established. This is historical authority and
+evidence only; do not reuse its root, key, launch authority, scheduler jobs,
+claims or budget journal for the 16:00 UTC successor.
 
 ## Historical October 16 replacement prospective pilot authority and incident
 
@@ -150,8 +173,9 @@ generation. The pilot was armed; its first worker logged one request intent at
 HTTP response or terminal gap evidence for that attempt and no accepted pilot
 coverage. A separate diagnostic observed HTTP 404, but it does not prove what
 the worker's request received. Preserve the stopped journal and all claims;
-do not reset, replay, or backfill this generation. The later October 16 and
-October 17 pilots each have distinct identities, isolated storage, keys, and windows.
+do not reset, replay, or backfill this generation. The later October 16,
+October 17 11:00 UTC, and October 17 16:00 UTC pilots each have distinct
+identities, isolated storage, keys, and windows.
 
 ## Historical September 13 live pilot authority and setup
 
@@ -367,10 +391,12 @@ The September 9 anchor elapsed without network authorization or execution. Prese
 dates solely as the historical frozen plan and synthetic test fixtures; never backfill or
 shift them automatically. The later September 13 successor was also deferred without
 backfill. The October 10 and October 16 successors stopped without accepted
-coverage. The separately approved October 17 successor is the active schedule.
+coverage. The 11:00 UTC October 17 successor was armed and halted without
+accepted coverage. The separately approved 16:00 UTC October 17 successor is
+the active schedule.
 
-The current fixed prospective UTC anchor is `2026-10-17T11:00:00Z`. Its observation window
-is half-open: `[2026-10-17T11:00:00Z, 2026-10-18T11:00:00Z)`. Freeze 96 reporting
+The current fixed prospective UTC anchor is `2026-10-17T16:00:00Z`. Its observation window
+is half-open: `[2026-10-17T16:00:00Z, 2026-10-18T16:00:00Z)`. Freeze 96 reporting
 intervals, each 900 seconds, with interval `i` equal to
 `[anchor + i*900s, anchor + (i+1)*900s)` for `0 <= i < 96`.
 
@@ -409,8 +435,8 @@ and preserve Batch A's terminal watermark and strictly increasing publication ch
 Batch A's frozen `PROVIDER_LAG` is 1,800 seconds: a file timestamp `t` is due at `t+30m`.
 The schedule accommodates this release-arrival allowance by starting each worker at its
 reporting interval's end plus 30 minutes, when all 15 files are due. The first worker
-starts `2026-10-17T11:45:00Z`; the last starts `2026-10-18T11:30:00Z` and must finish,
-including closeout, by `2026-10-18T11:45:00Z`. This explicitly specified 45-minute
+starts `2026-10-17T16:45:00Z`; the last starts `2026-10-18T16:30:00Z` and must finish,
+including closeout, by `2026-10-18T16:45:00Z`. This explicitly specified 45-minute
 retrieval/closeout tail does not extend the 24-hour observation window or admit next-day
 file timestamps. No later catch-up is allowed. The 30-minute value is the accepted
 engineering policy, not a newly verified provider SLA; late files remain subject to
