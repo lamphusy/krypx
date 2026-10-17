@@ -32,6 +32,11 @@ _MAX_TIMEOUT_SECONDS = 10.0
 _MAX_READ_BYTES = 64 * 1024
 _HEADER_NAME = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+\Z")
 _CONTENT_LENGTH = re.compile(r"(?:0|[1-9][0-9]{0,8})\Z")
+# These response metadata fields have comma-list semantics. GCS sends one
+# x-goog-hash field per checksum algorithm; rejecting the second field would
+# discard a legitimate completed HTTP response. Framing and interpretation-
+# critical fields remain singular below, including Content-Length.
+_REPEATABLE_HEADERS = frozenset({"cache-control", "vary", "x-goog-hash"})
 
 
 def _timeout(value: float) -> float:
@@ -75,10 +80,15 @@ def _headers(response: http.client.HTTPResponse) -> tuple[Mapping[str, str], int
             or type(value) is not str
             or not _HEADER_NAME.fullmatch(name)
             or any(ord(character) < 32 or ord(character) == 127 for character in value)
-            or name.lower() in headers
         ):
             raise NetworkSafetyError("HTTPS response headers are malformed or duplicated")
-        headers[name.lower()] = value
+        lowered = name.lower()
+        if lowered in headers:
+            if lowered not in _REPEATABLE_HEADERS:
+                raise NetworkSafetyError("HTTPS response headers are malformed or duplicated")
+            headers[lowered] = f"{headers[lowered]}, {value}"
+        else:
+            headers[lowered] = value
     if "transfer-encoding" in headers:
         raise NetworkSafetyError("HTTPS transfer encoding is not supported by this pilot")
     if headers.get("content-encoding", "identity").lower() != "identity":

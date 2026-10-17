@@ -170,11 +170,40 @@ def test_redirects_are_not_followed(monkeypatch, status):
     assert connection.response.fp is None
 
 
+@pytest.mark.parametrize("status, body", [("200 OK", RAW), ("404 Missing", b"")])
+def test_gcs_repeated_checksum_and_list_headers_are_combined(monkeypatch, status, body):
+    _connection(
+        monkeypatch,
+        body=body,
+        status=status,
+        headers=[
+            ("Content-Length", str(len(body))),
+            ("x-goog-hash", "crc32c=AAAAAA=="),
+            ("X-Goog-Hash", "md5=1B2M2Y8AsgTpgAmY7PhCfg=="),
+            ("Vary", "Origin, Accept-Language"),
+            ("vary", "Accept-Encoding"),
+            ("Cache-Control", "public"),
+            ("cache-control", "max-age=60"),
+        ],
+    )
+    response = RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    assert response.headers["x-goog-hash"] == ("crc32c=AAAAAA==, md5=1B2M2Y8AsgTpgAmY7PhCfg==")
+    assert response.headers["vary"] == "Origin, Accept-Language, Accept-Encoding"
+    assert response.headers["cache-control"] == "public, max-age=60"
+    assert response.read(65536, timeout=1.0) == body
+    assert response.read(65536, timeout=1.0) == b""
+    assert response.transfer_complete is True
+    response.close()
+
+
 @pytest.mark.parametrize(
     "headers",
     [
         [("Content-Length", "1"), ("content-length", "2")],
         [("X-Test", "a"), ("x-test", "b")],
+        [("Content-Encoding", "identity"), ("content-encoding", "identity")],
+        [("Retry-After", "5"), ("retry-after", "10")],
+        [("Set-Cookie", "a=1"), ("set-cookie", "b=2")],
         [("Transfer-Encoding", "chunked")],
         [("Transfer-Encoding", "identity")],
         [("Content-Encoding", "gzip")],
@@ -183,6 +212,7 @@ def test_redirects_are_not_followed(monkeypatch, status):
         [("Content-Length", "1, 1")],
         [("Content-Length", "500000001")],
         [("X-Fold", "first\r\n continuation")],
+        [("X-Goog-Hash", "crc32c=AAAAAA==\x01")],
     ],
 )
 def test_unsupported_or_ambiguous_headers_fail_before_body_read(monkeypatch, headers):
