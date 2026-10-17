@@ -8,22 +8,27 @@ is historical and was deferred without backfill. The October 10 prospective atte
 is also historical and stopped without accepted coverage or backfill. The
 separately authorized October 16 replacement was armed but halted after a TLS
 verification failure without accepted coverage. The distinct October 17
-replacement below is authorized but not armed, collected, or accepted.
+replacement below is authorized but not armed, collected, or accepted. Its
+earlier October 17 10:00 UTC window elapsed without arming or collection and
+cannot be backfilled.
 
 ## October 17 replacement prospective pilot authority
 
 The human authority approved a new, forward-only 24-hour GDELT GSG pilot with UTC
-anchor `2026-10-17T10:00:00Z`, observation window
-`[2026-10-17T10:00:00Z, 2026-10-18T10:00:00Z)`, and final retrieval and signed
-closeout deadline `2026-10-18T10:45:00Z`. The pilot identity is
+anchor `2026-10-17T11:00:00Z`, observation window
+`[2026-10-17T11:00:00Z, 2026-10-18T11:00:00Z)`, and final retrieval and signed
+closeout deadline `2026-10-18T11:45:00Z`. The pilot identity is
 `phase2-batch-b-20261017` and its isolated, Git-ignored storage namespace is
 `data/phase2-pilot-20261017` (mode `0700`). Its first scheduled worker starts
-at `2026-10-17T10:45:00Z`; the last starts at `2026-10-18T10:30:00Z`.
+at `2026-10-17T11:45:00Z`; the last starts at `2026-10-18T11:30:00Z`.
 The plan remains 96 fifteen-minute reporting slots and 1,440 exact one-minute
 gzip locators. The stopped October 16 generation and all earlier generations
 remain immutable and cannot be backfilled or replayed. The two nominal windows
 overlap, but the October 16 pilot halted without accepted coverage; this new
 authority does not revive or merge its evidence.
+The prior October 17 10:00 UTC window passed without scheduler arming, budget
+journal, or accepted evidence. It is a missed, uncollected window, not a source
+of historical minutes for this 11:00 UTC successor; no backfill is authorized.
 
 The human specifically approved internal English Bitcoin GSG title-metadata
 research and immutable local CAS retention of exact raw responses, including
@@ -364,8 +369,8 @@ shift them automatically. The later September 13 successor was also deferred wit
 backfill. The October 10 and October 16 successors stopped without accepted
 coverage. The separately approved October 17 successor is the active schedule.
 
-The current fixed prospective UTC anchor is `2026-10-17T10:00:00Z`. Its observation window
-is half-open: `[2026-10-17T10:00:00Z, 2026-10-18T10:00:00Z)`. Freeze 96 reporting
+The current fixed prospective UTC anchor is `2026-10-17T11:00:00Z`. Its observation window
+is half-open: `[2026-10-17T11:00:00Z, 2026-10-18T11:00:00Z)`. Freeze 96 reporting
 intervals, each 900 seconds, with interval `i` equal to
 `[anchor + i*900s, anchor + (i+1)*900s)` for `0 <= i < 96`.
 
@@ -404,8 +409,8 @@ and preserve Batch A's terminal watermark and strictly increasing publication ch
 Batch A's frozen `PROVIDER_LAG` is 1,800 seconds: a file timestamp `t` is due at `t+30m`.
 The schedule accommodates this release-arrival allowance by starting each worker at its
 reporting interval's end plus 30 minutes, when all 15 files are due. The first worker
-starts `2026-10-17T10:45:00Z`; the last starts `2026-10-18T10:30:00Z` and must finish,
-including closeout, by `2026-10-18T10:45:00Z`. This explicitly specified 45-minute
+starts `2026-10-17T11:45:00Z`; the last starts `2026-10-18T11:30:00Z` and must finish,
+including closeout, by `2026-10-18T11:45:00Z`. This explicitly specified 45-minute
 retrieval/closeout tail does not extend the 24-hour observation window or admit next-day
 file timestamps. No later catch-up is allowed. The 30-minute value is the accepted
 engineering policy, not a newly verified provider SLA; late files remain subject to

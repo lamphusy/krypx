@@ -21,7 +21,7 @@
 **October 10 incident:** the pilot was armed and its first worker logged request intent at `2026-10-10T20:45:06Z` for the first planned minute, then durable `retrieval_failed` and `session_failed` stops. There is no completed signed response or terminal gap evidence for that attempt, and no accepted coverage. A separate diagnostic observed HTTP 404 but does not establish what the worker received. Preserve the stopped journal and claims without resetting, replaying, or backfilling.
 **October 16 replacement pilot authority:** the human separately approved prospective anchor `2026-10-16T17:00:00Z`, observation window `[2026-10-16T17:00:00Z, 2026-10-17T17:00:00Z)`, and signed closeout deadline `2026-10-17T17:45:00Z`. This is a new, isolated generation, not a retry or backfill of October 10. The bounded live rights and network authority apply only within its exact GSG endpoint, schedule, and caps; no real scoring, models, features, research gates, or holdout use is authorized.
 **October 16 incident and preservation:** that generation was subsequently armed. Its first worker encountered the reported TLS issuer verification failure and the durable session stopped without accepted coverage. Preserve its launch, claim, budget journal, raw material if any, and signer; do not reset, replay, relabel, or backfill it.
-**October 17 replacement pilot authority:** the human separately approved prospective anchor `2026-10-17T10:00:00Z`, observation window `[2026-10-17T10:00:00Z, 2026-10-18T10:00:00Z)`, and signed closeout deadline `2026-10-18T10:45:00Z`. This is a distinct, isolated generation with its own key and root, not a retry or backfill of October 16. Its nominal window overlaps the halted October 16 window; no earlier evidence is merged or accepted. The bounded live rights and network authority apply only within its exact GSG endpoint, schedule, and caps; no real scoring, models, features, research gates, or holdout use is authorized.
+**October 17 replacement pilot authority:** the human separately approved prospective anchor `2026-10-17T11:00:00Z`, observation window `[2026-10-17T11:00:00Z, 2026-10-18T11:00:00Z)`, and signed closeout deadline `2026-10-18T11:45:00Z`. The earlier October 17 10:00 UTC window passed without arming or collection and is not backfilled. This is a distinct, isolated generation with its own key and root, not a retry or backfill of October 16. Its nominal window overlaps the halted October 16 window; no earlier evidence is merged or accepted. The bounded live rights and network authority apply only within its exact GSG endpoint, schedule, and caps; no real scoring, models, features, research gates, or holdout use is authorized.
 **Final offline Milestone 3 acceptance:** 2026-09-15; human-authorized independent verification against `c12aa01705712e53f65206c064248ef9fdc964ce` found zero blocking findings after the binary64 hydration fix; local commit on `main` authorized, no push.
 **Milestone 3 completion commit:** `d129094c9483f69431eeb6e3698e52ee273d5d0e`; 1,003 passing tests.
 **Milestone 4 specification freeze:** 2026-09-15; [offline point-in-time aggregation specification](phase2-milestone-4.md); documentation/configuration only, no implementation authority.
@@ -147,7 +147,9 @@ status is `DEFERRED_WITHOUT_BACKFILL`; it is neither completed nor accepted.
 Historical setup verification and its then-current `VERIFIED_SETUP_NOT_ARMED`
 status remain audit records, not a statement of current scheduler state.
 The October 10 and October 16 pilots were armed and stopped without accepted
-coverage. The distinct October 17 prospective pilot is authorized but has not
+coverage. The October 17 10:00 UTC window was missed without arming or
+collection and cannot be backfilled. The distinct October 17 11:00 UTC
+prospective pilot is authorized but has not
 been armed, executed, or accepted.
 
 The historically approved observation window was `[2026-09-13T14:00:00Z, 2026-09-14T14:00:00Z)`:
@@ -158,9 +160,9 @@ arming command and execution guidance in [the Batch B specification](phase2-batc
 are inactive for that September window. The October 10 successor was armed and
 stopped; its journal and claims remain immutable and it cannot be backfilled.
 The new, separate observation window is
-`[2026-10-17T10:00:00Z, 2026-10-18T10:00:00Z)` with closeout deadline
-`2026-10-18T10:45:00Z`. Its first and last scheduled worker starts are
-`2026-10-17T10:45:00Z` and `2026-10-18T10:30:00Z`. It may be armed only
+`[2026-10-17T11:00:00Z, 2026-10-18T11:00:00Z)` with closeout deadline
+`2026-10-18T11:45:00Z`. Its first and last scheduled worker starts are
+`2026-10-17T11:45:00Z` and `2026-10-18T11:30:00Z`. It may be armed only
 after key-pinned, clean-main offline readiness checks and before its anchor;
 otherwise it is missed and cannot be backfilled or automatically shifted.
 
