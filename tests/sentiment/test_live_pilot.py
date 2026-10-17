@@ -271,9 +271,10 @@ def test_real_replacement_schedule_is_exact_and_authority_bound():
     assert pilot["real_provider_rights_approved"] is True
     assert config["milestone_3_scoring_authorized"] is False
     authority = LiveAuthority.from_config(config)
-    assert authority.value["approval_record"]["anchor_utc"] == "2026-10-16T17:00:00Z"
-    assert pilot["end_exclusive_utc"] == "2026-10-17T17:00:00Z"
-    assert pilot["closeout_deadline_utc"] == "2026-10-17T17:45:00Z"
+    assert authority.value["approval_record"]["anchor_utc"] == "2026-10-17T10:00:00Z"
+    assert pilot["end_exclusive_utc"] == "2026-10-18T10:00:00Z"
+    assert pilot["closeout_deadline_utc"] == "2026-10-18T10:45:00Z"
+    assert pilot["prior_october_16_generation"]["anchor_utc"] == "2026-10-16T17:00:00Z"
     assert (
         authority.value["plan_sha256"]
         == plan_retrieval(pilot["anchor_utc"], pilot["end_exclusive_utc"]).plan_id
