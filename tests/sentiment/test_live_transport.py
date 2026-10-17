@@ -10,6 +10,7 @@ import ssl
 import subprocess
 import sys
 from dataclasses import replace
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -319,9 +320,83 @@ def test_tls_or_connect_failure_closes_without_leaking_diagnostics(monkeypatch, 
 def test_tls_verification_cannot_be_disabled(monkeypatch, verify_mode, check_hostname):
     _, factory = _connection(monkeypatch)
     context = Mock(verify_mode=verify_mode, check_hostname=check_hostname)
+    context.cert_store_stats.return_value = {"x509_ca": 1}
     monkeypatch.setattr(live_transport.ssl, "create_default_context", Mock(return_value=context))
     with pytest.raises(NetworkSafetyError, match="failed closed"):
         RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    factory.assert_not_called()
+
+
+@pytest.mark.parametrize("platform_name,default_ca_count", [("darwin", 1), ("linux", 0)])
+def test_system_ca_bundle_is_loaded_before_https_dispatch(
+    monkeypatch, platform_name, default_ca_count
+):
+    connection, factory = _connection(monkeypatch, body=b"", status="404 Missing")
+    monkeypatch.setattr(sys, "platform", platform_name)
+    original_is_file = Path.is_file
+    monkeypatch.setattr(
+        Path,
+        "is_file",
+        lambda path: str(path) == "/etc/ssl/cert.pem" or original_is_file(path),
+    )
+    context = Mock(verify_mode=ssl.CERT_REQUIRED, check_hostname=True)
+    context.cert_store_stats.return_value = {"x509_ca": default_ca_count}
+
+    def load_system_bundle(*, cafile):
+        assert cafile == "/etc/ssl/cert.pem"
+        assert not factory.called
+
+    context.load_verify_locations.side_effect = load_system_bundle
+    monkeypatch.setattr(live_transport.ssl, "create_default_context", Mock(return_value=context))
+
+    response = RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    context.load_verify_locations.assert_called_once_with(cafile="/etc/ssl/cert.pem")
+    assert factory.call_args.kwargs["context"] is context
+    assert context.verify_mode == ssl.CERT_REQUIRED
+    assert context.check_hostname is True
+    assert response.status == 404
+    assert response.read(65536, timeout=1.0) == b""
+    assert response.transfer_complete is True
+    response.close()
+    connection.close.assert_called_once()
+
+
+def test_malformed_darwin_system_ca_bundle_fails_before_dispatch(monkeypatch):
+    _, factory = _connection(monkeypatch)
+    monkeypatch.setattr(sys, "platform", "darwin")
+    original_is_file = Path.is_file
+    monkeypatch.setattr(
+        Path,
+        "is_file",
+        lambda path: str(path) == "/etc/ssl/cert.pem" or original_is_file(path),
+    )
+    context = Mock(verify_mode=ssl.CERT_REQUIRED, check_hostname=True)
+    context.cert_store_stats.return_value = {"x509_ca": 1}
+    context.load_verify_locations.side_effect = ssl.SSLError("sensitive certificate diagnostics")
+    monkeypatch.setattr(live_transport.ssl, "create_default_context", Mock(return_value=context))
+
+    with pytest.raises(NetworkSafetyError, match="failed closed") as caught:
+        RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    assert "sensitive" not in str(caught.value)
+    factory.assert_not_called()
+
+
+def test_empty_default_ca_store_without_system_bundle_fails_before_dispatch(monkeypatch):
+    _, factory = _connection(monkeypatch)
+    monkeypatch.setattr(sys, "platform", "linux")
+    original_is_file = Path.is_file
+    monkeypatch.setattr(
+        Path,
+        "is_file",
+        lambda path: False if str(path) == "/etc/ssl/cert.pem" else original_is_file(path),
+    )
+    context = Mock(verify_mode=ssl.CERT_REQUIRED, check_hostname=True)
+    context.cert_store_stats.return_value = {"x509_ca": 0}
+    monkeypatch.setattr(live_transport.ssl, "create_default_context", Mock(return_value=context))
+
+    with pytest.raises(NetworkSafetyError, match="failed closed"):
+        RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    context.load_verify_locations.assert_not_called()
     factory.assert_not_called()
 
 

@@ -11,7 +11,9 @@ import http.client
 import math
 import re
 import ssl
+import sys
 from collections.abc import Mapping
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
@@ -40,6 +42,27 @@ def _timeout(value: float) -> float:
     ):
         raise NetworkSafetyError("HTTPS operation timeout is outside its hard bound")
     return float(value)
+
+
+def _verified_ssl_context() -> ssl.SSLContext:
+    """Use the Darwin system CA bundle without relaxing TLS verification.
+
+    Some Python installations on macOS have no usable default issuer chain even
+    though the OS bundle is available at ``/etc/ssl/cert.pem``. Loading that
+    bundle supplements the default context; it never disables hostname checks.
+    An empty trust store without an available system bundle fails before I/O.
+    """
+    context = ssl.create_default_context()
+    no_default_ca = context.cert_store_stats().get("x509_ca", 0) == 0
+    if sys.platform == "darwin" or no_default_ca:
+        bundle = Path("/etc/ssl/cert.pem")
+        if bundle.is_file():
+            context.load_verify_locations(cafile=str(bundle))
+        elif no_default_ca:
+            raise NetworkSafetyError("HTTPS system CA bundle is unavailable")
+    if context.verify_mode != ssl.CERT_REQUIRED or context.check_hostname is not True:
+        raise NetworkSafetyError("HTTPS certificate verification cannot be disabled")
+    return context
 
 
 def _headers(response: http.client.HTTPResponse) -> tuple[Mapping[str, str], int | None]:
@@ -180,9 +203,7 @@ class RealGSGTransport:
         connection = None
         response = None
         try:
-            context = ssl.create_default_context()
-            if context.verify_mode != ssl.CERT_REQUIRED or context.check_hostname is not True:
-                raise NetworkSafetyError("HTTPS certificate verification cannot be disabled")
+            context = _verified_ssl_context()
             connection = http.client.HTTPSConnection(
                 _HOST, port=443, timeout=seconds, context=context
             )
