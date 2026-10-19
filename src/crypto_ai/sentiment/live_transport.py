@@ -18,7 +18,7 @@ from types import MappingProxyType
 from typing import Any
 
 from crypto_ai.exceptions import CryptoAIError
-from crypto_ai.sentiment.exceptions import NetworkSafetyError
+from crypto_ai.sentiment.exceptions import NetworkSafetyError, NetworkStageError
 from crypto_ai.sentiment.live_deadline import hard_deadline
 from crypto_ai.sentiment.providers.gdelt_gsg import (
     RetrievalPlan,
@@ -137,7 +137,7 @@ class RealGSGResponse:
             raise NetworkSafetyError("HTTPS body cannot be read after close")
         if self._pending_failure:
             self.close()
-            raise NetworkSafetyError("HTTPS response stream terminated prematurely")
+            raise NetworkStageError("response_body", "HTTPS response stream terminated prematurely")
         if self._eof:
             return b""
         try:
@@ -155,7 +155,7 @@ class RealGSGResponse:
                 self._pending_failure = True
                 return partial
             self.close()
-            raise NetworkSafetyError("HTTPS response body read failed") from None
+            raise NetworkStageError("response_body", "HTTPS response body read failed") from None
         if type(chunk) is not bytes or len(chunk) > maximum_bytes:
             self.close()
             raise NetworkSafetyError("HTTPS response stream violated its read bound")
@@ -178,6 +178,12 @@ class RealGSGResponse:
                 # Closing must not leak arbitrary transport diagnostics or mask
                 # the original integrity failure. The runner also owns a deadline.
                 pass
+
+    def __enter__(self) -> RealGSGResponse:
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        self.close()
 
 
 class RealGSGTransport:
@@ -212,8 +218,10 @@ class RealGSGTransport:
     def _open_verified(self, url: str, seconds: float) -> RealGSGResponse:
         connection = None
         response = None
+        stage = "tls_context"
         try:
             context = _verified_ssl_context()
+            stage = "request_dispatch"
             connection = http.client.HTTPSConnection(
                 _HOST, port=443, timeout=seconds, context=context
             )
@@ -234,20 +242,25 @@ class RealGSGTransport:
             # response. Require TLS close_notify rather than silently translating
             # a ragged TLS EOF to an ordinary HTTP stream EOF.
             connected_socket.suppress_ragged_eofs = False
+            stage = "response_headers"
             response = connection.getresponse()
+            stage = "response_validation"
             if type(response.status) is not int or not 200 <= response.status <= 599:
                 raise NetworkSafetyError("HTTPS response status is invalid")
             if 300 <= response.status <= 399:
                 raise NetworkSafetyError("HTTPS redirects are prohibited")
+            stage = "response_headers"
             headers, content_length = _headers(response)
             return RealGSGResponse(
                 connection, response, connected_socket, url, headers, content_length
             )
-        except Exception:
+        except Exception as exc:
             for resource in (response, connection):
                 if resource is not None:
                     try:
                         resource.close()
                     except Exception:
                         pass
-            raise NetworkSafetyError("allowlisted HTTPS request failed closed") from None
+            if isinstance(exc, ssl.SSLCertVerificationError):
+                stage = "tls_verification"
+            raise NetworkStageError(stage, "allowlisted HTTPS request failed closed") from None

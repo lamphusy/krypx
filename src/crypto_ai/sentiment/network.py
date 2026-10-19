@@ -22,7 +22,11 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 from crypto_ai.exceptions import CryptoAIError
 from crypto_ai.sentiment.canonical import canonical_sha256, canonicalize
 from crypto_ai.sentiment.contracts import format_utc_timestamp, parse_utc_timestamp
-from crypto_ai.sentiment.exceptions import NetworkSafetyError
+from crypto_ai.sentiment.exceptions import (
+    NETWORK_FAILURE_STAGES,
+    NetworkSafetyError,
+    NetworkStageError,
+)
 from crypto_ai.sentiment.live_contracts import LIVE_GAP_SCHEMA, LiveAuthority
 from crypto_ai.sentiment.network_budget import PilotBudget
 from crypto_ai.sentiment.providers.gdelt_gsg import (
@@ -452,6 +456,7 @@ class GSGNetworkClient:
         self._started: float | None = None
         self._worker_end: datetime | None = None
         self._worker_index: int | None = None
+        self._retrieval_stage = "preflight"
         self._check_transport()
 
     def _check_transport(self) -> None:
@@ -572,24 +577,41 @@ class GSGNetworkClient:
     def retrieve(self, filename_timestamp: str) -> RetrievalResult:
         if not self._retrieval_lock.acquire(blocking=False):
             raise NetworkSafetyError("only one retrieval may be in flight")
+        self._retrieval_stage = "preflight"
         try:
             return self._retrieve(filename_timestamp)
-        except NetworkSafetyError:
+        except RetrievalFailure:
+            # A signed terminal minute outcome is not a failed gap publication.
+            # Keep the historical unstaged stop shape for this known outcome.
             if self._active and not self._closed_out:
                 self.budget.stop("retrieval_failed")
             raise
-        except Exception:
+        except NetworkSafetyError as exc:
             if self._active and not self._closed_out:
-                self.budget.stop("retrieval_failed")
+                self.budget.stop("retrieval_failed", stage=self._failure_stage(exc))
+            raise
+        except Exception as exc:
+            if self._active and not self._closed_out:
+                self.budget.stop("retrieval_failed", stage=self._failure_stage(exc))
             raise NetworkSafetyError(
                 "collector failed closed; no provider diagnostic retained"
             ) from None
         finally:
+            self._retrieval_stage = "preflight"
             self._retrieval_lock.release()
 
+    def _failure_stage(self, exc: Exception) -> str:
+        if type(exc) is NetworkStageError:
+            stage = exc.stage
+            if type(stage) is str and stage in NETWORK_FAILURE_STAGES:
+                return stage
+        return self._retrieval_stage
+
     def _retrieve(self, filename_timestamp: str) -> RetrievalResult:
+        self._retrieval_stage = "preflight"
         self._remaining()
         self._check_transport()
+        self._retrieval_stage = "coverage_gate"
         self._require_attainable_coverage()
         intervals = {item.filename_timestamp: item for item in self.plan.intervals}
         if filename_timestamp not in intervals:
@@ -611,9 +633,12 @@ class GSGNetworkClient:
         result_receipts = []
         snapshot = None
         for attempt in range(1, MAXIMUM_ATTEMPTS + 1):
+            self._retrieval_stage = "preflight"
             self._check_transport()
             self._pace()
+            self._retrieval_stage = "storage_capacity"
             self.budget.assert_storage_capacity(PUBLICATION_RESERVE_BYTES)
+            self._retrieval_stage = "request_intent"
             intent_at = self._now()
             self.budget.record_request(
                 intent_at, filename_timestamp=filename_timestamp, attempt_number=attempt
@@ -622,10 +647,12 @@ class GSGNetworkClient:
             # Durable intent is not dispatch. Bracket the open call honestly in
             # UTC, and pace from its *return*, which cannot precede initiation.
             # A pause anywhere before/during open can only delay the next start.
+            self._retrieval_stage = "request_dispatch"
             requested_at = self._now()
             open_started = self._tick()
             response = self.transport.open(url, timeout=timeout)
             try:
+                self._retrieval_stage = "response_validation"
                 self._last_request_monotonic = self._tick()
                 dispatch_confirmed_at = self._now()
                 self._check_transport()
@@ -639,16 +666,31 @@ class GSGNetworkClient:
                         "redirect or unexpected response locator is prohibited"
                     )
                 status = response.status
+                self._retrieval_stage = "response_headers"
                 headers = self._response_headers(response.headers)
                 retry_after = self._retry_after(headers, status)
+                self._retrieval_stage = "response_body"
                 transfer = self._read_body(response, self._content_length(headers))
                 body_bytes = transfer.raw
                 completed_at = self._now()
-            finally:
+            except BaseException:
+                # Closing must not erase the original failure stage or mask its
+                # fail-closed stop. The transport itself suppresses close errors.
+                try:
+                    response.close()
+                except Exception:
+                    pass
+                raise
+            try:
                 response.close()
+            except Exception:
+                self._retrieval_stage = "response_close"
+                raise
             self._remaining()
             self._check_transport()
+            self._retrieval_stage = "storage_capacity"
             self.budget.assert_storage_capacity(2 * len(body_bytes) + PUBLICATION_RESERVE_BYTES)
+            self._retrieval_stage = "snapshot_storage"
             if status == 200:
                 prior_times = [
                     item["body"]["raw_published_at_utc"]
@@ -673,6 +715,7 @@ class GSGNetworkClient:
             else:
                 raw_hash = self.store.put_bytes(body_bytes)
             raw_published_at = snapshot.receipt.raw_published_at if snapshot else self._now()
+            self._retrieval_stage = "receipt_signing"
             body = {
                 **self.context,
                 "interval_index": offset,
@@ -713,6 +756,7 @@ class GSGNetworkClient:
                 [*self._receipts, envelope], self.public_key, live_authority=self.live_authority
             )
             self._remaining()
+            self._retrieval_stage = "receipt_publication"
             encoded = canonicalize(envelope)
             self.budget.assert_storage_capacity(2 * len(encoded) + PUBLICATION_RESERVE_BYTES)
             number = len(self._receipts) + 1
@@ -727,13 +771,16 @@ class GSGNetworkClient:
             )
             self._receipts.append(envelope)
             result_receipts.append(envelope)
+            self._retrieval_stage = "request_completion"
             self.budget.finish_request()
             self._remaining()
             if snapshot is not None and snapshot.state == "complete":
                 return RetrievalResult(snapshot, tuple(deepcopy(result_receipts)), None)
             if _retryable_receipt(body) and attempt < MAXIMUM_ATTEMPTS:
+                self._retrieval_stage = "retry_backoff"
                 self._wait(max(BACKOFF_SECONDS[attempt - 1], retry_after or 0.0))
                 continue
+            self._retrieval_stage = "gap_publication"
             evidence = build_terminal_gap_evidence(
                 plan=self.plan,
                 filename_timestamp=filename_timestamp,
@@ -754,6 +801,7 @@ class GSGNetworkClient:
             )
             self._remaining()
             result = RetrievalResult(snapshot, tuple(deepcopy(result_receipts)), evidence)
+            self._retrieval_stage = "coverage_gate"
             if status == 404 and transfer.complete:
                 # A complete, signed 404 is a terminal fact about this minute, not
                 # a session-safety failure. The reporting slot remains uncovered;

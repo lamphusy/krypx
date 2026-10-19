@@ -10,7 +10,7 @@ import pytest
 
 from crypto_ai.sentiment import network_budget as budget_module
 from crypto_ai.sentiment.canonical import canonicalize, sha256_bytes
-from crypto_ai.sentiment.exceptions import NetworkSafetyError
+from crypto_ai.sentiment.exceptions import NETWORK_FAILURE_STAGES, NetworkSafetyError
 from crypto_ai.sentiment.network_budget import PilotBudget
 from crypto_ai.sentiment.storage import ContentAddressedStore
 
@@ -97,9 +97,60 @@ def test_fatal_stop_is_durable(tmp_path: Path) -> None:
         assert budget.halted
         with pytest.raises(NetworkSafetyError, match="stop"):
             request(budget)
+    assert json.loads((journal(tmp_path, budget) / "event-000000.json").read_bytes())["event"] == {
+        "kind": "stop",
+        "reason": "malformed_payload",
+    }
     with pytest.raises(NetworkSafetyError, match="halted"):
         with make_budget(tmp_path).locked():
             pytest.fail("halted pilot resumed")
+
+
+@pytest.mark.parametrize("stage", sorted(NETWORK_FAILURE_STAGES))
+def test_staged_stop_is_durable_and_does_not_clear_pending_intent(
+    tmp_path: Path, stage: str
+) -> None:
+    budget = make_budget(tmp_path, create=True)
+    with budget.locked():
+        request(budget)
+        budget.stop("retrieval_failed", stage=stage)
+        assert budget.halted
+        with pytest.raises(NetworkSafetyError, match="prior intent or stop"):
+            request(budget, timestamp="2026-09-09T00:30:05Z", attempt=2)
+    raw = (journal(tmp_path, budget) / "event-000001.json").read_bytes()
+    assert json.loads(raw)["event"] == {
+        "kind": "stop",
+        "reason": "retrieval_failed",
+        "stage": stage,
+    }
+    with pytest.raises(NetworkSafetyError, match="unresolved prior request intent"):
+        with make_budget(tmp_path).locked():
+            pytest.fail("staged stop cleared the pending request")
+
+
+@pytest.mark.parametrize(
+    "stage",
+    [
+        "",
+        "body_read",
+        "https://user:secret@example.invalid/path",
+        "secret failure",
+        0,
+        True,
+        [],
+        {},
+    ],
+)
+def test_stop_rejects_unbounded_or_unredacted_stages(tmp_path: Path, stage: object) -> None:
+    budget = make_budget(tmp_path, create=True)
+    with budget.locked():
+        with pytest.raises(NetworkSafetyError, match="allowlisted code") as failure:
+            budget.stop("retrieval_failed", stage=stage)
+        assert "secret" not in str(failure.value)
+        assert not budget.halted
+    assert set(journal(tmp_path, budget).iterdir()) == {
+        journal(tmp_path, budget) / "checkpoint.json"
+    }
 
 
 def test_concurrent_and_recursive_session_locks_fail_immediately(tmp_path: Path) -> None:

@@ -16,7 +16,7 @@ from unittest.mock import Mock
 import pytest
 
 from crypto_ai.sentiment import live_transport
-from crypto_ai.sentiment.exceptions import NetworkSafetyError
+from crypto_ai.sentiment.exceptions import NetworkSafetyError, NetworkStageError
 from crypto_ai.sentiment.live_deadline import hard_deadline
 from crypto_ai.sentiment.live_transport import RealGSGTransport
 from crypto_ai.sentiment.providers.gdelt_gsg import expected_gsg_source_locator, plan_retrieval
@@ -105,6 +105,21 @@ def test_allowlisted_https_preserves_exact_bytes_and_requires_actual_eof(monkeyp
     connection.close.assert_called_once()
     with pytest.raises(NetworkSafetyError, match="after close"):
         response.read(1, timeout=1.0)
+
+
+def test_real_response_context_manager_closes_on_success_and_failure(monkeypatch):
+    connection, _ = _connection(monkeypatch)
+    with RealGSGTransport(PLAN).open(URL, timeout=1.0) as response:
+        assert response.read(65536, timeout=1.0) == RAW
+    connection.close.assert_called_once()
+    with pytest.raises(NetworkSafetyError, match="after close"):
+        response.read(1, timeout=1.0)
+
+    second, _ = _connection(monkeypatch)
+    with pytest.raises(ValueError, match="synthetic failure"):
+        with RealGSGTransport(PLAN).open(URL, timeout=1.0):
+            raise ValueError("synthetic failure")
+    second.close.assert_called_once()
 
 
 @pytest.mark.parametrize(
@@ -217,8 +232,9 @@ def test_gcs_repeated_checksum_and_list_headers_are_combined(monkeypatch, status
 )
 def test_unsupported_or_ambiguous_headers_fail_before_body_read(monkeypatch, headers):
     connection, _ = _connection(monkeypatch, headers=headers)
-    with pytest.raises(NetworkSafetyError, match="failed closed"):
+    with pytest.raises(NetworkStageError, match="failed closed") as caught:
         RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    assert caught.value.stage == "response_headers"
     connection.close.assert_called_once()
 
 
@@ -328,19 +344,41 @@ def test_stream_error_is_sanitized_and_closes_connection(monkeypatch):
     connection.response.fp = stream
     with pytest.raises(NetworkSafetyError, match="body read failed") as caught:
         response.read(65536, timeout=1.0)
+    assert isinstance(caught.value, NetworkStageError)
+    assert caught.value.stage == "response_body"
     assert "secret" not in str(caught.value)
     assert caught.value.__suppress_context__ is True
     assert response.transfer_complete is False
     connection.close.assert_called_once()
 
 
-@pytest.mark.parametrize("failure", [ssl.SSLCertVerificationError("secret"), OSError("secret")])
-def test_tls_or_connect_failure_closes_without_leaking_diagnostics(monkeypatch, failure):
+@pytest.mark.parametrize(
+    "failure, expected_stage",
+    [
+        (ssl.SSLCertVerificationError("secret"), "tls_verification"),
+        (OSError("secret"), "request_dispatch"),
+    ],
+)
+def test_tls_or_connect_failure_closes_without_leaking_diagnostics(
+    monkeypatch, failure, expected_stage
+):
     connection, _ = _connection(monkeypatch)
     connection.request.side_effect = failure
     with pytest.raises(NetworkSafetyError, match="failed closed") as caught:
         RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    assert isinstance(caught.value, NetworkStageError)
+    assert caught.value.stage == expected_stage
     assert "secret" not in str(caught.value)
+    connection.close.assert_called_once()
+
+
+def test_response_header_read_failure_has_only_fixed_stage(monkeypatch):
+    connection, _ = _connection(monkeypatch)
+    connection.getresponse = Mock(side_effect=OSError("secret=do-not-retain"))
+    with pytest.raises(NetworkStageError, match="failed closed") as caught:
+        RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    assert caught.value.stage == "response_headers"
+    assert "do-not-retain" not in str(caught.value)
     connection.close.assert_called_once()
 
 
@@ -407,6 +445,8 @@ def test_malformed_darwin_system_ca_bundle_fails_before_dispatch(monkeypatch):
 
     with pytest.raises(NetworkSafetyError, match="failed closed") as caught:
         RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    assert isinstance(caught.value, NetworkStageError)
+    assert caught.value.stage == "tls_context"
     assert "sensitive" not in str(caught.value)
     factory.assert_not_called()
 

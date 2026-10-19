@@ -18,7 +18,11 @@ import pytest
 from crypto_ai.exceptions import CryptoAIError
 from crypto_ai.sentiment import pilot_runner as runner
 from crypto_ai.sentiment.canonical import canonical_sha256, canonicalize, sha256_bytes
-from crypto_ai.sentiment.exceptions import NetworkSafetyError, ReceiptValidationError
+from crypto_ai.sentiment.exceptions import (
+    NetworkSafetyError,
+    NetworkStageError,
+    ReceiptValidationError,
+)
 from crypto_ai.sentiment.live_contracts import LIVE_GAP_SCHEMA, LIVE_RECEIPT_SCHEMA, LiveAuthority
 from crypto_ai.sentiment.live_transport import RealGSGTransport
 from crypto_ai.sentiment.network import (
@@ -182,6 +186,23 @@ def test_live_http_404_is_authenticated_gap_without_stopping_session(tmp_path):
         assert not client.budget.halted
         assert len(verify_receipt_chain(client.receipts, PUBLIC, live_authority=authority)) == 2
     assert transport.open.call_count == 2
+
+
+def test_live_transport_stage_is_redacted_in_persistent_budget(tmp_path):
+    client, _, transport, _, plan = live_client(tmp_path, Response())
+    transport.open.side_effect = NetworkStageError("response_headers", "secret=do-not-retain")
+    with pytest.raises(NetworkSafetyError):
+        with client:
+            client.retrieve(plan.intervals[0].filename_timestamp)
+    journal = tmp_path / ".network-budgets" / client.budget.directory_name
+    events = [
+        json.loads(path.read_bytes())["event"] for path in sorted(journal.glob("event-*.json"))
+    ]
+    assert events[-2:] == [
+        {"kind": "stop", "reason": "retrieval_failed", "stage": "response_headers"},
+        {"kind": "stop", "reason": "session_failed"},
+    ]
+    assert b"do-not-retain" not in b"".join(path.read_bytes() for path in journal.iterdir())
 
 
 def test_live_restart_keeps_budget_pacing_and_signer(tmp_path):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gzip
+import json
 from copy import deepcopy
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -14,7 +15,11 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from crypto_ai.exceptions import CryptoAIError, NormalizationIntegrityError
 from crypto_ai.sentiment.canonical import canonical_sha256, sha256_bytes
-from crypto_ai.sentiment.exceptions import NetworkSafetyError, ReceiptValidationError
+from crypto_ai.sentiment.exceptions import (
+    NetworkSafetyError,
+    NetworkStageError,
+    ReceiptValidationError,
+)
 from crypto_ai.sentiment.network import (
     GAP_EVIDENCE_VERSION,
     GSGNetworkClient,
@@ -269,6 +274,11 @@ def test_permanent_http_errors_do_not_retry_and_halt(tmp_path, status):
             client.retrieve(minute())
         assert failure.value.result.gap_evidence.attempt_count == 1
         assert client.budget.halted
+    journal = tmp_path / ".network-budgets" / client.budget.directory_name
+    events = [
+        json.loads(path.read_bytes())["event"] for path in sorted(journal.glob("event-*.json"))
+    ]
+    assert events[-1] == {"kind": "stop", "reason": "retrieval_failed"}
     transport.open.assert_called_once()
 
 
@@ -301,6 +311,70 @@ def test_complete_http_404_records_gap_and_continues_without_stopping_budget(tmp
     assert transport.open.call_count == 2
 
 
+@pytest.mark.parametrize(
+    "failure, expected_stage",
+    [
+        ("transport", "tls_context"),
+        ("headers", "response_headers"),
+        ("body", "response_body"),
+        ("body_and_close", "response_body"),
+        ("close", "response_close"),
+        ("publication", "receipt_publication"),
+    ],
+)
+def test_uncompleted_request_records_only_redacted_failure_stage(
+    tmp_path, monkeypatch, failure, expected_stage
+):
+    response = Response()
+    client, _, transport = client_at(tmp_path, response)
+    if failure == "transport":
+        transport.open.side_effect = NetworkStageError("tls_context", "secret=do-not-retain")
+    elif failure == "headers":
+        response.headers = {"Content-Length": "0", "content-length": "0"}
+    elif failure in {"body", "body_and_close"}:
+        monkeypatch.setattr(
+            response,
+            "read",
+            Mock(side_effect=OSError("secret=do-not-retain")),
+        )
+        if failure == "body_and_close":
+            monkeypatch.setattr(
+                response,
+                "close",
+                Mock(side_effect=OSError("secret=also-do-not-retain")),
+            )
+    elif failure == "close":
+        monkeypatch.setattr(
+            response,
+            "close",
+            Mock(side_effect=OSError("secret=do-not-retain")),
+        )
+    else:
+        original_publish = client.store.publish_bundle
+
+        def fail_receipt(name, *args, **kwargs):
+            if "attempt-" in name:
+                raise OSError("secret=do-not-retain")
+            return original_publish(name, *args, **kwargs)
+
+        monkeypatch.setattr(client.store, "publish_bundle", fail_receipt)
+    with pytest.raises(NetworkSafetyError):
+        with client:
+            client.retrieve(minute())
+    assert client.budget.halted
+    journal = tmp_path / ".network-budgets" / client.budget.directory_name
+    events = [
+        json.loads(path.read_bytes())["event"] for path in sorted(journal.glob("event-*.json"))
+    ]
+    assert events[-2:] == [
+        {"kind": "stop", "reason": "retrieval_failed", "stage": expected_stage},
+        {"kind": "stop", "reason": "session_failed"},
+    ]
+    assert not any(event["kind"] == "finish" for event in events)
+    assert b"do-not-retain" not in b"".join(path.read_bytes() for path in journal.iterdir())
+    assert not any("attempt-" in path.name for path in client.store.publications_root.iterdir())
+
+
 def test_truncated_http_404_remains_a_fatal_transfer_failure(tmp_path):
     client, _, transport = client_at(tmp_path, Response(b"", 404, {"Content-Length": "1"}))
     with client:
@@ -331,6 +405,15 @@ def test_fifth_distinct_404_reporting_slot_stops_unattainable_pilot(tmp_path):
                     client.retrieve(minute(slot * 15))
                 assert client.budget.halted
         transport.open.assert_called_once()
+    journal = tmp_path / ".network-budgets" / client.budget.directory_name
+    events = [
+        json.loads(path.read_bytes())["event"] for path in sorted(journal.glob("event-*.json"))
+    ]
+    assert events[-1] == {
+        "kind": "stop",
+        "reason": "retrieval_failed",
+        "stage": "coverage_gate",
+    }
     resumed, _, resumed_transport = client_at(tmp_path, Response(), create_pilot=False)
     with pytest.raises(NetworkSafetyError):
         with resumed:

@@ -25,7 +25,7 @@ from crypto_ai.sentiment.contracts import (
     format_utc_timestamp,
     parse_utc_timestamp,
 )
-from crypto_ai.sentiment.exceptions import NetworkSafetyError
+from crypto_ai.sentiment.exceptions import NETWORK_FAILURE_STAGES, NetworkSafetyError
 from crypto_ai.sentiment.storage import (
     ContentAddressedStore,
     _ensure_directory_at,
@@ -238,10 +238,12 @@ class PilotBudget:
         self._validate_event(event)
         self._append(event)
 
-    def stop(self, reason: str) -> None:
-        """Persist a fatal stop; it cannot be cleared by reopening the budget."""
+    def stop(self, reason: str, *, stage: str | None = None) -> None:
+        """Persist a fatal stop, optionally with a fixed, non-sensitive local stage."""
         self._require_lock()
         event = {"kind": "stop", "reason": reason}
+        if stage is not None:
+            event["stage"] = stage
         self._validate_event(event)
         self._append(event)
 
@@ -277,9 +279,16 @@ class PilotBudget:
         elif kind == "finish" and set(event) == {"kind"}:
             if not self._pending:
                 raise NetworkSafetyError("no request is pending")
-        elif kind == "stop" and set(event) == {"kind", "reason"}:
+        elif kind == "stop" and set(event) in (
+            {"kind", "reason"},
+            {"kind", "reason", "stage"},
+        ):
             if not isinstance(event["reason"], str) or not 1 <= len(event["reason"]) <= 128:
                 raise NetworkSafetyError("stop reason must be a bounded nonempty string")
+            if "stage" in event and (
+                type(event["stage"]) is not str or event["stage"] not in NETWORK_FAILURE_STAGES
+            ):
+                raise NetworkSafetyError("stop stage must be an allowlisted code")
         else:
             raise NetworkSafetyError("unknown or malformed budget event")
 

@@ -229,6 +229,14 @@ or budget reset. Unbounded stdout/stderr are discarded; only bounded local statu
 is retained. The machine must remain available for the scheduled slots; sleep, missed starts,
 local failures and caps cannot be represented as provider outages or verified intervals.
 
+For a fatal retrieval, the immutable budget stop event retains its original
+`retrieval_failed` reason and may also carry one allowlisted, redacted local execution
+`stage` (for example `tls_verification`, `response_headers`, or `response_body`).
+Historical stop events without a stage remain valid. A stage is diagnostic evidence
+about where the local worker failed, not an observed HTTP status, signed receipt,
+provider gap, or permission to retry a claimed minute. Raw exception text, URLs,
+headers, and response bytes are never written to that field.
+
 The real path must preserve verified TLS, exact URL allowlisting/no redirects, bounded raw
 stream accounting, five-second dispatch spacing, four attempts only for HTTP 429/5xx,
 10-second HTTP timeouts, atomic CAS, signature chaining and signed closeout verification.
