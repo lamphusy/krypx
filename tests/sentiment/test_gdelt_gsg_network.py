@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import ssl
 from copy import deepcopy
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -20,6 +21,7 @@ from crypto_ai.sentiment.exceptions import (
     NetworkStageError,
     ReceiptValidationError,
 )
+from crypto_ai.sentiment.live_transport import RealGSGResponse
 from crypto_ai.sentiment.network import (
     GAP_EVIDENCE_VERSION,
     GSGNetworkClient,
@@ -32,6 +34,7 @@ from crypto_ai.sentiment.providers.gdelt_gsg import (
     GSGRetryPolicy,
     TerminalGapEvidence,
     _validate_terminal_gap_evidence,
+    expected_gsg_source_locator,
     plan_retrieval,
 )
 from crypto_ai.sentiment.receipts import receipt_sha256, verify_closeout, verify_receipt_chain
@@ -309,6 +312,48 @@ def test_complete_http_404_records_gap_and_continues_without_stopping_budget(tmp
         assert [body["http_status"] for body in bodies] == [404, 200]
         assert [body["filename_timestamp"] for body in bodies] == [minute(), minute(1)]
     assert transport.open.call_count == 2
+
+
+def test_ragged_tls_eof_after_empty_404_signs_gap_and_continues_offline(tmp_path):
+    # Exercise the real response reader through the mock-only collector boundary;
+    # no HTTPS connection or socket is constructed by this test.
+    clock = Clock()
+    connection = Mock()
+    socket = Mock()
+    http_response = Mock(status=404)
+    http_response.fp.read1.side_effect = ssl.SSLEOFError("TLS peer omitted close_notify")
+    url = expected_gsg_source_locator(PLAN.intervals[0])
+    empty_404 = RealGSGResponse(connection, http_response, socket, url, {"content-length": "0"}, 0)
+    transport = Transport(clock, empty_404, Response())
+    client, _, _ = client_at(tmp_path, transport=transport, clock=clock)
+
+    with client:
+        missing = client.retrieve(minute())
+        assert missing.snapshot is None
+        assert missing.gap_evidence is not None
+        assert missing.gap_evidence.final_terminal_disposition == "non_retryable"
+        assert not client.budget.halted
+        verify_terminal_gap_evidence(
+            missing.gap_evidence,
+            plan=PLAN,
+            filename_timestamp=minute(),
+            receipts=client.receipts,
+            public_key=PUBLIC,
+            protocol_sha256="a" * 64,
+        )
+        found = client.retrieve(minute(1))
+        assert found.snapshot is not None and found.snapshot.state == "complete"
+        assert not client.budget.halted
+        bodies = verify_receipt_chain(client.receipts, PUBLIC)
+        assert [body["http_status"] for body in bodies] == [404, 200]
+        assert bodies[0]["bytes_received"] == 0
+        assert bodies[0]["content_length"] == 0
+        assert bodies[0]["transfer_complete"] is True
+        assert bodies[0]["raw_sha256"] == sha256_bytes(b"")
+    assert transport.open.call_count == 2
+    http_response.fp.read1.assert_called_once_with(65536)
+    socket.settimeout.assert_called_once()
+    connection.close.assert_called_once()
 
 
 @pytest.mark.parametrize(

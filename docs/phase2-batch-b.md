@@ -12,8 +12,10 @@ window elapsed without arming or collection and cannot be backfilled. The
 separate October 17 11:00 UTC generation was armed, but its first worker
 stopped without accepted coverage. The October 17 16:00 UTC generation was
 also armed and stopped after its first request intent, without accepted coverage.
-The fresh October 19 replacement below is authorized but not armed, collected,
-or accepted.
+The October 19 replacement below was authorized and armed, but its first worker
+halted after a response-body failure without a signed receipt, terminal gap,
+accepted coverage, or closeout. Its schedule and arming instructions below are
+historical authority, not permission to reset or replay its stopped journal.
 
 ## October 19 06:00 UTC replacement prospective pilot authority
 
@@ -30,6 +32,14 @@ budget journal and retained evidence remains immutable. Neither the stopped
 October 17 11:00 nor 16:00 UTC generation established accepted coverage; this
 new authority does not revive, merge, reset, or backfill either one. The prior
 October 17 10:00 UTC window was missed without collection or backfill.
+
+At `2026-10-19T06:45:06Z`, the first worker recorded request intent for the
+06:00 UTC minute. A diagnostic request separately observed HTTP 404 with
+`Content-Length: 0`, followed by a TLS EOF without `close_notify` when the
+transport attempted its raw-body read. The worker's immutable journal records
+`retrieval_failed` at `response_body` and then `session_failed`; it has no
+signed HTTP outcome or gap. The narrow zero-byte transport correction below
+does not retroactively validate, resume, or backfill this halted generation.
 
 The human specifically approved internal English Bitcoin GSG title-metadata
 research and immutable local CAS retention of exact raw responses, including
@@ -295,8 +305,13 @@ Run `.venv/bin/python scripts/run_phase2_pilot.py check` from the committed clea
 checkout before arming. It validates local governance, key custody/pins, the future anchor,
 and launchd GUI availability without scheduling or making a request. Keep this checkout
 unchanged and this Mac awake/logged in through the closeout deadline. A missed slot is not
-backfilled. Transfer-Encoding is rejected and a real peer EOF is required; incompatible
-server framing, volume or availability may fail the pilot rather than weaken its caps.
+backfilled. Transfer-Encoding is rejected and a real peer EOF is required for
+nonempty or unknown-length bodies. For a verified HTTP 404 with exactly
+`Content-Length: 0`, a bounded raw read still checks for surplus bytes, but an
+`SSLEOFError` with no captured or partial bytes may complete the framed empty
+response even when the peer omits TLS `close_notify`. All other ragged EOFs,
+incompatible server framing, volume or availability fail closed rather than
+weaken the pilot's caps.
 Authenticated terminal failures produce an early signed failure closeout when still safe.
 Hard deadline, capacity or unresolved-transfer failures can leave an incomplete run without
 a closeout; they never certify coverage. Signing-key custody remains local and unchanged.

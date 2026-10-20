@@ -105,6 +105,7 @@ class RealGSGResponse:
     ``HTTPResponse.read`` stops at Content-Length and can conceal surplus bytes. The
     frozen pilot requests ``Connection: close`` and reads the buffered raw body
     stream directly instead. Chunked framing is rejected before exposing a body.
+    A framed empty 404 alone can tolerate peer EOF without TLS close_notify.
     """
 
     def __init__(
@@ -140,10 +141,12 @@ class RealGSGResponse:
             raise NetworkStageError("response_body", "HTTPS response stream terminated prematurely")
         if self._eof:
             return b""
+        read_started = False
         try:
             self._socket.settimeout(seconds)
             if self._response.fp is None:
                 raise NetworkSafetyError("HTTPS body stream is unavailable")
+            read_started = True
             chunk = self._response.fp.read1(maximum_bytes)
         except Exception as exc:
             # Some transport errors expose bytes already consumed. Return those
@@ -154,6 +157,21 @@ class RealGSGResponse:
                 self._received += len(partial)
                 self._pending_failure = True
                 return partial
+            if (
+                read_started
+                and type(exc) is ssl.SSLEOFError
+                and self.status == 404
+                and self._content_length == 0
+                and self._received == 0
+                and partial is None
+            ):
+                # The authenticated HTTP headers frame this 404 as an empty
+                # message. A peer that omits TLS close_notify cannot truncate
+                # its zero-byte body. Still attempt the read above so any
+                # surplus bytes are detected rather than silently discarded.
+                self._eof = True
+                self.transfer_complete = True
+                return b""
             self.close()
             raise NetworkStageError("response_body", "HTTPS response body read failed") from None
         if type(chunk) is not bytes or len(chunk) > maximum_bytes:
