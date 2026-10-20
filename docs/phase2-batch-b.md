@@ -17,7 +17,52 @@ halted after a response-body failure without a signed receipt, terminal gap,
 accepted coverage, or closeout. Its schedule and arming instructions below are
 historical authority, not permission to reset or replay its stopped journal.
 
-## October 19 06:00 UTC replacement prospective pilot authority
+The separately authorized October 20 replacement below is a new, isolated,
+forward-only generation; its authorization is not evidence of arming or coverage.
+
+## October 20 05:00 UTC replacement prospective pilot authority
+
+The human authority approved a new 24-hour GDELT GSG pilot with UTC anchor
+`2026-10-20T05:00:00Z` (12:00 Vietnam time), observation window
+`[2026-10-20T05:00:00Z, 2026-10-21T05:00:00Z)`, and final retrieval and signed
+closeout deadline `2026-10-21T05:45:00Z`. The pilot identity is
+`phase2-batch-b-20261020` and its isolated, Git-ignored storage namespace is
+`data/phase2-pilot-20261020` (mode `0700`). Its first scheduled worker starts
+at `2026-10-20T05:45:00Z`; the last starts at `2026-10-21T05:30:00Z`.
+The plan remains 96 fifteen-minute reporting slots and 1,440 exact one-minute
+gzip locators. Preserve every prior generation's signer, launch authority,
+claim, budget journal, and retained evidence immutably. In particular, the
+armed and halted October 19 generation established no accepted coverage and
+cannot be resumed, reset, replayed, merged, or backfilled into this successor.
+
+The human specifically approved internal English Bitcoin GSG title-metadata
+research and immutable local CAS retention of exact raw response bytes,
+including incidental fields and unrelated titles, through review. GDELT
+attribution is required; external redistribution, public publication,
+publisher-page scraping, and body-text collection are not approved. The sole
+endpoint is `https://data.gdeltproject.org/gdeltv3/gsg/{timestamp}.gsg.json.gz`.
+`real_provider_rights_approved: true` and `network_pilot_authorized: true`
+apply only to this bounded prospective generation. Milestone 3 real scoring,
+model downloads, indicators/features, market-data joins, training, backtests,
+research-gate execution, and holdout access/evaluation remain unauthorized.
+
+The hard caps are 500,000,000 cumulative downloaded bytes, 2,000,000,000
+retained bytes, 900 seconds per worker, one request start per five seconds
+(0.2 Hz maximum), 10-second HTTP timeout, at most three retries (four attempts),
+and $0.00 incremental cost. The fresh Ed25519 private key belongs at
+`data/phase2-pilot-20261020/secrets/pilot_ed25519.key` with mode `0600`;
+this is the runner-required relative `secrets/pilot_ed25519.key` path, not a
+repository-root secret. Pin its 32-byte public key and SHA-256 key ID in the
+active protocol. Never print or commit the private key. Provisioning and
+successful offline preflight do not establish scheduler arming, network
+dispatch, signed receipts, coverage, or closeout. After the clean local `main`
+commit and offline `.venv/bin/python scripts/run_phase2_pilot.py check`, use
+`.venv/bin/python scripts/run_phase2_pilot.py arm` only before the anchor and
+only while all key-custody and local safety checks pass. Do not shift a missed
+anchor automatically. The next action is `execute_live_prospective_pilot`
+only while these conditions hold; no push is authorized.
+
+## Historical October 19 06:00 UTC replacement prospective pilot authority and incident
 
 The human authority approved a new, forward-only 24-hour GDELT GSG pilot with UTC
 anchor `2026-10-19T06:00:00Z` (13:00 Vietnam time), observation window
@@ -66,8 +111,8 @@ coverage, or closeout. After a clean local `main` commit, use
 `.venv/bin/python scripts/run_phase2_pilot.py check` for offline readiness and,
 only before the anchor, `.venv/bin/python scripts/run_phase2_pilot.py arm` to
 install the bounded schedule. Do not shift the anchor automatically if missed.
-The next action is `execute_live_prospective_pilot` only while all authorization,
-key-custody, local safety, and pre-anchor conditions hold.
+That next-action instruction was historical and no longer permits arming or
+resuming the stopped October 19 generation.
 
 ## Historical October 17 16:00 UTC pilot authority and incident
 
@@ -421,10 +466,11 @@ shift them automatically. The later September 13 successor was also deferred wit
 backfill. The October 10 and October 16 successors stopped without accepted
 coverage. The 11:00 UTC and 16:00 UTC October 17 successors were armed and
 halted without accepted coverage. The separately approved 06:00 UTC October 19
-successor is the active schedule.
+successor was also armed and halted without accepted coverage. The distinct
+05:00 UTC October 20 successor is the active prospective schedule.
 
-The current fixed prospective UTC anchor is `2026-10-19T06:00:00Z`. Its observation window
-is half-open: `[2026-10-19T06:00:00Z, 2026-10-20T06:00:00Z)`. Freeze 96 reporting
+The current fixed prospective UTC anchor is `2026-10-20T05:00:00Z`. Its observation window
+is half-open: `[2026-10-20T05:00:00Z, 2026-10-21T05:00:00Z)`. Freeze 96 reporting
 intervals, each 900 seconds, with interval `i` equal to
 `[anchor + i*900s, anchor + (i+1)*900s)` for `0 <= i < 96`.
 
@@ -463,8 +509,8 @@ and preserve Batch A's terminal watermark and strictly increasing publication ch
 Batch A's frozen `PROVIDER_LAG` is 1,800 seconds: a file timestamp `t` is due at `t+30m`.
 The schedule accommodates this release-arrival allowance by starting each worker at its
 reporting interval's end plus 30 minutes, when all 15 files are due. The first worker
-starts `2026-10-19T06:45:00Z`; the last starts `2026-10-20T06:30:00Z` and must finish,
-including closeout, by `2026-10-20T06:45:00Z`. This explicitly specified 45-minute
+starts `2026-10-20T05:45:00Z`; the last starts `2026-10-21T05:30:00Z` and must finish,
+including closeout, by `2026-10-21T05:45:00Z`. This explicitly specified 45-minute
 retrieval/closeout tail does not extend the 24-hour observation window or admit next-day
 file timestamps. No later catch-up is allowed. The 30-minute value is the accepted
 engineering policy, not a newly verified provider SLA; late files remain subject to
