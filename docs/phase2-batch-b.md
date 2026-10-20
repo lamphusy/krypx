@@ -17,19 +17,38 @@ halted after a response-body failure without a signed receipt, terminal gap,
 accepted coverage, or closeout. Its schedule and arming instructions below are
 historical authority, not permission to reset or replay its stopped journal.
 
-The separately authorized October 20 replacement below is a new, isolated,
-forward-only generation; its authorization is not evidence of arming or coverage.
+The separately authorized October 20 replacement below was an isolated,
+forward-only generation. The human incident report states that its 05:00 UTC
+minute exercised the corrected HTTP 404 gap handling, and that its 05:01 UTC
+HTTP 200 response reached the declared 142,688 `Content-Length` bytes before
+terminating without TLS `close_notify`. The 05:01 facts are not a signed HTTP
+receipt. Under the then-frozen response-body rule, that ragged EOF halted the
+worker at `response_body`. The stopped journal and claim remain immutable audit evidence;
+this amendment does not revise their outcome or authorize a reset, re-arm,
+resume, replay, or backfill. There is no currently authorized live pilot window.
 
-## October 20 05:00 UTC replacement prospective pilot authority
+## Authorized exact-length TLS EOF protocol amendment
+
+For any HTTP response, including a nonempty HTTP 200, a declared
+`Content-Length` and an exact byte count (`received_bytes == content_length`)
+establish transfer completion after a bounded raw read has checked for surplus.
+If the peer then ends TLS without `close_notify`, including by raising
+`SSLEOFError`, set `transfer_complete = True` and end the stream normally.
+Truncation, surplus bytes, premature stream aborts, and unknown-length streams
+without clean TLS `close_notify` remain fail-closed. This is a prospective
+transport rule only; it does not reinterpret the October 20 stopped journal or
+claim, supply a signed 05:01 receipt, or authorize a new live pilot.
+
+## Historical October 20 05:00 UTC replacement prospective pilot authority and incident
 
 The human authority approved a new 24-hour GDELT GSG pilot with UTC anchor
 `2026-10-20T05:00:00Z` (12:00 Vietnam time), observation window
 `[2026-10-20T05:00:00Z, 2026-10-21T05:00:00Z)`, and final retrieval and signed
 closeout deadline `2026-10-21T05:45:00Z`. The pilot identity is
 `phase2-batch-b-20261020` and its isolated, Git-ignored storage namespace is
-`data/phase2-pilot-20261020` (mode `0700`). Its first scheduled worker starts
-at `2026-10-20T05:45:00Z`; the last starts at `2026-10-21T05:30:00Z`.
-The plan remains 96 fifteen-minute reporting slots and 1,440 exact one-minute
+`data/phase2-pilot-20261020` (mode `0700`). Its first scheduled worker was
+set for `2026-10-20T05:45:00Z`; the last for `2026-10-21T05:30:00Z`.
+The frozen plan had 96 fifteen-minute reporting slots and 1,440 exact one-minute
 gzip locators. Preserve every prior generation's signer, launch authority,
 claim, budget journal, and retained evidence immutably. In particular, the
 armed and halted October 19 generation established no accepted coverage and
@@ -42,7 +61,8 @@ attribution is required; external redistribution, public publication,
 publisher-page scraping, and body-text collection are not approved. The sole
 endpoint is `https://data.gdeltproject.org/gdeltv3/gsg/{timestamp}.gsg.json.gz`.
 `real_provider_rights_approved: true` and `network_pilot_authorized: true`
-apply only to this bounded prospective generation. Milestone 3 real scoring,
+were the historical approval for this bounded generation, not current network
+authority after it halted. Milestone 3 real scoring,
 model downloads, indicators/features, market-data joins, training, backtests,
 research-gate execution, and holdout access/evaluation remain unauthorized.
 
@@ -52,15 +72,18 @@ retained bytes, 900 seconds per worker, one request start per five seconds
 and $0.00 incremental cost. The fresh Ed25519 private key belongs at
 `data/phase2-pilot-20261020/secrets/pilot_ed25519.key` with mode `0600`;
 this is the runner-required relative `secrets/pilot_ed25519.key` path, not a
-repository-root secret. Pin its 32-byte public key and SHA-256 key ID in the
-active protocol. Never print or commit the private key. Provisioning and
-successful offline preflight do not establish scheduler arming, network
-dispatch, signed receipts, coverage, or closeout. After the clean local `main`
-commit and offline `.venv/bin/python scripts/run_phase2_pilot.py check`, use
+repository-root secret. Its 32-byte public key and SHA-256 key ID remain pinned
+in the protocol as historical evidence. Never print or commit the private key.
+Provisioning and successful offline preflight do not establish scheduler arming, network
+dispatch, signed receipts, coverage, or closeout. The original setup instruction
+was: after the clean local `main` commit and offline
+`.venv/bin/python scripts/run_phase2_pilot.py check`, use
 `.venv/bin/python scripts/run_phase2_pilot.py arm` only before the anchor and
 only while all key-custody and local safety checks pass. Do not shift a missed
-anchor automatically. The next action is `execute_live_prospective_pilot`
-only while these conditions hold; no push is authorized.
+anchor automatically. That instruction is now historical and cannot arm or
+resume the halted October 20 generation. A new prospective window and separate
+human network authorization are required before any further live collection;
+no push is authorized.
 
 ## Historical October 19 06:00 UTC replacement prospective pilot authority and incident
 
@@ -306,11 +329,13 @@ flags or synthetic receipt/gap relabeling. Accepted offline validators remain fa
 
 Local `origin/main` reflog records `14769aff` updated by push at
 `2026-09-12T23:45:28+07:00`; actor and authority are not established by that record.
-This setup performs no push or live remote query. The authorized current commit is local
-on `main`; no completion commit hash, successful collection, live coverage pass, or later
-milestone completion is invented in advance.
+That setup performed no push or live remote query. Its authorized setup commit
+was local on `main`; no completion commit hash, successful collection, live
+coverage pass, or later milestone completion was invented in advance.
 
-Next action: `execute_live_prospective_pilot`, after setup validation and explicit arming.
+The then-recorded next action was `execute_live_prospective_pilot`, after setup
+validation and explicit arming. It is historical and grants no current network
+authority.
 Scoring, models, indicators/features, market data, training/backtests, research gates and
 holdout collection/access/evaluation remain unauthorized.
 
@@ -346,17 +371,23 @@ The runner produces raw CAS, verified parser observations, signed attempts/gaps 
 96-slot closeout evidence. It does not migrate the Batch A state-v3 normalizer, publish
 sentiment features, or claim an independently accepted live result.
 
-Run `.venv/bin/python scripts/run_phase2_pilot.py check` from the committed clean `main`
-checkout before arming. It validates local governance, key custody/pins, the future anchor,
-and launchd GUI availability without scheduling or making a request. Keep this checkout
-unchanged and this Mac awake/logged in through the closeout deadline. A missed slot is not
-backfilled. Transfer-Encoding is rejected and a real peer EOF is required for
-nonempty or unknown-length bodies. For a verified HTTP 404 with exactly
-`Content-Length: 0`, a bounded raw read still checks for surplus bytes, but an
-`SSLEOFError` with no captured or partial bytes may complete the framed empty
-response even when the peer omits TLS `close_notify`. All other ragged EOFs,
-incompatible server framing, volume or availability fail closed rather than
-weaken the pilot's caps.
+The historical October 20 setup called for
+`.venv/bin/python scripts/run_phase2_pilot.py check` from a committed clean
+`main` checkout before arming. That check validated local governance, key
+custody/pins, the future anchor, and launchd GUI availability without scheduling
+or making a request. It is not permission to re-arm a halted generation. A
+missed slot is not backfilled. Transfer-Encoding is rejected. After a bounded
+raw read checks for surplus bytes, any response status (including HTTP 200)
+with a declared `Content-Length` is transfer-complete when
+`received_bytes == content_length`: peer EOF or `SSLEOFError` after the final
+declared byte is accepted even without TLS `close_notify`. This includes the
+previously authorized exact-empty HTTP 404 case, but does not retroactively
+change any stopped pilot evidence. Truncation
+(`received_bytes < content_length`), surplus bytes
+(`received_bytes > content_length`), premature stream aborts, and unknown-length
+streams without clean TLS `close_notify` remain fail-closed. Incompatible server
+framing, volume or availability also fail closed rather than weaken the pilot's
+caps.
 Authenticated terminal failures produce an early signed failure closeout when still safe.
 Hard deadline, capacity or unresolved-transfer failures can leave an incomplete run without
 a closeout; they never certify coverage. Signing-key custody remains local and unchanged.
@@ -467,10 +498,13 @@ backfill. The October 10 and October 16 successors stopped without accepted
 coverage. The 11:00 UTC and 16:00 UTC October 17 successors were armed and
 halted without accepted coverage. The separately approved 06:00 UTC October 19
 successor was also armed and halted without accepted coverage. The distinct
-05:00 UTC October 20 successor is the active prospective schedule.
+05:00 UTC October 20 successor also halted on its 05:01 UTC response-body
+transfer; it cannot be re-armed, resumed, replayed, or backfilled. No
+prospective schedule is currently active.
 
-The current fixed prospective UTC anchor is `2026-10-20T05:00:00Z`. Its observation window
-is half-open: `[2026-10-20T05:00:00Z, 2026-10-21T05:00:00Z)`. Freeze 96 reporting
+The historical October 20 fixed UTC anchor was `2026-10-20T05:00:00Z`. Its
+observation window was half-open:
+`[2026-10-20T05:00:00Z, 2026-10-21T05:00:00Z)`. The frozen plan had 96 reporting
 intervals, each 900 seconds, with interval `i` equal to
 `[anchor + i*900s, anchor + (i+1)*900s)` for `0 <= i < 96`.
 
@@ -799,8 +833,9 @@ criterion; it neither changes nor approves the frozen 99.5% research coverage ga
 ## Authority and next action
 
 `SPECIFICATION_FROZEN_COMPATIBLE` records the base archive-compatible specification.
-The separately recorded September 13 human instruction authorizes the exact prospective
-pilot, actual rights scope, key provisioning and live runner. Before any request, the live
+The separately recorded September 13 human instruction historically authorized
+its exact prospective pilot, actual rights scope, key provisioning and live runner;
+it does not authorize a current window. Before any future authorized request, the live
 path must verify the final protocol and specification identity, approved rights record,
 pinned signer and verified implementation commit, durable budgets and scheduled bounds.
 Missing any prerequisite fails before network access. An elapsed anchor requires a new
@@ -809,13 +844,16 @@ specification and approval; authorization is never substituted for readiness or 
 Publisher scraping, sentiment scoring, model/tokenizer downloads, feature construction or
 joining, market-data access, training, backtesting, research-gate execution, future holdout
 collection, holdout access/evaluation, paid services, credentials, and `git push` are excluded.
-Milestone 3 remains unauthorized. Setup neither arms the scheduler nor starts collection.
+Milestone 3 remains unauthorized. Offline setup alone never arms a scheduler or
+starts collection.
 
-The next action is `execute_live_prospective_pilot` after verified setup and explicit arming.
-The offline review passed; actual transport and authority-envelope setup must still pass
-offline verification before launch. This amendment supersedes the completed offline review action;
-the document and current protocol configuration had already superseded v1's
-`await_human_network_pilot_authorization` action and the
-historical `prepare_batch_b_specification` next action in the 2026-09-02 Batch A sign-off
-record. Earlier one-GiB/seven-day collection proposals do not apply to this pilot. No
+The next action is to await separate human authorization of a new forward-only
+prospective pilot window before any live collection. The offline review passed;
+the present transport amendment authorizes local source/test work and checks,
+not October 20 re-arming, a new live run, or a retroactive coverage claim.
+This amendment supersedes the completed offline review action. Historical live
+approvals had superseded v1's `await_human_network_pilot_authorization` action and
+the `prepare_batch_b_specification` action in the 2026-09-02 Batch A sign-off;
+those past approvals do not cover a successor. Earlier one-GiB/seven-day
+collection proposals do not apply to this pilot. No
 accepted Batch A parser, interval, retry, storage, or Phase 1 contract is changed.

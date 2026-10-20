@@ -3,8 +3,8 @@
   "protocol_version": "0.2.0",
   "status": "phase2_batch_a_accepted_completed",
   "batch_b_status": "SPECIFICATION_FROZEN_COMPATIBLE",
-  "network_pilot_authorized": true,
-  "real_network_calls_prohibited": false,
+  "network_pilot_authorized": false,
+  "real_network_calls_prohibited": true,
   "real_provider_rights_approved": true,
   "milestone_3_status": "ACCEPTED_OFFLINE_ONLY",
   "milestone_3_offline_foundation_authorized": true,
@@ -64,7 +64,7 @@
   "created_at": "2026-08-12T09:52:48Z",
   "approval_state": "batch_a_accepted_batch_b_offline_accepted_live_pilot_deferred_without_backfill_milestone3_offline_mock_foundation_accepted_milestone4_accepted_synthetic_only_milestone5_accepted_offline_only_milestone6_accepted_offline_only_milestone7_accepted_offline_only_milestone8_accepted_offline_only_milestone9_accepted_offline_only_milestone10_accepted_offline_only",
   "approved": true,
-  "approval_scope": "accepted_offline_foundations_through_milestone10_plus_bounded_2026_10_20_prospective_gdelt_gsg_pilot_no_real_scoring_features_training_backtests_holdout_production_training_promotion_activation_or_push",
+  "approval_scope": "accepted_offline_foundations_through_milestone10_plus_exact_length_tls_eof_transport_amendment_historical_2026_10_20_pilot_halted_no_current_network_authority_no_real_scoring_features_training_backtests_holdout_production_training_promotion_activation_or_push",
   "milestone_3_offline_foundation": {
     "status": "ACCEPTED_OFFLINE_ONLY",
     "authorization_authority": "human_authority",
@@ -1176,11 +1176,11 @@
     "status": "SPECIFICATION_FROZEN_COMPATIBLE",
     "batch_a_signoff_commit": "e7c189bf180c9b3fd72892544fa72805998f765d",
     "batch_a_engineering_completion_commit": "bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5",
-    "implementation_readiness": "OFFLINE_ACCEPTED_OCTOBER_20_PROSPECTIVE_PILOT_AUTHORIZED_NOT_ARMED",
+    "implementation_readiness": "OFFLINE_ACCEPTED_OCTOBER_20_PILOT_HALTED_NO_CURRENT_NETWORK_AUTHORITY",
     "compatibility_scope": "accepted_gsg_archive_locator_payload_parser_and_underlying_identity_chronology_and_gap_semantics_not_completed_live_transport_or_signed_evidence",
-    "network_pilot_authorized": true,
+    "network_pilot_authorized": false,
     "milestone_3_scoring_authorized": false,
-    "next_action": "execute_live_prospective_pilot",
+    "next_action": "await_separately_authorized_prospective_pilot_successor",
     "source_and_test_implementation_authorized_by_this_docs_only_instruction": false,
     "later_offline_source_test_authorization": "batch_b_offline_implementation",
     "later_live_source_test_and_network_authorization": "batch_b_live_pilot",
@@ -1252,8 +1252,10 @@
       "storage_namespace": "isolated_local_pilot_generation_outside_git"
     },
     "schedule": {
-      "current_status": "OCTOBER_20_AUTHORIZED_SETUP_NOT_ARMED",
-      "status_recorded_at": "2026-10-20T04:16:15Z",
+      "current_status": "OCTOBER_20_ARMED_HALTED_NO_ACTIVE_PROSPECTIVE_SCHEDULE",
+      "historical_authorization_recorded_at_utc": "2026-10-20T04:16:15Z",
+      "halt_recorded_on": "2026-10-20",
+      "current_network_dispatch_authorized": false,
       "prior_schedule": {
         "status": "MISSED_UNAUTHORIZED_NOT_EXECUTED",
         "prospective_anchor_utc": "2026-09-09T00:00:00Z",
@@ -1614,7 +1616,7 @@
     "git_push_authorized": false
   },
   "batch_b_live_pilot": {
-    "status": "AUTHORIZED_SETUP_NOT_ARMED",
+    "status": "ARMED_HALTED_NO_ACTIVE_NETWORK_AUTHORITY",
     "deferral": {
       "authorized_by": "human_authority",
       "recorded_on": "2026-09-14",
@@ -1733,6 +1735,19 @@
       "accepted_coverage_established": false,
       "backfill_or_relaunch_authorized": false
     },
+    "october_20_halt": {
+      "status": "ARMED_HALTED_AFTER_EXACT_LENGTH_HTTP_200_RAGGED_TLS_EOF_RESPONSE_BODY_FAILURE",
+      "evidence_source": "human_incident_report_not_signed_0501_receipt",
+      "minute_0500_http_404_gap_handling_succeeded": true,
+      "minute_0501_http_status": 200,
+      "minute_0501_content_length_bytes": 142688,
+      "minute_0501_received_bytes": 142688,
+      "minute_0501_tls_close_notify_observed": false,
+      "minute_0501_recorded_failure_stage": "response_body",
+      "stopped_journal_and_claim_immutable": true,
+      "retroactive_reclassification_authorized": false,
+      "reset_rearm_resume_replay_or_backfill_authorized": false
+    },
     "pilot_id": "phase2-batch-b-20261020",
     "specification_id": "phase2-batch-b-live-prospective-v1",
     "base_specification_id": "phase2-batch-b-prospective-ingestion-v2",
@@ -1746,12 +1761,15 @@
     "private_key_path": "secrets/pilot_ed25519.key",
     "public_key_hex": "82fb68dd26245816162b65088e377b4ded9ae339709e8ed17ebf0928cc6f9bbc",
     "signer_key_id": "474abd67fa37386b1853c133120ea25cea824308e2313e92bd8b9a900bd41e0f",
-    "network_pilot_authorized": true,
+    "network_pilot_authorized": false,
     "real_provider_rights_approved": true,
+    "accepted_pilot_coverage_established": false,
+    "historical_anchor_only": true,
     "milestone_3_scoring_authorized": false,
     "real_network_calls_during_setup": false,
     "scheduler_armed_during_setup": false,
     "arming_command": ".venv/bin/python scripts/run_phase2_pilot.py arm",
+    "historical_arming_command_is_inactive": true,
     "arming_required_before_anchor": true,
     "scheduler": "96_local_launchd_calendar_workers_no_continuous_24_hour_collector",
     "worker_deadline_enforcement": "os_watchdog_minimum_of_900_seconds_and_fixed_lag_adjusted_slot_end",
@@ -1799,6 +1817,17 @@
       "incremental_cost_usd": 0
     },
     "approval_binding": "canonical_approval_record_sha256_computed_at_loading_and_bound_with_exact_protocol_sha256_provider_scope_plan_signer_and_verified_code_commit_no_self_referential_protocol_hash",
+    "transfer_completion_policy": {
+      "authorized_amendment": "exact_declared_content_length_peer_tls_eof_after_bounded_raw_read",
+      "applies_to_http_status": "all_including_200",
+      "declared_content_length_exact_match": "transfer_complete_true_on_peer_eof_or_SSLEOFError_without_close_notify",
+      "bounded_raw_read_required_to_detect_surplus": true,
+      "declared_content_length_truncation": "fail_closed",
+      "declared_content_length_surplus": "fail_closed",
+      "premature_stream_abort": "fail_closed",
+      "unknown_length_without_clean_tls_close_notify": "fail_closed",
+      "retroactive_change_to_halted_pilot_evidence": false
+    },
     "signer_provisioning_authorized": true,
     "signer_pin_required_before_arming": true,
     "live_input_class": "provider_response",
@@ -1816,7 +1845,7 @@
       "actor_and_authorization": "not_established_by_local_reflog",
       "live_remote_query_performed": false
     },
-    "next_action": "execute_live_prospective_pilot"
+    "next_action": "await_separately_authorized_prospective_pilot_successor"
   },
   "batch_a_corrective_review": {
     "status": "ACCEPTED_COMPLETED",
@@ -2192,7 +2221,7 @@
     "exact_next_action_at_batch_a_signoff": "prepare_batch_b_specification"
   },
   "verdict": "PROCEED_WITH_FORWARD_ONLY_COLLECTION",
-  "next_action": "execute_live_prospective_pilot",
+  "next_action": "await_separately_authorized_prospective_pilot_successor",
   "article_contract_version": "article-contract-v1",
   "contract_versions": {
     "article_contract": "article-contract-v1",
@@ -4341,8 +4370,8 @@
     "future_holdout_evaluation_authorization"
   ],
   "required_authorizations": {
-    "provider_data_download": "authorized_only_for_2026_10_10_20z_gdelt_gsg_prospective_pilot_with_frozen_caps",
-    "provider_api_call": "authorized_only_for_exact_gdelt_gsg_https_timestamped_locator_after_explicit_arming",
+    "provider_data_download": "not_currently_authorized_historical_2026_10_20_pilot_halted_new_prospective_window_requires_separate_human_authorization",
+    "provider_api_call": "not_currently_authorized_historical_exact_gdelt_gsg_https_timestamped_locator_scope_does_not_allow_rearming",
     "publisher_page_fetch": "not_authorized",
     "market_data_fetch": "not_authorized",
     "account_or_credentials": "not_authorized",
@@ -4368,12 +4397,12 @@
     "future_holdout_evaluation": "separate_explicit_authorization_required"
   },
   "next_authorized_task": {
-    "status": "BATCH_B_OCTOBER_20_PROSPECTIVE_PILOT_AUTHORIZED_NOT_ARMED",
-    "action": "execute_live_prospective_pilot",
+    "status": "BATCH_B_OCTOBER_20_PILOT_HALTED_AWAIT_NEW_PROSPECTIVE_AUTHORITY",
+    "action": "await_separately_authorized_prospective_pilot_successor",
     "canonical_batch_a_completion_commit": "bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5",
     "batch_a_status": "ACCEPTED_COMPLETED",
     "batch_b_specification_status": "SPECIFICATION_FROZEN_COMPATIBLE",
-    "description": "Phase 2 offline engineering remains accepted. The human separately authorized only the bounded replacement prospective GDELT GSG pilot for 2026-10-20T05:00:00Z through 2026-10-21T05:00:00Z, with closeout by 05:45Z, internal title-metadata use, exact raw retention through review, no redistribution, and no backfill. The October 16, October 17 11:00Z and 16:00Z, and October 19 06:00Z generations were armed and halted without accepted coverage; their evidence, journals and keys remain immutable. The prior October 17 10:00Z window elapsed without arming or collection and is not backfilled. The fresh October 20 pilot is not armed or collected by governance setup. Real scoring, model downloads, features, training, holdout evaluation, production promotion and activation remain unauthorized; no push is authorized for this setup.",
+    "description": "Phase 2 offline engineering remains accepted. The bounded October 20 GDELT GSG pilot was armed and halted: minute 05:00 UTC exercised the corrected HTTP 404 gap handling, then minute 05:01 UTC received all 142688 bytes of a Content-Length-framed HTTP 200 response but stopped at response_body when TLS ended without close_notify under the then-frozen rule. Its stopped journal and claim remain immutable; the new exact-length transfer rule does not retroactively change its outcome or authorize reset, re-arm, replay, or backfill. No live pilot window is currently authorized. A future forward-only window requires separate human network authorization. Real scoring, model downloads, features, training, holdout evaluation, production promotion and activation remain unauthorized; no push is authorized.",
     "milestone_4_specification_id": "phase2-milestone4-offline-aggregation-v1",
     "milestone_4_status": "ACCEPTED",
     "milestone_4_implementation_authorized": true,
@@ -4438,10 +4467,12 @@
     "source_and_test_implementation_authorized_by_this_docs_only_instruction": false,
     "source_and_test_implementation_authorized_by_current_milestone7_instruction": true,
     "source_and_test_implementation_authorized_by_current_milestone8_instruction": true,
+    "current_instruction_exact_length_transport_source_tests_and_local_commit_authorized": true,
+    "current_instruction_live_collection_or_rearm_authorized": false,
     "subsequent_offline_implementation_authorized_by_september_10_instruction": true,
     "four_p1_offline_correction_authorized_by_september_11_instruction": true,
-    "real_network_calls_prohibited": false,
-    "network_pilot_authorized": true,
+    "real_network_calls_prohibited": true,
+    "network_pilot_authorized": false,
     "real_provider_rights_approved": true,
     "historical_live_source_tests_runner_and_key_provisioning_authorized": true,
     "milestone_3_status": "ACCEPTED_OFFLINE_ONLY",

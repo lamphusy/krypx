@@ -105,7 +105,9 @@ class RealGSGResponse:
     ``HTTPResponse.read`` stops at Content-Length and can conceal surplus bytes. The
     frozen pilot requests ``Connection: close`` and reads the buffered raw body
     stream directly instead. Chunked framing is rejected before exposing a body.
-    A framed empty 404 alone can tolerate peer EOF without TLS close_notify.
+    A declared-length response can tolerate peer EOF without TLS close_notify
+    only after every declared byte was captured and a further bounded read
+    found no surplus bytes.
     """
 
     def __init__(
@@ -159,16 +161,14 @@ class RealGSGResponse:
                 return partial
             if (
                 read_started
-                and type(exc) is ssl.SSLEOFError
-                and self.status == 404
-                and self._content_length == 0
-                and self._received == 0
-                and partial is None
+                and isinstance(exc, ssl.SSLEOFError)
+                and self._content_length is not None
+                and self._received == self._content_length
+                and (partial is None or (type(partial) is bytes and not partial))
             ):
-                # The authenticated HTTP headers frame this 404 as an empty
-                # message. A peer that omits TLS close_notify cannot truncate
-                # its zero-byte body. Still attempt the read above so any
-                # surplus bytes are detected rather than silently discarded.
+                # Exact declared framing proves no body byte is missing. The
+                # bounded read above still exposes buffered surplus bytes;
+                # only an actual TLS EOF with no partial bytes is accepted.
                 self._eof = True
                 self.transfer_complete = True
                 return b""

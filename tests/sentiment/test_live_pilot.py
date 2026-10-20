@@ -284,15 +284,19 @@ def test_malformed_live_byte_counts_fail_with_project_exception(tmp_path, bad):
         verify_receipt(envelope, PUBLIC, live_authority=authority)
 
 
-def test_real_replacement_schedule_is_exact_and_authority_bound():
+def test_halted_replacement_schedule_is_retained_but_not_current_authority():
     config = json.loads((Path(__file__).parents[2] / "config/phase2_protocol.json").read_bytes())
-    assert config["network_pilot_authorized"] is True
+    assert config["network_pilot_authorized"] is False
+    assert config["real_network_calls_prohibited"] is True
     pilot = config["batch_b_live_pilot"]
-    assert pilot["network_pilot_authorized"] is True
+    assert pilot["network_pilot_authorized"] is False
     assert pilot["real_provider_rights_approved"] is True
+    assert pilot["status"] == "ARMED_HALTED_NO_ACTIVE_NETWORK_AUTHORITY"
+    assert pilot["october_20_halt"]["reset_rearm_resume_replay_or_backfill_authorized"] is False
     assert config["milestone_3_scoring_authorized"] is False
-    authority = LiveAuthority.from_config(config)
-    assert authority.value["approval_record"]["anchor_utc"] == "2026-10-20T05:00:00Z"
+    with pytest.raises(CryptoAIError, match="not authorized"):
+        LiveAuthority.from_config(config)
+    assert pilot["approval_record"]["anchor_utc"] == "2026-10-20T05:00:00Z"
     assert pilot["end_exclusive_utc"] == "2026-10-21T05:00:00Z"
     assert pilot["closeout_deadline_utc"] == "2026-10-21T05:45:00Z"
     assert pilot["pilot_id"] == "phase2-batch-b-20261020"
@@ -310,10 +314,7 @@ def test_real_replacement_schedule_is_exact_and_authority_bound():
     )
     assert pilot["prior_october_17_10utc_window"]["status"] == "MISSED_NOT_ARMED_NO_COLLECTION"
     assert pilot["prior_october_16_generation"]["anchor_utc"] == "2026-10-16T17:00:00Z"
-    assert (
-        authority.value["plan_sha256"]
-        == plan_retrieval(pilot["anchor_utc"], pilot["end_exclusive_utc"]).plan_id
-    )
+    assert len(plan_retrieval(pilot["anchor_utc"], pilot["end_exclusive_utc"]).intervals) == 1440
     assert len(runner.calendar_jobs(Path("/example"), pilot, "/python")) == 96
 
 

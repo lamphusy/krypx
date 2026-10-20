@@ -310,6 +310,71 @@ def test_empty_404_with_ragged_tls_eof_is_complete_only_after_bounded_read(monke
     connection.close.assert_called_once()
 
 
+def test_200_exact_142688_byte_body_accepts_ragged_tls_eof(monkeypatch):
+    # Synthetic bytes reproduce the pilot's framing without using pilot data.
+    body = b"x" * 142_688
+    connection, _ = _connection(monkeypatch, body=body)
+    response = RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    stream = Mock()
+    stream.read1.side_effect = [
+        body[:65_536],
+        body[65_536:131_072],
+        body[131_072:],
+        ssl.SSLEOFError("TLS peer omitted close_notify"),
+    ]
+    connection.response.fp = stream
+
+    received = b"".join(response.read(65_536, timeout=1.0) for _ in range(3))
+    assert received == body
+    assert len(received) == 142_688
+    assert response.headers["content-length"] == "142688"
+    assert response.transfer_complete is False
+    assert response.read(65_536, timeout=1.0) == b""
+    assert response.transfer_complete is True
+    assert stream.read1.call_count == 4
+    assert connection.sock.timeouts == [1.0] * 4
+    assert response.read(65_536, timeout=1.0) == b""
+    assert stream.read1.call_count == 4
+    response.close()
+    connection.close.assert_called_once()
+
+
+def test_exact_length_ragged_tls_eof_with_empty_partial_is_complete(monkeypatch):
+    connection, _ = _connection(monkeypatch)
+    response = RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    stream = Mock()
+    eof = ssl.SSLEOFError("TLS peer omitted close_notify")
+    eof.partial = b""
+    stream.read1.side_effect = [RAW, eof]
+    connection.response.fp = stream
+
+    assert response.read(65_536, timeout=1.0) == RAW
+    assert response.read(65_536, timeout=1.0) == b""
+    assert response.transfer_complete is True
+    response.close()
+
+
+@pytest.mark.parametrize(
+    "status, body",
+    [("200 OK", b""), ("404 Missing", RAW), ("500 Error", RAW)],
+)
+def test_exact_length_ragged_tls_eof_is_complete_for_any_status(monkeypatch, status, body):
+    connection, _ = _connection(monkeypatch, body=body, status=status)
+    response = RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    stream = Mock()
+    stream.read1.side_effect = ([body] if body else []) + [
+        ssl.SSLEOFError("TLS peer omitted close_notify")
+    ]
+    connection.response.fp = stream
+
+    if body:
+        assert response.read(65_536, timeout=1.0) == body
+        assert response.transfer_complete is False
+    assert response.read(65_536, timeout=1.0) == b""
+    assert response.transfer_complete is True
+    response.close()
+
+
 def test_empty_404_tls_error_before_body_read_fails_closed(monkeypatch):
     connection, _ = _connection(monkeypatch, body=b"", status="404 Missing")
     response = RealGSGTransport(PLAN).open(URL, timeout=1.0)
@@ -373,21 +438,108 @@ def test_nonempty_declared_body_with_ragged_tls_eof_fails_closed(monkeypatch):
     connection.close.assert_called_once()
 
 
-@pytest.mark.parametrize(
-    "status, headers",
-    [
-        ("200 OK", [("Content-Length", "0")]),
-        ("404 Missing", []),
-    ],
-)
-def test_ragged_tls_eof_requires_exact_empty_404_framing(monkeypatch, status, headers):
-    connection, _ = _connection(monkeypatch, body=b"", status=status, headers=headers)
+@pytest.mark.parametrize("status", ["200 OK", "404 Missing", "500 Error"])
+def test_ragged_tls_eof_rejects_unknown_length(monkeypatch, status):
+    connection, _ = _connection(monkeypatch, body=b"", status=status, headers=[])
     response = RealGSGTransport(PLAN).open(URL, timeout=1.0)
     stream = Mock()
     stream.read1.side_effect = ssl.SSLEOFError("TLS peer omitted close_notify")
     connection.response.fp = stream
     with pytest.raises(NetworkStageError, match="body read failed") as caught:
         response.read(65536, timeout=1.0)
+    assert caught.value.stage == "response_body"
+    assert response.transfer_complete is False
+    connection.close.assert_called_once()
+
+
+@pytest.mark.parametrize("declared, received", [(5, b"four"), (3, b"four"), (0, b"surplus")])
+def test_ragged_tls_eof_rejects_declared_length_mismatch(monkeypatch, declared, received):
+    connection, _ = _connection(monkeypatch, body=b"", headers=[("Content-Length", str(declared))])
+    response = RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    stream = Mock()
+    stream.read1.side_effect = [
+        received,
+        ssl.SSLEOFError("TLS peer omitted close_notify"),
+    ]
+    connection.response.fp = stream
+
+    assert response.read(65_536, timeout=1.0) == received
+    assert response.transfer_complete is False
+    with pytest.raises(NetworkStageError, match="body read failed") as caught:
+        response.read(65_536, timeout=1.0)
+    assert caught.value.stage == "response_body"
+    assert response.transfer_complete is False
+    connection.close.assert_called_once()
+
+
+def test_surplus_buffered_after_exact_body_rejects_later_ragged_tls_eof(monkeypatch):
+    connection, _ = _connection(monkeypatch)
+    response = RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    stream = Mock()
+    stream.read1.side_effect = [
+        RAW,
+        b"surplus",
+        ssl.SSLEOFError("TLS peer omitted close_notify"),
+    ]
+    connection.response.fp = stream
+
+    assert response.read(65_536, timeout=1.0) == RAW
+    assert response.transfer_complete is False
+    assert response.read(65_536, timeout=1.0) == b"surplus"
+    assert response.transfer_complete is False
+    with pytest.raises(NetworkStageError, match="body read failed") as caught:
+        response.read(65_536, timeout=1.0)
+    assert caught.value.stage == "response_body"
+    assert response.transfer_complete is False
+    assert stream.read1.call_count == 3
+    connection.close.assert_called_once()
+
+
+def test_ragged_tls_error_before_confirming_read_fails_after_exact_body(monkeypatch):
+    connection, _ = _connection(monkeypatch)
+    response = RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    stream = Mock()
+    stream.read1.return_value = RAW
+    connection.response.fp = stream
+
+    assert response.read(65_536, timeout=1.0) == RAW
+    assert response.transfer_complete is False
+    connection.sock.settimeout = Mock(side_effect=ssl.SSLEOFError("TLS peer failed early"))
+    with pytest.raises(NetworkStageError, match="body read failed") as caught:
+        response.read(65_536, timeout=1.0)
+    assert caught.value.stage == "response_body"
+    assert response.transfer_complete is False
+    stream.read1.assert_called_once_with(65_536)
+    connection.close.assert_called_once()
+
+
+def test_non_tls_error_after_exact_length_still_fails_closed(monkeypatch):
+    connection, _ = _connection(monkeypatch)
+    response = RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    stream = Mock()
+    stream.read1.side_effect = [RAW, OSError("stream aborted")]
+    connection.response.fp = stream
+
+    assert response.read(65_536, timeout=1.0) == RAW
+    assert response.transfer_complete is False
+    with pytest.raises(NetworkStageError, match="body read failed") as caught:
+        response.read(65_536, timeout=1.0)
+    assert caught.value.stage == "response_body"
+    assert response.transfer_complete is False
+    connection.close.assert_called_once()
+
+
+def test_partial_exception_at_exact_length_still_fails_closed(monkeypatch):
+    connection, _ = _connection(monkeypatch)
+    response = RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    stream = Mock()
+    stream.read1.side_effect = http.client.IncompleteRead(RAW, 0)
+    connection.response.fp = stream
+
+    assert response.read(65_536, timeout=1.0) == RAW
+    assert response.transfer_complete is False
+    with pytest.raises(NetworkStageError, match="prematurely") as caught:
+        response.read(65_536, timeout=1.0)
     assert caught.value.stage == "response_body"
     assert response.transfer_complete is False
     connection.close.assert_called_once()
