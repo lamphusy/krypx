@@ -40,6 +40,8 @@ from crypto_ai.sentiment.providers.gdelt_gsg import (
     plan_retrieval,
 )
 from crypto_ai.sentiment.receipts import (
+    _minute_outcome,
+    _terminal_unresolved,
     receipt_sha256,
     sign_closeout,
     sign_receipt,
@@ -124,12 +126,7 @@ def _retryable_receipt(body: Mapping[str, Any]) -> bool:
 
 
 def _terminal_failure(body: Mapping[str, Any]) -> bool:
-    return body["http_status"] is not None and (
-        not body["transfer_complete"]
-        or body["snapshot_state"] == "invalid"
-        or body["http_status"] != 200
-        and (not _retryable_receipt(body) or body["attempt_number"] == MAXIMUM_ATTEMPTS)
-    )
+    return _terminal_unresolved(body)
 
 
 def _apply_transfer_verdict(snapshot: SnapshotResult, complete: bool) -> SnapshotResult:
@@ -802,10 +799,11 @@ class GSGNetworkClient:
             self._remaining()
             result = RetrievalResult(snapshot, tuple(deepcopy(result_receipts)), evidence)
             self._retrieval_stage = "coverage_gate"
-            if status == 404 and transfer.complete:
-                # A complete, signed 404 is a terminal fact about this minute, not
-                # a session-safety failure. The reporting slot remains uncovered;
-                # the fixed 92/96 gate still stops the pilot after five lost slots.
+            if _minute_outcome(body) == "verified_empty":
+                # An exact empty 404 after the release allowance is a verified
+                # no-file minute, not a gzip snapshot or an uncovered slot. Its
+                # immutable gap evidence was published above and is replayed
+                # before any later closeout.
                 self._require_attainable_coverage()
                 return result
             if not _retryable_receipt(body):
@@ -826,7 +824,9 @@ class GSGNetworkClient:
         uncovered = 0
         for index in range(96):
             slot = [body for body in latest.values() if body["interval_index"] == index]
-            complete = sum(body["snapshot_state"] == "complete" for body in slot)
+            complete = sum(
+                _minute_outcome(body) in {"complete_gzip", "verified_empty"} for body in slot
+            )
             terminal_gap = any(_terminal_failure(body) for body in slot)
             if terminal_gap or index < self._worker_index and complete < 15:
                 uncovered += 1
@@ -961,7 +961,9 @@ class GSGNetworkClient:
         for index in range(96):
             slot = [body for body in bodies if body["interval_index"] == index]
             complete = {
-                body["filename_timestamp"] for body in slot if body["snapshot_state"] == "complete"
+                body["filename_timestamp"]
+                for body in slot
+                if _minute_outcome(body) in {"complete_gzip", "verified_empty"}
             }
             outcome = "verified" if len(complete) == 15 else "uncovered"
             if outcome != "verified" and any(_terminal_failure(body) for body in slot):

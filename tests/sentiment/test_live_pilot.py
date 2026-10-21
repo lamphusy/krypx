@@ -43,7 +43,9 @@ def historical_authorized_configuration():
     config = json.loads((Path(__file__).parents[2] / "config/phase2_protocol.json").read_bytes())
     config["network_pilot_authorized"] = True
     config["real_network_calls_prohibited"] = False
+    config["real_provider_rights_approved"] = True
     config["batch_b_live_pilot"]["network_pilot_authorized"] = True
+    config["batch_b_live_pilot"]["real_provider_rights_approved"] = True
     return config
 
 
@@ -163,7 +165,7 @@ def test_live_terminal_invalid_transfer_early_closeout_is_signed_and_replayable(
         transport.open.assert_called_once()
 
 
-def test_live_http_404_is_authenticated_gap_without_stopping_session(tmp_path):
+def test_live_verified_empty_404_is_authenticated_without_stopping_session(tmp_path):
     client, _, transport, authority, plan = live_client(
         tmp_path, Response(raw=b"", status=404, headers={"Content-Length": "0"}), Response()
     )
@@ -172,6 +174,7 @@ def test_live_http_404_is_authenticated_gap_without_stopping_session(tmp_path):
         assert missing.snapshot is None
         assert missing.gap_evidence is not None
         assert missing.gap_evidence.version == LIVE_GAP_SCHEMA
+        assert missing.gap_evidence.final_terminal_disposition == "non_retryable"
         verify_terminal_gap_evidence(
             missing.gap_evidence,
             plan=plan,
@@ -186,6 +189,46 @@ def test_live_http_404_is_authenticated_gap_without_stopping_session(tmp_path):
         assert not client.budget.halted
         assert len(verify_receipt_chain(client.receipts, PUBLIC, live_authority=authority)) == 2
     assert transport.open.call_count == 2
+
+
+def test_live_mixed_complete_gzip_and_verified_empty_closes_verified_slot(tmp_path):
+    client, _, transport, authority, plan = live_client(
+        tmp_path,
+        *(
+            Response() if index in {0, 14} else Response(b"", 404, {"Content-Length": "0"})
+            for index in range(15)
+        ),
+    )
+    with client:
+        for index, interval in enumerate(plan.intervals[:15]):
+            result = client.retrieve(interval.filename_timestamp)
+            if index in {0, 14}:
+                assert result.snapshot is not None and result.snapshot.state == "complete"
+            else:
+                assert result.snapshot is None and result.gap_evidence is not None
+                assert result.gap_evidence.version == LIVE_GAP_SCHEMA
+                assert result.gap_evidence.final_terminal_disposition == "non_retryable"
+                verify_terminal_gap_evidence(
+                    result.gap_evidence,
+                    plan=plan,
+                    filename_timestamp=interval.filename_timestamp,
+                    receipts=client.receipts,
+                    public_key=PUBLIC,
+                    protocol_sha256=client.context["protocol_sha256"],
+                    live_authority=authority,
+                )
+        closeout = client.closeout()
+        assert closeout["body"]["slot_outcomes"][0]["outcome"] == "verified"
+        replayed = verify_retained_closeout(
+            client.budget,
+            public_key=PUBLIC,
+            receipts=client.receipts,
+            expected_closeout_sha256=canonical_sha256(closeout),
+            expected_plan_sha256=plan.plan_id,
+            live_authority=authority,
+        )
+        assert replayed["slot_outcomes"][0]["outcome"] == "verified"
+    assert transport.open.call_count == 15
 
 
 def test_live_transport_stage_is_redacted_in_persistent_budget(tmp_path):
@@ -284,17 +327,34 @@ def test_malformed_live_byte_counts_fail_with_project_exception(tmp_path, bad):
         verify_receipt(envelope, PUBLIC, live_authority=authority)
 
 
-def test_october_21_authority_preserves_halted_october_20_generation():
+def test_october_21_stopped_pilot_authority_is_inactive_and_prior_evidence_is_preserved():
     config = json.loads((Path(__file__).parents[2] / "config/phase2_protocol.json").read_bytes())
-    assert config["network_pilot_authorized"] is True
-    assert config["real_network_calls_prohibited"] is False
+    assert config["network_pilot_authorized"] is False
+    assert config["real_network_calls_prohibited"] is True
     assert config["real_provider_rights_approved"] is True
-    assert config["next_action"] == "execute_live_prospective_pilot"
+    assert (
+        config["next_action"]
+        == "await_new_prospective_pilot_authorization_after_offline_verification"
+    )
     pilot = config["batch_b_live_pilot"]
-    assert pilot["network_pilot_authorized"] is True
+    assert pilot["network_pilot_authorized"] is False
     assert pilot["real_provider_rights_approved"] is True
+    assert pilot["historical_anchor_only"] is True
+    assert pilot["historical_arming_command_is_inactive"] is True
     assert pilot["scheduler_armed_during_setup"] is False
     assert pilot["live_pilot_completed"] is False
+    assert pilot["accepted_pilot_coverage_established"] is False
+    assert pilot["october_21_halt"]["stopped_journal_and_claim_immutable"] is True
+    assert pilot["october_21_halt"]["retroactive_reclassification_authorized"] is False
+    assert (
+        pilot["october_21_halt"]["reset_rearm_resume_replay_merge_or_backfill_authorized"] is False
+    )
+    amendment = config["batch_b_minute_coverage_amendment"]
+    assert amendment["applies_to_stopped_october_21_journal_or_claim"] is False
+    assert (
+        amendment["october_21_reclassification_replay_reset_rearm_or_backfill_authorized"] is False
+    )
+    assert amendment["new_network_window_authorized"] is False
     assert pilot["october_20_halt"]["reset_rearm_resume_replay_or_backfill_authorized"] is False
     assert config["milestone_3_scoring_authorized"] is False
     prior = pilot["prior_october_20_generation"]
@@ -324,7 +384,23 @@ def test_october_21_authority_preserves_halted_october_20_generation():
         == pilot["approval_record"]["closeout_deadline_utc"]
         == ("2026-10-22T04:45:00Z")
     )
-    assert json.loads(LiveAuthority.from_config(config).encoded)["pilot_id"] == pilot["pilot_id"]
+    assert pilot["approval_record"]["network_pilot_authorized"] is True
+    assert pilot["approval_record"]["real_provider_rights_approved"] is True
+    assert (
+        config["next_authorized_task"]["current_instruction_new_october_21_pilot_authorized"]
+        is False
+    )
+    assert config["next_authorized_task"][
+        "historical_october_21_pilot_authorization_preserved_in_batch_b_live_pilot_approval_record"
+    ]
+    assert config["next_authorized_task"][
+        "october_21_network_authorization_now_inactive_after_stop"
+    ]
+    assert (
+        config["next_authorized_task"]["current_instruction_new_network_window_authorized"] is False
+    )
+    with pytest.raises(NetworkSafetyError, match="live execution is not authorized"):
+        LiveAuthority.from_config(config)
     assert pilot["prior_october_19_06utc_generation"]["pilot_id"] == ("phase2-batch-b-20261019")
     assert pilot["prior_october_19_06utc_generation"]["status"] == (
         "ARMED_HALTED_AFTER_REQUEST_INTENT_RESPONSE_BODY_FAILURE_SESSION_FAILED"

@@ -37,7 +37,12 @@ from crypto_ai.sentiment.providers.gdelt_gsg import (
     expected_gsg_source_locator,
     plan_retrieval,
 )
-from crypto_ai.sentiment.receipts import receipt_sha256, verify_closeout, verify_receipt_chain
+from crypto_ai.sentiment.receipts import (
+    receipt_sha256,
+    sign_receipt,
+    verify_closeout,
+    verify_receipt_chain,
+)
 from crypto_ai.sentiment.storage import ContentAddressedStore
 
 PLAN = plan_retrieval("2026-09-09T00:00:00Z", "2026-09-10T00:00:00Z")
@@ -285,7 +290,7 @@ def test_permanent_http_errors_do_not_retry_and_halt(tmp_path, status):
     transport.open.assert_called_once()
 
 
-def test_complete_http_404_records_gap_and_continues_without_stopping_budget(tmp_path):
+def test_complete_zero_length_http_404_is_signed_and_continues_without_stopping_budget(tmp_path):
     client, _, transport = client_at(
         tmp_path, Response(b"", 404, {"Content-Length": "0"}), Response()
     )
@@ -304,6 +309,23 @@ def test_complete_http_404_records_gap_and_continues_without_stopping_budget(tmp
             public_key=PUBLIC,
             protocol_sha256="a" * 64,
         )
+        for forged in (
+            replace(missing.gap_evidence, attempt_count=2),
+            replace(missing.gap_evidence, evidence_sha256="0" * 64),
+            replace(
+                missing.gap_evidence,
+                attempts=(replace(missing.gap_evidence.attempts[0], http_status=200),),
+            ),
+        ):
+            with pytest.raises(NetworkSafetyError):
+                verify_terminal_gap_evidence(
+                    forged,
+                    plan=PLAN,
+                    filename_timestamp=minute(),
+                    receipts=client.receipts,
+                    public_key=PUBLIC,
+                    protocol_sha256="a" * 64,
+                )
         found = client.retrieve(minute(1))
         assert found.snapshot is not None and found.snapshot.state == "complete"
         assert found.gap_evidence is None
@@ -311,6 +333,15 @@ def test_complete_http_404_records_gap_and_continues_without_stopping_budget(tmp
         bodies = verify_receipt_chain(client.receipts, PUBLIC)
         assert [body["http_status"] for body in bodies] == [404, 200]
         assert [body["filename_timestamp"] for body in bodies] == [minute(), minute(1)]
+        assert bodies[0]["content_length"] == bodies[0]["bytes_received"] == 0
+        assert bodies[0]["transfer_complete"] is True
+        assert bodies[0]["raw_sha256"] == sha256_bytes(b"")
+        early = deepcopy(client.receipts[0]["body"])
+        early["requested_at_utc"] = "2026-09-09T00:29:00Z"
+        with pytest.raises(
+            ReceiptValidationError, match="scheduled reporting slot|release allowance"
+        ):
+            sign_receipt(early, KEY)
     assert transport.open.call_count == 2
 
 
@@ -430,13 +461,39 @@ def test_truncated_http_404_remains_a_fatal_transfer_failure(tmp_path):
     transport.open.assert_called_once()
 
 
-def test_fifth_distinct_404_reporting_slot_stops_unattainable_pilot(tmp_path):
+def test_five_fully_verified_empty_reporting_slots_do_not_trip_coverage_gate(tmp_path):
     for slot in range(5):
         clock = Clock()
         clock.start += timedelta(minutes=15 * slot)
         client, _, transport = client_at(
             tmp_path,
-            Response(b"", 404, {"Content-Length": "0"}),
+            *(Response(b"", 404, {"Content-Length": "0"}) for _ in range(15)),
+            clock=clock,
+            create_pilot=slot == 0,
+        )
+        with client:
+            for offset in range(15):
+                result = client.retrieve(minute(slot * 15 + offset))
+                assert result.gap_evidence is not None
+                assert result.gap_evidence.final_terminal_disposition == "non_retryable"
+                assert result.snapshot is None
+                assert not client.budget.halted
+            if slot == 4:
+                closeout = client.closeout()
+                assert [item["outcome"] for item in closeout["body"]["slot_outcomes"][:5]] == [
+                    "verified"
+                ] * 5
+        assert transport.open.call_count == 15
+    assert len(client.receipts) == 75
+
+
+def test_fifth_distinct_unresolved_reporting_slot_stops_unattainable_pilot(tmp_path):
+    for slot in range(5):
+        clock = Clock()
+        clock.start += timedelta(minutes=15 * slot)
+        client, _, transport = client_at(
+            tmp_path,
+            *(Response(b"busy", 503) for _ in range(4)),
             clock=clock,
             create_pilot=slot == 0,
         )
@@ -444,12 +501,13 @@ def test_fifth_distinct_404_reporting_slot_stops_unattainable_pilot(tmp_path):
             if slot < 4:
                 result = client.retrieve(minute(slot * 15))
                 assert result.gap_evidence is not None
+                assert result.gap_evidence.final_terminal_disposition == "retry_exhausted"
                 assert not client.budget.halted
             else:
                 with pytest.raises(NetworkSafetyError, match="92/96 unattainable"):
                     client.retrieve(minute(slot * 15))
                 assert client.budget.halted
-        transport.open.assert_called_once()
+        assert transport.open.call_count == 4
     journal = tmp_path / ".network-budgets" / client.budget.directory_name
     events = [
         json.loads(path.read_bytes())["event"] for path in sorted(journal.glob("event-*.json"))
@@ -608,7 +666,7 @@ def test_closeout_binds_all_payloads_and_detects_truncated_chain(tmp_path):
             )
 
 
-def test_full_reporting_interval_requires_fifteen_verified_minute_files(tmp_path):
+def test_full_reporting_interval_requires_fifteen_verified_minute_outcomes(tmp_path):
     client, _, _ = client_at(tmp_path, *(Response() for _ in range(15)))
     with client:
         for index in range(15):
@@ -616,6 +674,91 @@ def test_full_reporting_interval_requires_fifteen_verified_minute_files(tmp_path
         closeout = client.closeout()
         assert closeout["body"]["slot_outcomes"][0]["outcome"] == "verified"
         assert sum(slot["outcome"] == "verified" for slot in closeout["body"]["slot_outcomes"]) == 1
+
+
+def test_mixed_complete_gzip_and_verified_empty_fully_verify_reporting_slot(tmp_path):
+    responses = [
+        (
+            Response()
+            if index in {0, 7, 14}
+            else Response(b"", 404, {"Content-Length": "0"} if index % 2 else None)
+        )
+        for index in range(15)
+    ]
+    client, _, transport = client_at(tmp_path, *responses)
+    with client:
+        for index in range(15):
+            result = client.retrieve(minute(index))
+            if index in {0, 7, 14}:
+                assert result.snapshot is not None and result.snapshot.state == "complete"
+                assert result.gap_evidence is None
+            else:
+                assert result.snapshot is None
+                assert result.gap_evidence is not None
+                assert result.gap_evidence.final_terminal_disposition == "non_retryable"
+                verify_terminal_gap_evidence(
+                    result.gap_evidence,
+                    plan=PLAN,
+                    filename_timestamp=minute(index),
+                    receipts=client.receipts,
+                    public_key=PUBLIC,
+                    protocol_sha256="a" * 64,
+                )
+        bodies = verify_receipt_chain(client.receipts, PUBLIC)
+        assert len(bodies) == 15
+        assert sum(body["snapshot_state"] == "complete" for body in bodies) == 3
+        assert sum(body["http_status"] == 404 for body in bodies) == 12
+        assert any(body["http_status"] == 404 and body["content_length"] is None for body in bodies)
+        closeout = client.closeout()
+        assert closeout["body"]["slot_outcomes"][0]["outcome"] == "verified"
+        replayed = verify_retained_closeout(
+            client.budget,
+            public_key=PUBLIC,
+            receipts=client.receipts,
+            expected_closeout_sha256=canonical_sha256(closeout),
+            expected_plan_sha256=PLAN.plan_id,
+        )
+        assert replayed["slot_outcomes"][0]["outcome"] == "verified"
+    assert transport.open.call_count == 15
+
+
+def test_exhausted_provider_failure_keeps_full_reporting_slot_uncovered(tmp_path):
+    client, _, transport = client_at(
+        tmp_path,
+        *(Response() for _ in range(14)),
+        *(Response(b"busy", 503) for _ in range(4)),
+    )
+    with client:
+        for index in range(14):
+            client.retrieve(minute(index))
+        failed = client.retrieve(minute(14))
+        assert failed.snapshot is None
+        assert failed.gap_evidence is not None
+        assert failed.gap_evidence.final_terminal_disposition == "retry_exhausted"
+        closeout = client.closeout()
+        assert closeout["body"]["slot_outcomes"][0]["outcome"] == "provider_gap"
+        assert not client.budget.halted
+    assert transport.open.call_count == 18
+
+
+@pytest.mark.parametrize(
+    "unverified_404",
+    [
+        Response(b"unexpected", 404, {"Content-Length": "10"}),
+        Response(b"", 404, {"Content-Length": "1"}),
+    ],
+    ids=["nonzero_body", "truncated_zero_body"],
+)
+def test_unverified_404_cannot_complete_reporting_slot(tmp_path, unverified_404):
+    client, _, _ = client_at(tmp_path, *(Response() for _ in range(14)), unverified_404)
+    with client:
+        for index in range(14):
+            client.retrieve(minute(index))
+        with pytest.raises(RetrievalFailure) as failure:
+            client.retrieve(minute(14))
+        assert failure.value.result.gap_evidence is not None
+        closeout = client.closeout()
+        assert closeout["body"]["slot_outcomes"][0]["outcome"] == "provider_gap"
 
 
 def test_deterministic_offline_rerun_and_no_mutable_receipt_alias(tmp_path):

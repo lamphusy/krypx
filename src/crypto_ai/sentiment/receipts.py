@@ -313,6 +313,44 @@ def _receipt_body(body: object, live_authority: LiveAuthority | None = None) -> 
     return body
 
 
+def _minute_outcome(body: dict[str, Any]) -> str:
+    """Classify a validated receipt under the prospective coverage policy.
+
+    A signed 404 is not an empty gzip file. It is verified absence only when the
+    complete response explicitly declared an empty body and its exact empty-byte
+    CAS identity was retained. Receipt validation separately enforces the fixed
+    release allowance and reporting-worker time bounds.
+    """
+    if (
+        body["http_status"] == 200
+        and body["snapshot_state"] == "complete"
+        and body["transfer_complete"] is True
+    ):
+        return "complete_gzip"
+    if (
+        body["http_status"] == 404
+        and body["snapshot_state"] == "absent"
+        and body["snapshot_id"] is None
+        and body["transfer_complete"] is True
+        and body["content_length"] in (None, 0)
+        and body["bytes_received"] == 0
+        and body["raw_sha256"] == sha256_bytes(b"")
+    ):
+        return "verified_empty"
+    return "unresolved_provider_gap"
+
+
+def _terminal_unresolved(body: dict[str, Any]) -> bool:
+    """A signed unresolved response is terminal only after the retry policy ends."""
+    if _minute_outcome(body) != "unresolved_provider_gap":
+        return False
+    status = body["http_status"]
+    if status is None:
+        return False
+    retryable = body["transfer_complete"] is True and (status == 429 or 500 <= status <= 599)
+    return not retryable or body["attempt_number"] == 4
+
+
 def _closeout_body(body: object, live_authority: LiveAuthority | None = None) -> dict[str, Any]:
     _validate_live_authority(live_authority)
     fields = CLOSEOUT_BODY_FIELDS | ({"live_authority_sha256"} if live_authority else set())
@@ -603,7 +641,11 @@ def verify_closeout(
     expected_plan_sha256: str,
     live_authority: LiveAuthority | None = None,
 ) -> dict[str, Any]:
-    """Verify externally pinned completion, inventory, chain and evidenced slots."""
+    """Recompute slot labels from the pinned closeout and signed receipt chain.
+
+    Retained raw CAS and gap publications are independently replayed by the
+    storage-bound closeout verifier before pilot coverage can be accepted.
+    """
     for field, value in (
         ("expected_closeout_sha256", expected_closeout_sha256),
         ("expected_inventory_sha256", expected_inventory_sha256),
@@ -633,25 +675,18 @@ def verify_closeout(
         latest[(receipt["interval_index"], receipt["filename_timestamp"])] = receipt
     for slot in body["slot_outcomes"]:
         evidence = [item for (index, _), item in latest.items() if index == slot["interval_index"]]
-        successful = sum(item["snapshot_state"] == "complete" for item in evidence)
+        outcomes = [_minute_outcome(item) for item in evidence]
+        fully_verified = len(outcomes) == 15 and all(
+            outcome in {"complete_gzip", "verified_empty"} for outcome in outcomes
+        )
+        terminal_gap = any(_terminal_unresolved(item) for item in evidence)
         if slot["outcome"] == "verified":
-            _require(successful == 15, "verified slot lacks all 15 successful minute receipts")
-        if slot["outcome"] == "provider_gap":
+            _require(fully_verified, "verified slot lacks all 15 successful minute receipts")
+        elif slot["outcome"] == "provider_gap":
+            _require(terminal_gap, "provider gap lacks a bound terminal attempt sequence")
+        else:
             _require(
-                any(
-                    (item["http_status"] is not None and item["transfer_complete"] is False)
-                    or item["snapshot_state"] == "invalid"
-                    or (
-                        item["http_status"] is not None
-                        and item["http_status"] not in (200, 429)
-                        and not 500 <= item["http_status"] <= 599
-                    )
-                    or (
-                        item["attempt_number"] == 4
-                        and (item["http_status"] == 429 or 500 <= (item["http_status"] or 0) <= 599)
-                    )
-                    for item in evidence
-                ),
-                "provider gap lacks a bound terminal attempt sequence",
+                not fully_verified and not terminal_gap,
+                "uncovered slot differs from signed minutes",
             )
     return body

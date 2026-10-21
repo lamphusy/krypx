@@ -1,6 +1,6 @@
 # KrypX Phase 2 — Milestone 0 Research Protocol and News-Source Feasibility
 
-**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**. The historical September live pilot remains **DEFERRED WITHOUT BACKFILL**; the October 10, October 16, October 17 11:00 UTC, October 17 16:00 UTC, October 19 06:00 UTC, and October 20 05:00 UTC prospective attempts were armed and stopped without accepted coverage. The October 20 stopped journal and claim remain immutable. A distinct October 21 04:00 UTC forward-only pilot is authorized for setup; this document does not claim it has been armed or collected. Milestone 3 foundation **ACCEPTED_OFFLINE_ONLY**; Milestone 4 **ACCEPTED** for offline synthetic aggregation; Milestone 5 dataset integration **ACCEPTED_OFFLINE_ONLY**. Milestone 6 is **ACCEPTED** for offline synthetic engineering only at `b3726f3c02587b470ab85e552559091e7aeeaa42`. Milestone 7 is **ACCEPTED** within its verified synthetic-only scope at `e84944721f5ba2199992c7fc547bc0c868436056` and `29f311660c047cc31b365fd4029e788bff9150a9`. Milestone 8 is **ACCEPTED**, with engineering acceptance limited to offline synthetic claim, zero-outcome readiness and boundary-purge infrastructure. Milestone 9 is **ACCEPTED** at `468e8221bd9a4566c75ce71818a25e8a7f23001b`; its historical engineering acceptance remains **ACCEPTED_OFFLINE_ONLY** and grants no real holdout authority. Milestone 10 is **ACCEPTED_OFFLINE_ONLY** for synthetic production-registry/training-workflow engineering under the October 7 cooperative-lock and parent-descriptor publication amendment to the frozen specification at `9affa48b198f4a68566800fff71300ab4d398aaf`. The operative `next_action` is `execute_live_prospective_pilot` only after clean local setup, offline preflight, and pre-anchor arming checks. No push, real production training, promotion, activation, real dataset integration, real scoring/feature use, real training/backtests, real research-gate execution, or holdout access/evaluation is authorized.
+**Protocol status:** Phase 2 Batch A **ACCEPTED** and **COMPLETED**; Milestone 0 **APPROVED** as the frozen research specification; Milestones 1 and 2 **ACCEPTED**; Batch B offline corrective implementation **ACCEPTED**. The September pilot remains **DEFERRED WITHOUT BACKFILL**. The October 10, 16, 17, 19 and 20 attempts stopped without accepted coverage; the October 21 04:00 UTC pilot also stopped at `coverage_gate` under its former accounting rule. All stopped journals, claims, signers, and evidence remain immutable, with no reset, re-arm, replay or backfill. The prospective `batch-b-gsg-minute-coverage-v2` amendment is authorized for offline implementation only; no live pilot is currently authorized. Milestone 3 foundation and Milestone 5 dataset integration remain **ACCEPTED_OFFLINE_ONLY**. Milestone 4 is **ACCEPTED** for offline synthetic aggregation; Milestones 6 and 7 are **ACCEPTED** only within verified synthetic-only scope; Milestone 8 is **ACCEPTED** only for offline claim/readiness engineering; Milestones 9 and 10 are **ACCEPTED_OFFLINE_ONLY**. The next action is offline verification of the amendment, followed by separate human authorization of a new forward-only window. No push, real production training, promotion, activation, real dataset integration, real scoring/feature use, real training/backtests, real research-gate execution, or holdout access/evaluation is authorized.
 
 **Research decision:** `PROCEED_WITH_FORWARD_ONLY_COLLECTION`
 
@@ -25,7 +25,36 @@
 **Historical October 17 16:00 UTC replacement pilot authority and incident:** the human separately approved prospective anchor `2026-10-17T16:00:00Z`, observation window `[2026-10-17T16:00:00Z, 2026-10-18T16:00:00Z)`, and signed closeout deadline `2026-10-18T16:45:00Z`. This was a distinct, isolated generation with its own key and root, not a retry or backfill of the 11:00 UTC or earlier pilots. It was armed and stopped after request intent without accepted coverage. Preserve its launch, claims, budget journal, scheduler files, signer and any evidence without reset, replay, relabeling, or backfill. Its authority and any retained evidence do not authorize collection of its elapsed minutes or merge into a successor. The bounded live rights and network authority applied only within its exact GSG endpoint, schedule, and caps; no real scoring, models, features, research gates, or holdout use was authorized.
 **October 19 06:00 UTC historical pilot authority and incident:** the human separately approved the prospective anchor `2026-10-19T06:00:00Z` (13:00 Vietnam time), observation window `[2026-10-19T06:00:00Z, 2026-10-20T06:00:00Z)`, and signed closeout deadline `2026-10-20T06:45:00Z`. This was a forward-only, isolated 24-hour generation, not a retry or backfill of an earlier pilot. It was armed, but its first worker logged request intent and then `retrieval_failed` at `response_body` and `session_failed`, without a signed HTTP outcome, terminal gap, accepted coverage, or closeout. Preserve its journal, signer, claims, and evidence without reset, replay, merge, or backfill. Its historical rights and network authority do not permit resuming it.
 **Historical October 20 05:00 UTC replacement pilot authority and incident:** the human separately approved prospective anchor `2026-10-20T05:00:00Z` (12:00 Vietnam time), observation window `[2026-10-20T05:00:00Z, 2026-10-21T05:00:00Z)`, and signed closeout deadline `2026-10-21T05:45:00Z`. This was a forward-only, isolated 24-hour generation, not a retry or backfill of any prior pilot. Internal English Bitcoin GSG title-metadata use and immutable local CAS retention of exact raw response bytes through review were approved with GDELT attribution and no external redistribution; the historical `real_provider_rights_approved: true` and `network_pilot_authorized: true` applied only to this bounded generation. Its network authority covered only `https://data.gdeltproject.org/gdeltv3/gsg/{timestamp}.gsg.json.gz`, its fixed schedule, and hard caps of 500,000,000 downloaded bytes, 2,000,000,000 retained bytes, 900 seconds per worker, at least five seconds between request starts, at most three retries, and $0.00 incremental cost. The human incident report says the 05:00 UTC HTTP 404 gap handling succeeded, then the 05:01 UTC HTTP 200 response delivered exactly its declared 142,688 bytes before TLS ended without `close_notify`, causing the then-frozen `response_body` stop. The 05:01 facts are not a signed receipt. Preserve the stopped journal and claim without reset, re-arm, replay, or backfill. The newly authorized exact-length TLS EOF rule is prospective transport semantics only, not retroactive pilot acceptance or live network authorization. Publisher-page scraping, body-text collection, Milestone 3 real scoring, model downloads, indicators, real feature use, research gates, and holdout evaluation remain unauthorized. A new forward-only window requires separate human approval; no push is authorized.
-**Current October 21 04:00 UTC replacement pilot authority:** the human separately approves prospective anchor `2026-10-21T04:00:00Z` (11:00 Vietnam time), half-open observation window `[2026-10-21T04:00:00Z, 2026-10-22T04:00:00Z)`, and final retrieval and signed closeout deadline `2026-10-22T04:45:00Z`. This new 24-hour generation uses pilot ID `phase2-batch-b-20261021` and Git-ignored root `data/phase2-pilot-20261021` (mode `0700`), with 96 reporting slots, 1,440 exact one-minute gzip locators, first worker `2026-10-21T04:45:00Z`, and last worker `2026-10-22T04:30:00Z`. It cannot reset, resume, replay, merge, or backfill any prior pilot. Internal English Bitcoin GSG title-metadata use and immutable local CAS retention of exact raw response bytes, including incidental fields and unrelated titles, are approved through review with GDELT attribution and no external redistribution. `real_provider_rights_approved: true` and `network_pilot_authorized: true` apply only to this bounded generation and the sole endpoint `https://data.gdeltproject.org/gdeltv3/gsg/{timestamp}.gsg.json.gz`. Hard caps are 500,000,000 cumulative downloaded bytes, 2,000,000,000 retained bytes, 900 seconds per worker, 0.2 Hz maximum (at least five seconds between request starts), 10-second HTTP timeout, at most three retries (four total attempts), and $0.00 incremental cost. The fresh Ed25519 key belongs at `data/phase2-pilot-20261021/secrets/pilot_ed25519.key` (mode `0600`), with its public key and SHA-256 key ID pinned in `config/phase2_protocol.json`; never print or commit the private key. After a clean local `main` setup commit, run `.venv/bin/python scripts/run_phase2_pilot.py check` for offline preflight and, only before the anchor while all safety checks pass, `.venv/bin/python scripts/run_phase2_pilot.py arm` to install the bounded schedule. This authorization does not itself establish arming, dispatch, signed receipts, coverage, or closeout. The `next_action` is `execute_live_prospective_pilot`; no push is authorized. Publisher-page scraping, body-text collection, Milestone 3 real scoring, model downloads, indicators/features, research-gate execution, and holdout access/evaluation remain prohibited.
+**Historical October 21 04:00 UTC replacement pilot authority and stop:** the human separately approved anchor `2026-10-21T04:00:00Z` (11:00 Vietnam time), half-open observation window `[2026-10-21T04:00:00Z, 2026-10-22T04:00:00Z)`, and final retrieval and signed closeout deadline `2026-10-22T04:45:00Z`. This distinct 24-hour generation used pilot ID `phase2-batch-b-20261021` and Git-ignored root `data/phase2-pilot-20261021` (mode `0700`), with 96 reporting slots, 1,440 exact one-minute locators, first scheduled worker `2026-10-21T04:45:00Z`, and last scheduled worker `2026-10-22T04:30:00Z`. Its historical network rights covered internal English Bitcoin GSG title metadata, exact immutable raw-response CAS retention through review with GDELT attribution and no redistribution, and only `https://data.gdeltproject.org/gdeltv3/gsg/{timestamp}.gsg.json.gz`. Frozen caps were 500,000,000 downloaded bytes, 2,000,000,000 retained bytes, 900 seconds per worker, at least five seconds between request starts, 10-second HTTP timeout, at most three retries/four attempts, and $0.00 incremental cost. Its Ed25519 key belonged at `data/phase2-pilot-20261021/secrets/pilot_ed25519.key` (mode `0600`), with public key and SHA-256 key ID pinned in `config/phase2_protocol.json`; never print or commit the private key. That pilot stopped at `coverage_gate` under former accounting. Its journal, claim, signer, receipts, gaps and raw CAS remain immutable; the new three-state amendment does not grant accepted coverage or permit reset, re-arm, replay, merge or backfill. The former `execute_live_prospective_pilot` next action and arming instruction are inactive. No live pilot is authorized by this amendment; no push, scraping, body text, real scoring/features, research-gate execution or holdout evaluation is authorized.
+**Prospective Batch B minute-coverage amendment:** Human authority approves
+`batch-b-gsg-minute-coverage-v2` for offline implementation and future,
+separately authorized pilots. GSG's 15-minute batch clusters may omit minute
+files with no articles; after the 30-minute release allowance, a complete
+zero-body HTTP 404 with a valid collector-signed receipt and immutable
+`TerminalGapEvidence` deterministically derived from that receipt is
+`verified_empty`, not an unresolved loss. An HTTP 200 is `complete_gzip` only
+with verified exact raw bytes, immutable CAS, signed receipt and bounded gzip
+replay. Transport failure, timeout, 5xx/retry exhaustion, truncation, invalid
+payload or unauthenticated/premature/nonzero-body 404 is
+`unresolved_provider_gap`. The fixed 1,440 planned minute locators and 96
+reporting slots do not change: a slot is verified only if all 15 outcomes are
+`complete_gzip` or `verified_empty`; one unresolved minute uncovers it. A
+zero-body 404 with declared `Content-Length: 0` must be exact; absent length
+requires independently attested clean end-of-stream. Ragged unknown-length
+EOF remains unresolved. The
+integer 92/96 gate and five-uncovered-slot stop remain unchanged. Retain
+separate counts for all three outcomes and never equate verified emptiness
+with a downstream provider outage. The separate 99.5% research-gate value and all
+historical evidence remain unchanged; this pilot amendment does not itself
+approve real feature use, research evaluation, or a new live schedule.
+The five-slot `coverage_gate` counts irrecoverably uncovered slots, including
+missed scheduled slots. A missed minute is unresolved for coverage accounting,
+but is a local schedule incident rather than an invented signed provider gap.
+Unsafe stream exceptions or incomplete attempts can independently halt under
+the existing fail-closed safety rules and never create invented signed evidence.
+Live signed receipt/gap/closeout evidence remains separate from unchanged
+synthetic Batch A state-v3 hydration and its terminal watermark.
+
 **Final offline Milestone 3 acceptance:** 2026-09-15; human-authorized independent verification against `c12aa01705712e53f65206c064248ef9fdc964ce` found zero blocking findings after the binary64 hydration fix; local commit on `main` authorized, no push.
 **Milestone 3 completion commit:** `d129094c9483f69431eeb6e3698e52ee273d5d0e`; 1,003 passing tests.
 **Milestone 4 specification freeze:** 2026-09-15; [offline point-in-time aggregation specification](phase2-milestone-4.md); documentation/configuration only, no implementation authority.
@@ -89,8 +118,9 @@ the September 10 instruction permitted adapter, circuit-breaker and Ed25519 sour
 implementation using synthetic mocks only. That historical amendment remains mock-only;
 the separate `batch_b_live_pilot` authority subsequently permitted production-input implementation.
 Current fields are `batch_b_status: SPECIFICATION_FROZEN_COMPATIBLE`,
-`network_pilot_authorized: true` for the isolated October 21 GSG pilot,
-`real_provider_rights_approved: true`,
+`network_pilot_authorized: false` after the stopped October 21 GSG pilot,
+`real_provider_rights_approved: true` preserving the human-approved historical
+rights record but granting no current network authority,
 `milestone_3_status: ACCEPTED_OFFLINE_ONLY`,
 `milestone_3_offline_foundation_authorized: true`,
 `milestone_3_scoring_authorized: false`, `milestone_4_feature_aggregation_authorized: true`,
@@ -133,8 +163,9 @@ Current fields are `batch_b_status: SPECIFICATION_FROZEN_COMPATIBLE`,
 `milestone_10_production_training_authorized: false`,
 `milestone_10_promotion_authorized: false`,
 `milestone_10_activation_authorized: false`,
-`real_network_calls_prohibited: false` only within that pilot's bounded authority, and
-`next_action: execute_live_prospective_pilot`. The completed
+`real_network_calls_prohibited: true`, and
+`next_action: await_new_prospective_pilot_authorization_after_offline_verification`.
+The completed
 Milestone 8, Milestone 9 and Milestone 10 implementations are accepted only for
 offline synthetic fixtures. A separate October 7 human sign-off authorizes
 one local acceptance commit, not a push. Real production training, promotion,
@@ -168,10 +199,11 @@ The historical, separate October 20 observation window was
 `2026-10-21T05:45:00Z`. Its first and last scheduled worker starts were
 `2026-10-20T05:45:00Z` and `2026-10-21T05:30:00Z`. That generation halted and
 cannot be re-armed, resumed, replayed, backfilled, or automatically shifted.
-The current, separate October 21 observation window is
+The historical, separate October 21 observation window was
 `[2026-10-21T04:00:00Z, 2026-10-22T04:00:00Z)`, with closeout deadline
 `2026-10-22T04:45:00Z`, first worker `2026-10-21T04:45:00Z`, and last worker
-`2026-10-22T04:30:00Z`. Setup does not establish arming or coverage.
+`2026-10-22T04:30:00Z`. That generation stopped at `coverage_gate`; setup
+and prior authority cannot now establish accepted coverage or permit replay.
 
 The historical September namespace is `data/phase2-pilot-20260913` (ignored by Git, mode `0700`), with
 private key `secrets/pilot_ed25519.key` (mode `0600`), raw CAS, receipts, control files and
@@ -203,7 +235,7 @@ through review, including incidental fields and unrelated titles, with GDELT
 attribution and no external redistribution. Only the exact timestamped HTTPS
 GSG gzip endpoint is permitted. Publisher scraping, body-text collection,
 real scoring, model downloads and downstream research remain prohibited.
-The new October 21 pilot uses `phase2-batch-b-20261021` and isolated ignored
+The stopped October 21 pilot used `phase2-batch-b-20261021` and isolated ignored
 root `data/phase2-pilot-20261021` (mode `0700`), with a fresh signer at
 `data/phase2-pilot-20261021/secrets/pilot_ed25519.key` (mode `0600`) and
 separately pinned public key and SHA-256 key ID. Do not reuse an older root,
@@ -213,8 +245,9 @@ All caps remain strict: 500,000,000 cumulative received bytes, 2,000,000,000 ret
 logical/allocated bytes, at most 900 seconds per worker, at least five seconds between
 dispatches (0.2 Hz maximum), 10-second HTTP timeout,
 at most four attempts (HTTP 429/5xx only), and $0.00 incremental billed cost. Setup acceptance
-does not imply a completed or accepted live pilot; the October 21 pilot still
-requires its own verification and independent acceptance. Deferral is not a coverage pass.
+does not imply a completed or accepted live pilot; the October 21 evidence
+remains stopped and immutable. Deferral and a retrospective amendment are not
+coverage passes.
 
 ### Current offline Milestone 3 implementation scope
 
@@ -1005,7 +1038,7 @@ All evidence links are in the source register and were accessed on 2026-08-12.
 
 | Candidate | Earliest usable history / query payload | Authentication, rate, and pagination | Retry, version, and outage behavior |
 |---|---|---|---|
-| GDELT GSG | First documented file is 2021-07-02. Processing runs in 15-minute batches, but the archive format is one minute-stamped gzip per minute with JSON similarity records containing `from`/`to` date, URL, title, language, image, and similarity type. Raw filename template and a BigQuery table are documented. | No key for raw archives; deterministic minute-stamped files rather than pages/cursors. BigQuery requires a Google Cloud project. Numeric raw-download quota is not published. | HTTP retry/backoff, `Retry-After`, SLA, outage backfill, formal schema-compatibility policy, and gap guarantees are **UNVERIFIED**; freeze the `gdeltv3/gsg` path/table, parser, expected minute list, and hashes. Evidence: `GDELT-GSG`.
+| GDELT GSG | First documented file is 2021-07-02. Processing runs in 15-minute batches, but the archive format uses minute-stamped gzip locators with JSON similarity records containing `from`/`to` date, URL, title, language, image, and similarity type; under the later human-approved pilot-v2 contract, quiescent minutes may have no file. Raw filename template and a BigQuery table are documented. | No key for raw archives; deterministic minute-stamped locators rather than pages/cursors. BigQuery requires a Google Cloud project. Numeric raw-download quota is not published. | This historical documentary review did not verify HTTP retry/backoff, `Retry-After`, SLA, outage backfill or formal schema-compatibility guarantees. The separate human-approved post-lag zero-body 404 semantics govern only prospective pilot-v2 minute accounting, not a provider SLA or an accepted research gate. Evidence: `GDELT-GSG`.
 | GDELT DOC/GKG | GKG 2.0 begins 2015; DOC search reaches 2017. DOC ArticleList supplies title, URL, language/country, and publication date; GKG supplies extracted metadata, not title/body. | No DOC key; default 75 and maximum 250 results, no documented stable cursor. ArticleList can require narrow time slicing. GKG uses timestamped raw files. | DOC is rate-limited but numeric quota/retry interval/SLA are **UNVERIFIED**. Paths are versioned as DOC/GKG 2.0; broader deprecation/gap guarantees are **UNVERIFIED**. Evidence: `GDELT-DOC`, `GDELT-GKG`, `GDELT-DATA`.
 | Common Crawl CC-NEWS | Daily news WARC files from 2016; WARC/WET payload plus CDXJ capture timestamp, URL, digest, filename, offset, and length. Worldwide source/language counts and BTC volume are **UNVERIFIED**. | Public HTTP/S3 access without an article API key; index/file-range retrieval replaces ordinary pagination. Request quotas and stable snapshot enumeration guarantees are **UNVERIFIED**. | Retry/backoff, SLA, outage/backfill, index-version compatibility, and deletion/revision completeness are **UNVERIFIED**. Evidence: `CC-NEWS`, `CC-CDXJ`.
 | NewsAPI.org | Paid production history is five years. `/v2/everything?q=bitcoin` returns `source`, author, title, description, URL/image, `publishedAt`, and content truncated to 200 characters; 14 language codes and 150,000+ sources are documented. | API key; header recommended. `pageSize <= 100` and integer `page`; no documented stable cursor, page ceiling, immutable snapshot, or gap-free pagination. Monthly plan quotas are public; numeric per-second quota is **UNVERIFIED**. | 429 guidance says back off, but exact delays/`Retry-After`, SLA, and outage backfill are **UNVERIFIED**. Endpoint is `/v2`; no formal long-term compatibility policy was found. Evidence: `NEWSAPI-EVERYTHING`, `NEWSAPI-PRICE`.
@@ -1441,7 +1474,7 @@ Every item is mandatory:
 
 1. 100% of modeled article versions pass raw snapshot, schema, content hash, exact-version availability, identity, and duplicate-group validation.
 2. Zero records use `published_at`, historical-backfill receipt time, scoring time, GSG filename time, `fromDate`/`toDate`, or any undocumented provider field as model availability.
-3. Prospective GSG collection retrieval is at least 99.5% of the frozen expected one-file-per-UTC-minute schedule. The operational due time for minute `m` is `m + 30 minutes`; 15-minute batching changes clustering, not the denominator. A 404, HTTP error, missing file, or invalid/corrupt gzip is an unexplained gap; a valid zero-line gzip is complete. Freeze the expected schedule hash and observed receipt-manifest hash before parsing; no unexplained gap exceeds 6 hours. Any modeled row whose 24-hour feature window intersects a gap is fail-closed from every cell before folding, never treated as no news, and at least 90.0% of all otherwise-intended hourly decisions must survive this gap-window rule.
+3. Historical proposed research gate (not the amended Batch B pilot gate): prospective GSG collection retrieval is at least 99.5% of the frozen expected one-file-per-UTC-minute schedule. The operational due time for minute `m` is `m + 30 minutes`; 15-minute batching changes clustering, not the denominator. Under this older research-gate definition, a 404, HTTP error, missing file, or invalid/corrupt gzip is an unexplained gap; a valid zero-line gzip is complete. Freeze the expected schedule hash and observed receipt-manifest hash before parsing; no unexplained gap exceeds 6 hours. Any modeled row whose 24-hour feature window intersects a gap is fail-closed from every cell before folding, never treated as no news, and at least 90.0% of all otherwise-intended hourly decisions must survive this gap-window rule.
 4. The verified prospective corpus covers at least 730 consecutive days after the 24-hour warmup and the full forward market development interval selected for the experiment; pre-collection rows are excluded from all four cells.
 5. At least 25,000 eligible unique duplicate groups, 50 distinct sources overall, 10 sources in every calendar month, and 250 groups in every calendar month.
 6. At least 90.0% of hourly decision rows have one or more eligible groups in the prior 24 hours (`news_missing_rate <= 10.0%`).
@@ -1450,6 +1483,14 @@ Every item is mandatory:
 9. All four cells have exactly identical row IDs, labels, fold IDs, purge IDs, market values, explicit market-price context, missing-data-policy hash, and every non-news configuration hash.
 10. A clean rerun in the pinned environment exactly reproduces normalized-data, score-payload, feature, fold, prediction, trade, metric, and manifest hashes.
 11. The complete unchanged Phase 1 suite and complete Phase 2 suite pass, including all unit, leakage, boundary, malformed-input, interruption, claim, formatter, linter, compilation, and transitive-hash checks required by the repository.
+
+The historical one-file-per-minute research gate in item 3 is not silently
+rewritten by the Batch B pilot amendment. Its 99.5% value and development-row
+exclusion rule remain separate, unapproved research criteria; using
+`verified_empty` as a satisfied minute in a future research gate requires an
+explicitly versioned research-contract decision before real evaluation. The
+pilot-v2 outcome neither migrates Batch A state-v3 evidence nor grants real
+Milestone 3 scoring or Milestone 4 feature eligibility.
 
 ### Development evidence gates
 
@@ -1647,23 +1688,23 @@ the active publication contract; subsequent human sign-off sets the active
 status to `ACCEPTED_OFFLINE_ONLY` and authorizes one local acceptance commit.
 Real production training, promotion, activation, push, and holdout access
 remain unauthorized. The bounded October 20 GSG pilot halted; the distinct
-October 21 prospective window is now authorized for setup and conditional
-pre-anchor arming, without any claim of dispatch or accepted coverage.
+October 21 generation also stopped at `coverage_gate` under its former
+accounting, without accepted coverage. Both evidence sets remain immutable.
 Historical docs/config freezes and acceptance records are preserved. Push, real
 dataset/feature use, real training and trading backtests and numerical research
 gates remain unauthorized. The September live pilot remains deferred without
-backfill; all earlier October attempts remain halted or missed without accepted
-coverage or backfill. The new internal-use/retention and network authority is
-bounded to the October 21 GSG window and exact endpoint; historical approvals
-alone do not create current network authority. Real scorer/model choice and scoring, the
+backfill; all October attempts remain halted or missed without accepted
+coverage or backfill. The historical internal-use/retention and network
+authority was bounded to the October 21 GSG window and exact endpoint; no
+current network authority exists. Real scorer/model choice and scoring, the
 exact cutoff, collection beyond this bounded pilot, and holdout evaluation still
 require their own approvals.
 
 | Action | Current state |
 |---|---|
-| Batch B specification | Base `SPECIFICATION_FROZEN_COMPATIBLE`; offline correction `ACCEPTED_OFFLINE_ONLY`; September live pilot deferred without backfill; October 10, October 16, October 17 11:00 UTC, October 17 16:00 UTC, October 19 06:00 UTC, and October 20 05:00 UTC attempts armed and halted without accepted coverage; exact-length TLS EOF transport fix committed at `9d35265ac074722e3642ca7916b6c1e004dffe66` and applies prospectively only |
-| Batch B source/test execution | Accepted offline implementation and historical runner/key setup preserved; exact-length transport source/tests committed on `main`, with no prior pilot reset or re-arm |
-| Batch B network pilot | `network_pilot_authorized: true`, `real_provider_rights_approved: true`; new isolated October 21 window `[2026-10-21T04:00:00Z, 2026-10-22T04:00:00Z)`, closeout `2026-10-22T04:45:00Z`; setup authorized but arming, requests, receipts, and coverage not established; no backfill |
+| Batch B specification | Base `SPECIFICATION_FROZEN_COMPATIBLE`; prospective `batch-b-gsg-minute-coverage-v2` authorizes offline implementation only; all October attempts through October 21 stopped without accepted coverage; exact-length TLS EOF transport fix committed at `9d35265ac074722e3642ca7916b6c1e004dffe66` and applies prospectively only |
+| Batch B source/test execution | Accepted historical offline implementation and runner/key setup preserved; prospective three-state source, test and governance changes authorized, without prior pilot reset, re-arm or evidence relabeling |
+| Batch B network pilot | `network_pilot_authorized: false`, `real_network_calls_prohibited: true`; historical rights approval remains recorded as `real_provider_rights_approved: true` but cannot activate a new window; October 21 stopped at `coverage_gate` under former accounting, with immutable evidence and no accepted coverage |
 | Milestone 3 offline foundation | `milestone_3_status: ACCEPTED_OFFLINE_ONLY`; Scorer Protocol, strict JSON validation/errors, immutable CAS/cache and synthetic/mock tests accepted at `d129094` |
 | Milestone 3 real sentiment scoring | `milestone_3_scoring_authorized: false`; `approved_scorer: null` |
 | Milestone 4 specification | Frozen at `683f76d`; numerical, causal, coverage and storage requirements unchanged |
@@ -1674,10 +1715,10 @@ require their own approvals.
 | Milestone 8 future-holdout specification and implementation | Specification `SPECIFICATION_FROZEN` on 2026-09-27; root `milestone_8_status: ACCEPTED` at `bf2cb8c` after 101 focused and 1,582 repository tests, for offline synthetic claim/readiness/boundary-purge engineering only; no real claim, collection, holdout access/evaluation |
 | Milestone 9 one-time evaluation specification and implementation | Specification frozen at `54978ada`; active `milestone_9_status: ACCEPTED` at `468e822` after 1,693 repository tests and corrective verification; historical acceptance `ACCEPTED_OFFLINE_ONLY`, synthetic-fixture workflow only, no real holdout evaluation or push |
 | Milestone 10 production decision and registry | Specification frozen at `9affa48`; October 7 publication amendment establishes a cooperative version-lock boundary, exclusive parent-descriptor relative final-directory reservation, inode verification and manifest-last writes; `milestone_10_status: ACCEPTED_OFFLINE_ONLY` and `milestone_10_offline_implementation_authorized: true`; verified synthetic registry/workflow engineering accepted, with one local acceptance commit authorized but no push, real production training, promotion or activation |
-| Download/query GDELT or any provider data | Only the separately authorized October 21 pilot may query the exact timestamped GDELT GSG HTTPS gzip endpoint within its fixed schedule and hard caps, after successful preflight and pre-anchor arming; no October 20 re-arm or backfill |
+| Download/query GDELT or any provider data | Not currently authorized; October 21 authority ended at its stop, and a separate new forward-only window and preflight are required before any network request |
 | Call a provider API or fetch a publisher page | Other provider APIs and all publisher pages remain prohibited |
 | Fetch or alter market data | Not authorized |
-| Create an account, accept a model/provider license, or request credentials | Not authorized; preserve all prior pilot signing keys, including the halted October 20 key; the fresh October 21 local Ed25519 key is separately authorized |
+| Create an account, accept a model/provider license, or request credentials | Not authorized; preserve all prior pilot signing keys, including the stopped October 20 and October 21 keys; neither may be reused for a successor |
 | Start a paid service or incur third-party spend | Not authorized |
 | Download model weights, score real articles, build/join real features, train on real data, or run real trading backtests | Not authorized; M7 synthetic-only backtest engineering is authorized, not real-data research execution |
 | Start future-holdout collection | Not authorized; requires approved frozen protocol/generation |
