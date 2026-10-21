@@ -284,23 +284,47 @@ def test_malformed_live_byte_counts_fail_with_project_exception(tmp_path, bad):
         verify_receipt(envelope, PUBLIC, live_authority=authority)
 
 
-def test_halted_replacement_schedule_is_retained_but_not_current_authority():
+def test_october_21_authority_preserves_halted_october_20_generation():
     config = json.loads((Path(__file__).parents[2] / "config/phase2_protocol.json").read_bytes())
-    assert config["network_pilot_authorized"] is False
-    assert config["real_network_calls_prohibited"] is True
+    assert config["network_pilot_authorized"] is True
+    assert config["real_network_calls_prohibited"] is False
+    assert config["real_provider_rights_approved"] is True
+    assert config["next_action"] == "execute_live_prospective_pilot"
     pilot = config["batch_b_live_pilot"]
-    assert pilot["network_pilot_authorized"] is False
+    assert pilot["network_pilot_authorized"] is True
     assert pilot["real_provider_rights_approved"] is True
-    assert pilot["status"] == "ARMED_HALTED_NO_ACTIVE_NETWORK_AUTHORITY"
+    assert pilot["scheduler_armed_during_setup"] is False
+    assert pilot["live_pilot_completed"] is False
     assert pilot["october_20_halt"]["reset_rearm_resume_replay_or_backfill_authorized"] is False
     assert config["milestone_3_scoring_authorized"] is False
-    with pytest.raises(CryptoAIError, match="not authorized"):
-        LiveAuthority.from_config(config)
-    assert pilot["approval_record"]["anchor_utc"] == "2026-10-20T05:00:00Z"
-    assert pilot["end_exclusive_utc"] == "2026-10-21T05:00:00Z"
-    assert pilot["closeout_deadline_utc"] == "2026-10-21T05:45:00Z"
-    assert pilot["pilot_id"] == "phase2-batch-b-20261020"
-    assert pilot["store_path"] == "data/phase2-pilot-20261020"
+    prior = pilot["prior_october_20_generation"]
+    assert prior["pilot_id"] == "phase2-batch-b-20261020"
+    assert prior["anchor_utc"] == "2026-10-20T05:00:00Z"
+    assert prior["end_exclusive_utc"] == "2026-10-21T05:00:00Z"
+    assert prior["closeout_deadline_utc"] == "2026-10-21T05:45:00Z"
+    assert prior["store_path"] == "data/phase2-pilot-20261020"
+    assert prior["signer_key_id"] == (
+        "474abd67fa37386b1853c133120ea25cea824308e2313e92bd8b9a900bd41e0f"
+    )
+    assert prior["status"] == (
+        "ARMED_HALTED_AFTER_EXACT_LENGTH_HTTP_200_RAGGED_TLS_EOF_RESPONSE_BODY_FAILURE"
+    )
+    assert prior["accepted_coverage_established"] is False
+    assert prior["backfill_or_relaunch_authorized"] is False
+    assert pilot["pilot_id"] == "phase2-batch-b-20261021"
+    assert pilot["store_path"] == "data/phase2-pilot-20261021"
+    assert pilot["anchor_utc"] == pilot["approval_record"]["anchor_utc"] == ("2026-10-21T04:00:00Z")
+    assert (
+        pilot["end_exclusive_utc"]
+        == pilot["approval_record"]["end_exclusive_utc"]
+        == ("2026-10-22T04:00:00Z")
+    )
+    assert (
+        pilot["closeout_deadline_utc"]
+        == pilot["approval_record"]["closeout_deadline_utc"]
+        == ("2026-10-22T04:45:00Z")
+    )
+    assert json.loads(LiveAuthority.from_config(config).encoded)["pilot_id"] == pilot["pilot_id"]
     assert pilot["prior_october_19_06utc_generation"]["pilot_id"] == ("phase2-batch-b-20261019")
     assert pilot["prior_october_19_06utc_generation"]["status"] == (
         "ARMED_HALTED_AFTER_REQUEST_INTENT_RESPONSE_BODY_FAILURE_SESSION_FAILED"
