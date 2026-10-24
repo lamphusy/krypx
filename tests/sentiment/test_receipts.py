@@ -38,6 +38,7 @@ KEY = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
 PUBLIC = KEY.public_key()
 START = "2026-09-09T00:00:00Z"
 PLAN = plan_retrieval(START, "2026-09-10T00:00:00Z", maximum_intervals=1_440)
+PLAN_12H = plan_retrieval(START, "2026-09-09T12:00:00Z", maximum_intervals=1_440)
 INVENTORY = sha256_bytes(b"independently verified test payload inventory")
 
 
@@ -506,8 +507,47 @@ def test_source_minutes_cannot_move_backwards_but_uncovered_minutes_are_allowed(
 
 
 def test_plan_datetime_overflow_raises_project_specific_error() -> None:
-    with pytest.raises(ReceiptValidationError, match="24-hour receipt plan"):
+    with pytest.raises(ReceiptValidationError, match="bounded receipt plan"):
         sign_receipt(_body(plan_start_at_utc="9999-12-31T00:00:00Z"), KEY)
+
+
+def test_twelve_hour_signed_plan_and_closeout_preserve_historical_24_hour_replay() -> None:
+    twelve_hour_receipt = sign_receipt(_body(minute=719, plan_sha256=PLAN_12H.plan_id), KEY)
+    assert verify_receipt(twelve_hour_receipt, PUBLIC)["interval_index"] == 47
+    with pytest.raises(ReceiptValidationError, match="outside its bounded plan"):
+        sign_receipt(_body(minute=720, plan_sha256=PLAN_12H.plan_id), KEY)
+
+    body = {
+        field: twelve_hour_receipt["body"][field]
+        for field in (
+            "pilot_id",
+            "specification_id",
+            "protocol_sha256",
+            "code_commit",
+            "plan_sha256",
+        )
+    }
+    body.update(
+        final_receipt_sha256=receipt_sha256(twelve_hour_receipt),
+        receipt_count=1,
+        slot_outcomes=[{"interval_index": index, "outcome": "uncovered"} for index in range(48)],
+        payload_inventory_sha256=INVENTORY,
+    )
+    closeout = sign_closeout(body, KEY)
+    assert (
+        len(
+            verify_closeout(
+                closeout,
+                PUBLIC,
+                [twelve_hour_receipt],
+                expected_closeout_sha256=closeout_sha256(closeout),
+                expected_inventory_sha256=INVENTORY,
+                expected_plan_sha256=PLAN_12H.plan_id,
+            )["slot_outcomes"]
+        )
+        == 48
+    )
+    assert verify_receipt(sign_receipt(_body(minute=1439), KEY), PUBLIC)["interval_index"] == 95
 
 
 def _resign_unvalidated_receipt(receipt: dict, **changes: object) -> dict:

@@ -214,12 +214,14 @@ class RealGSGTransport:
         try:
             if (
                 type(plan) is not RetrievalPlan
-                or len(plan.intervals) != 1440
+                or len(plan.intervals) not in (720, 1440)
                 or plan != plan_retrieval(plan.start_at, plan.end_at_exclusive)
             ):
-                raise NetworkSafetyError("live HTTPS requires an authoritative 24-hour plan")
+                raise NetworkSafetyError("live HTTPS requires an authoritative 12- or 24-hour plan")
         except (CryptoAIError, TypeError, ValueError):
-            raise NetworkSafetyError("live HTTPS requires an authoritative 24-hour plan") from None
+            raise NetworkSafetyError(
+                "live HTTPS requires an authoritative 12- or 24-hour plan"
+            ) from None
         self._allowed_urls = frozenset(
             expected_gsg_source_locator(interval) for interval in plan.intervals
         )

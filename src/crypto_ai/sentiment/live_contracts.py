@@ -145,7 +145,7 @@ class LiveAuthority:
                 "live closeout deadline differs from the plan",
             )
             _require(
-                len(plan.intervals) == 1440 and plan.plan_id == value["plan_sha256"],
+                len(plan.intervals) in (720, 1440) and plan.plan_id == value["plan_sha256"],
                 "live authority plan mismatch",
             )
             _require(
@@ -167,6 +167,11 @@ class LiveAuthority:
                 and pilot["milestone_3_scoring_authorized"] is False,
                 "live execution is not authorized",
             )
+            plan = plan_retrieval(pilot["anchor_utc"], pilot["end_exclusive_utc"])
+            _require(
+                len(plan.intervals) in (720, 1440),
+                "live configuration requires an exact 12- or 24-hour plan",
+            )
             for field, expected in {
                 "maximum_download_bytes": 500_000_000,
                 "maximum_storage_bytes": 2_000_000_000,
@@ -176,8 +181,9 @@ class LiveAuthority:
                 "maximum_retries": 3,
                 "maximum_attempts": 4,
                 "incremental_cost_usd": 0,
-                "expected_reporting_intervals": 96,
-                "expected_minute_files": 1440,
+                "expected_reporting_intervals": len(plan.intervals) // 15,
+                "expected_minute_files": len(plan.intervals),
+                "minimum_verified_reporting_intervals": (46 if len(plan.intervals) == 720 else 92),
             }.items():
                 _require(
                     type(pilot[field]) in (int, float) and pilot[field] == expected,
@@ -188,7 +194,6 @@ class LiveAuthority:
                     pilot[field] == pilot["approval_record"][field],
                     "live schedule and approval disagree",
                 )
-            plan = plan_retrieval(pilot["anchor_utc"], pilot["end_exclusive_utc"])
             return cls(
                 canonicalize(
                     {

@@ -65,8 +65,27 @@ def configuration():
     }.items():
         pilot[field] = value
         pilot["approval_record"][field] = value
+    pilot["expected_reporting_intervals"] = 96
+    pilot["expected_minute_files"] = 1440
+    pilot["minimum_verified_reporting_intervals"] = 92
     pilot["approval_record"]["approved_at_utc"] = "2026-09-12T17:46:20Z"
     pilot["approval_record"]["window_authorized_at_utc"] = "2026-09-12T17:46:20Z"
+    return config
+
+
+def bounded_configuration():
+    """A separate, synthetic 12-hour authority; historical fixtures remain 24h."""
+    config = configuration()
+    pilot = config["batch_b_live_pilot"]
+    for field, value in {
+        "end_exclusive_utc": "2026-09-13T12:00:00Z",
+        "closeout_deadline_utc": "2026-09-13T12:45:00Z",
+    }.items():
+        pilot[field] = value
+        pilot["approval_record"][field] = value
+    pilot["expected_reporting_intervals"] = 48
+    pilot["expected_minute_files"] = 720
+    pilot["minimum_verified_reporting_intervals"] = 46
     return config
 
 
@@ -327,7 +346,7 @@ def test_malformed_live_byte_counts_fail_with_project_exception(tmp_path, bad):
         verify_receipt(envelope, PUBLIC, live_authority=authority)
 
 
-def test_october_22_authority_is_active_and_october_21_evidence_is_preserved():
+def test_october_24_bounded_authority_is_active_and_prior_evidence_is_preserved():
     config = json.loads((Path(__file__).parents[2] / "config/phase2_protocol.json").read_bytes())
     assert config["network_pilot_authorized"] is True
     assert config["real_network_calls_prohibited"] is False
@@ -341,15 +360,17 @@ def test_october_22_authority_is_active_and_october_21_evidence_is_preserved():
     assert pilot["scheduler_armed_during_setup"] is False
     assert pilot["live_pilot_completed"] is False
     assert pilot["accepted_pilot_coverage_established"] is False
-    assert pilot["pilot_id"] == "phase2-batch-b-20261022"
-    assert pilot["store_path"] == "data/phase2-pilot-20261022"
+    assert pilot["pilot_id"] == "phase2-batch-b-20261024"
+    assert pilot["store_path"] == "data/phase2-pilot-20261024"
     assert pilot["private_key_path"] == "secrets/pilot_ed25519.key"
+    assert pilot["expected_reporting_intervals"] == 48
+    assert pilot["expected_minute_files"] == 720
     assert len(bytes.fromhex(pilot["public_key_hex"])) == 32
     assert sha256_bytes(bytes.fromhex(pilot["public_key_hex"])) == pilot["signer_key_id"]
     for field, expected in {
-        "anchor_utc": "2026-10-22T04:00:00Z",
-        "end_exclusive_utc": "2026-10-23T04:00:00Z",
-        "closeout_deadline_utc": "2026-10-23T04:45:00Z",
+        "anchor_utc": "2026-10-24T08:00:00Z",
+        "end_exclusive_utc": "2026-10-24T20:00:00Z",
+        "closeout_deadline_utc": "2026-10-24T20:45:00Z",
     }.items():
         assert pilot[field] == pilot["approval_record"][field] == expected
     assert pilot["approval_record"]["network_pilot_authorized"] is True
@@ -400,8 +421,25 @@ def test_october_22_authority_is_active_and_october_21_evidence_is_preserved():
     assert amendment["verified_reporting_slot"] == (
         "all_15_distinct_planned_minutes_are_complete_gzip_or_verified_empty"
     )
-    assert amendment["coverage_gate_stop_after_uncovered_reporting_slots"] == 5
-    assert amendment["minimum_verified_reporting_slots"] == 92
+    assert amendment["coverage_gate_stop_after_uncovered_reporting_slots"] == 3
+    assert amendment["minimum_verified_reporting_slots"] == 46
+    prior_october_22 = pilot["prior_october_22_generation"]
+    assert prior_october_22["pilot_id"] == "phase2-batch-b-20261022"
+    assert prior_october_22["store_path"] == "data/phase2-pilot-20261022"
+    assert prior_october_22["expected_reporting_intervals"] == 96
+    assert prior_october_22["expected_minute_files"] == 1440
+    assert prior_october_22["minimum_verified_reporting_intervals"] == 92
+    prior_october_23 = pilot["prior_october_23_generation"]
+    assert prior_october_23["pilot_id"] == "phase2-batch-b-20261023"
+    assert prior_october_23["store_path"] == "data/phase2-pilot-20261023"
+    assert prior_october_23["anchor_utc"] == "2026-10-23T19:00:00Z"
+    assert prior_october_23["end_exclusive_utc"] == "2026-10-24T07:00:00Z"
+    assert prior_october_23["closeout_deadline_utc"] == "2026-10-24T07:45:00Z"
+    assert prior_october_23["expected_reporting_intervals"] == 48
+    assert prior_october_23["expected_minute_files"] == 720
+    assert prior_october_23["minimum_verified_reporting_intervals"] == 46
+    assert prior_october_23["status"] == "MISSED_NOT_ARMED_NO_COLLECTION"
+    assert prior_october_23["reset_rearm_resume_replay_merge_or_backfill_authorized"] is False
     assert pilot["october_20_halt"]["reset_rearm_resume_replay_or_backfill_authorized"] is False
     prior = pilot["prior_october_20_generation"]
     assert prior["pilot_id"] == "phase2-batch-b-20261020"
@@ -417,14 +455,6 @@ def test_october_22_authority_is_active_and_october_21_evidence_is_preserved():
     )
     assert prior["accepted_coverage_established"] is False
     assert prior["backfill_or_relaunch_authorized"] is False
-    assert (
-        config["next_authorized_task"]["current_instruction_new_october_21_pilot_authorized"]
-        is False
-    )
-    assert config["next_authorized_task"][
-        "october_21_network_authorization_now_inactive_after_stop"
-    ]
-    assert config["next_authorized_task"]["current_instruction_new_october_22_pilot_authorized"]
     assert config["next_authorized_task"]["current_instruction_new_network_window_authorized"]
     assert pilot["prior_october_19_06utc_generation"]["pilot_id"] == ("phase2-batch-b-20261019")
     assert pilot["prior_october_19_06utc_generation"]["status"] == (
@@ -439,8 +469,8 @@ def test_october_22_authority_is_active_and_october_21_evidence_is_preserved():
     )
     assert pilot["prior_october_17_10utc_window"]["status"] == "MISSED_NOT_ARMED_NO_COLLECTION"
     assert pilot["prior_october_16_generation"]["anchor_utc"] == "2026-10-16T17:00:00Z"
-    assert len(plan_retrieval(pilot["anchor_utc"], pilot["end_exclusive_utc"]).intervals) == 1440
-    assert len(runner.calendar_jobs(Path("/example"), pilot, "/python")) == 96
+    assert len(plan_retrieval(pilot["anchor_utc"], pilot["end_exclusive_utc"]).intervals) == 720
+    assert len(runner.calendar_jobs(Path("/example"), pilot, "/python")) == 48
 
 
 def test_runner_calendar_has_96_absolute_nonoverlapping_workers():
@@ -461,6 +491,44 @@ def test_runner_calendar_has_96_absolute_nonoverlapping_workers():
         assert job["ProgramArguments"][-2:] == ["--slot", str(index)]
         assert job["RunAtLoad"] is False and job["KeepAlive"] is False
         assert job["StandardOutPath"] == job["StandardErrorPath"] == "/dev/null"
+
+
+def test_runner_calendar_has_48_absolute_nonoverlapping_workers():
+    pilot = bounded_configuration()["batch_b_live_pilot"]
+    jobs = runner.calendar_jobs(Path("/example/repo"), pilot, "/example/python")
+    assert len(jobs) == len({label for label, _ in jobs}) == 48
+    assert runner._reporting_slots(pilot) == 48
+    for index, (_, encoded) in enumerate(jobs):
+        job = plistlib.loads(encoded)
+        when = (
+            datetime(2026, 9, 13, 0, 45, tzinfo=UTC) + timedelta(minutes=index * 15)
+        ).astimezone()
+        assert job["StartCalendarInterval"] == {
+            "Month": when.month,
+            "Day": when.day,
+            "Hour": when.hour,
+            "Minute": when.minute,
+        }
+        assert job["ProgramArguments"][-2:] == ["--slot", str(index)]
+    assert runner._reporting_slots(configuration()["batch_b_live_pilot"]) == 96
+
+
+@pytest.mark.parametrize("hours", [4, 11, 13, 23, 25])
+def test_runner_rejects_unapproved_schedule_durations(hours):
+    pilot = bounded_configuration()["batch_b_live_pilot"]
+    pilot["end_exclusive_utc"] = (
+        datetime(2026, 9, 13, tzinfo=UTC) + timedelta(hours=hours)
+    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with pytest.raises(NetworkSafetyError):
+        runner.calendar_jobs(Path("/example"), pilot, "python")
+
+
+def test_runner_rejects_worker_beyond_48_slot_bound_before_dispatch(tmp_path, monkeypatch):
+    config = bounded_configuration()
+    pilot = config["batch_b_live_pilot"]
+    monkeypatch.setattr(runner, "load_setup", lambda repo: (config, pilot, None, KEY))
+    with pytest.raises(NetworkSafetyError, match="outside the approved pilot window"):
+        runner.worker(tmp_path, 48)
 
 
 @pytest.mark.parametrize("bad", ["../../escape", "x/y", "", "x" * 97])
@@ -545,9 +613,12 @@ def test_runner_requires_clean_main(tmp_path, monkeypatch, branch, status):
         runner._require_clean_main(tmp_path)
 
 
-@pytest.mark.parametrize("terminal", [False, True])
-def test_complete_runner_arming_and_first_worker_are_offline(tmp_path, monkeypatch, terminal):
-    config = configuration()
+@pytest.mark.parametrize("hours", [12, 24])
+@pytest.mark.parametrize("first_outcome", ["complete", "verified_empty", "unresolved", "truncated"])
+def test_complete_runner_arming_and_first_worker_are_offline(
+    tmp_path, monkeypatch, hours, first_outcome
+):
+    config = bounded_configuration() if hours == 12 else configuration()
     pilot = config["batch_b_live_pilot"]
     (tmp_path / "data").mkdir()
 
@@ -588,21 +659,30 @@ def test_complete_runner_arming_and_first_worker_are_offline(tmp_path, monkeypat
         SimpleNamespace(platform="darwin", executable=sys.executable, stderr=sys.stderr),
     )
     armed = runner.arm(tmp_path)
-    assert armed["status"] == "ARMED" and launch.call_count == 96
+    assert armed["status"] == "ARMED" and launch.call_count == hours * 4
     for call in launch.call_args_list:
         assert call.args[0][:2] == ["/bin/launchctl", "bootstrap"]
     clock.start = datetime(2026, 9, 13, 0, 45, tzinfo=UTC)
-    responses = (
-        [Response(raw=b"", status=404, headers={"Content-Length": "0"})] if terminal else []
-    ) + [Response() for _ in range(29 if terminal else 15)]
+    first_response = {
+        "complete": Response(),
+        "verified_empty": Response(raw=b"", status=404, headers={"Content-Length": "0"}),
+        "unresolved": Response(raw=b"", status=400, headers={"Content-Length": "0"}),
+        "truncated": Response(headers={"Content-Length": str(len(RAW) + 10)}),
+    }[first_outcome]
+    responses = [first_response] + [Response() for _ in range(29)]
     fake = Transport(clock, *responses)
     monkeypatch.setattr(
         RealGSGTransport, "open", lambda self, url, *, timeout: fake.open(url, timeout=timeout)
     )
+    if first_outcome == "truncated":
+        with pytest.raises(NetworkSafetyError):
+            runner.worker(tmp_path, 0)
+        assert fake.open.call_count == 1
+        return
     result = runner.worker(tmp_path, 0)
     assert result["status"] == "WORKER_FINISHED"
     assert fake.open.call_count == 15
-    if terminal:
+    if first_outcome != "complete":
         clock.start = datetime(2026, 9, 13, 1, tzinfo=UTC)
         clock.seconds = 0.0
         later = runner.worker(tmp_path, 1)
@@ -610,4 +690,4 @@ def test_complete_runner_arming_and_first_worker_are_offline(tmp_path, monkeypat
         assert fake.open.call_count == 30
     with pytest.raises(NetworkSafetyError):
         runner.worker(tmp_path, 0)
-    assert fake.open.call_count == (30 if terminal else 15)
+    assert fake.open.call_count == (30 if first_outcome != "complete" else 15)

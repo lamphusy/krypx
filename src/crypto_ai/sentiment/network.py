@@ -41,6 +41,7 @@ from crypto_ai.sentiment.providers.gdelt_gsg import (
 )
 from crypto_ai.sentiment.receipts import (
     _minute_outcome,
+    _plan_minute_count,
     _terminal_unresolved,
     receipt_sha256,
     sign_closeout,
@@ -341,7 +342,10 @@ def _load_verified_receipts(
         raise NetworkSafetyError("receipt suffix or raw byte count detached from durable budget")
     if bodies:
         start = bodies[0]["plan_start_at_utc"]
-        plan = plan_retrieval(start, format_utc_timestamp(_utc(start) + timedelta(days=1)))
+        minute_count = _plan_minute_count(start, bodies[0]["plan_sha256"])
+        plan = plan_retrieval(
+            start, format_utc_timestamp(_utc(start) + timedelta(minutes=minute_count))
+        )
         for timestamp, (body, envelope) in final_by_minute.items():
             if body["snapshot_state"] == "complete":
                 continue
@@ -395,10 +399,10 @@ class GSGNetworkClient:
         self.live_authority = live_authority
         if (
             type(plan) is not RetrievalPlan
-            or len(plan.intervals) != 1440
+            or len(plan.intervals) not in (720, 1440)
             or plan != plan_retrieval(plan.start_at, plan.end_at_exclusive)
         ):
-            raise NetworkSafetyError("pilot requires an exact 24-hour, 1440-minute retrieval plan")
+            raise NetworkSafetyError("pilot requires an exact 12- or 24-hour retrieval plan")
         if not isinstance(private_key, Ed25519PrivateKey) or not isinstance(
             public_key, Ed25519PublicKey
         ):
@@ -417,6 +421,8 @@ class GSGNetworkClient:
                 raise NetworkSafetyError(f"invalid {label} identity")
         self.store = store
         self.plan = plan
+        self.reporting_slots = len(plan.intervals) // 15
+        self.required_verified_slots = 46 if self.reporting_slots == 48 else 92
         self.transport = transport
         self.private_key = private_key
         self.public_key = public_key
@@ -536,7 +542,7 @@ class GSGNetworkClient:
             self._active = True
             first_start = _utc(self.plan.start_at) + timedelta(minutes=45)
             elapsed = (_utc(self._now()) - first_start).total_seconds()
-            if not 0 <= elapsed < 86400:
+            if not 0 <= elapsed < len(self.plan.intervals) * 60:
                 raise NetworkSafetyError("mock session is outside the frozen worker schedule")
             self._worker_index = int(elapsed // 900)
             self._worker_end = first_start + timedelta(seconds=(self._worker_index + 1) * 900)
@@ -577,10 +583,17 @@ class GSGNetworkClient:
         self._retrieval_stage = "preflight"
         try:
             return self._retrieve(filename_timestamp)
-        except RetrievalFailure:
-            # A signed terminal minute outcome is not a failed gap publication.
-            # Keep the historical unstaged stop shape for this known outcome.
-            if self._active and not self._closed_out:
+        except RetrievalFailure as exc:
+            # A complete, signed terminal HTTP response is an evidenced minute
+            # loss and may consume one bounded uncovered slot. A transfer whose
+            # framing never completed is a safety failure even if its partial
+            # bytes and gap evidence were durably retained for incident review.
+            receipts = exc.result.receipts
+            if (
+                self._active
+                and not self._closed_out
+                and (not receipts or receipts[-1]["body"]["transfer_complete"] is not True)
+            ):
                 self.budget.stop("retrieval_failed")
             raise
         except NetworkSafetyError as exc:
@@ -806,9 +819,9 @@ class GSGNetworkClient:
                 # before any later closeout.
                 self._require_attainable_coverage()
                 return result
+            self._require_attainable_coverage()
             if not _retryable_receipt(body):
                 raise RetrievalFailure(result)
-            self._require_attainable_coverage()
             return result
         raise NetworkSafetyError("unreachable retry state")  # pragma: no cover
 
@@ -816,13 +829,13 @@ class GSGNetworkClient:
         return _gap_publication_name(self.context["pilot_id"], evidence)
 
     def _require_attainable_coverage(self) -> None:
-        """Five irrecoverable reporting slots make the fixed 92/96 gate impossible."""
+        """Stop only when the bounded integer verified-slot gate is impossible."""
         latest = {}
         for envelope in self._receipts:
             body = envelope["body"]
             latest[body["filename_timestamp"]] = body
         uncovered = 0
-        for index in range(96):
+        for index in range(self.reporting_slots):
             slot = [body for body in latest.values() if body["interval_index"] == index]
             complete = sum(
                 _minute_outcome(body) in {"complete_gzip", "verified_empty"} for body in slot
@@ -830,8 +843,12 @@ class GSGNetworkClient:
             terminal_gap = any(_terminal_failure(body) for body in slot)
             if terminal_gap or index < self._worker_index and complete < 15:
                 uncovered += 1
-        if uncovered >= 5:
-            raise NetworkSafetyError("five reporting gaps or missed slots make 92/96 unattainable")
+        if self.reporting_slots - uncovered < self.required_verified_slots:
+            raise NetworkSafetyError(
+                f"{self.reporting_slots - self.required_verified_slots + 1} reporting gaps "
+                f"or missed slots make {self.required_verified_slots}/{self.reporting_slots} "
+                "unattainable"
+            )
 
     def _pace(self) -> None:
         now = self._tick()
@@ -931,7 +948,7 @@ class GSGNetworkClient:
         return float(value)
 
     def closeout(self) -> dict[str, Any]:
-        """Sign an inventory-bound 96-slot closeout; this does not grant pilot acceptance.
+        """Sign an inventory-bound closeout; this does not grant pilot acceptance.
 
         Caller must independently preserve the returned closeout hash and inventory hash.
         Missing minutes stay uncovered. No claimed state-v3 normalization is performed here.
@@ -958,7 +975,7 @@ class GSGNetworkClient:
             self._receipts, self.public_key, live_authority=self.live_authority
         )
         outcomes = []
-        for index in range(96):
+        for index in range(self.reporting_slots):
             slot = [body for body in bodies if body["interval_index"] == index]
             complete = {
                 body["filename_timestamp"]

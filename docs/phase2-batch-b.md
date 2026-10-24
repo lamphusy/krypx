@@ -34,12 +34,119 @@ the former accounting rule; its journal, claim, signer, receipts, gaps and raw
 CAS remain immutable audit evidence, not material to relabel or backfill. No
 accepted coverage or closeout is claimed. The exact-length TLS EOF transport
 fix was committed on `main` at `9d35265ac074722e3642ca7916b6c1e004dffe66`.
-The separately authorized October 22 window below is a new, forward-only
-generation; it is not an extension of the stopped October 21 pilot.
+The separately authorized October 22 window below was a distinct, forward-only
+generation; its authority is historical and is not extended by the new bounded pilot.
 
-## Active October 22 04:00 UTC prospective live pilot authority
+## Active October 24 08:00 UTC bounded live pilot authority
 
-The human authority approves one bounded 24-hour GDELT GSG network pilot with
+The human authority approves a distinct, forward-only **12-hour engineering
+pilot** with UTC anchor `2026-10-24T08:00:00Z` (15:00 October 24 Vietnam time),
+half-open observation window `[2026-10-24T08:00:00Z, 2026-10-24T20:00:00Z)`,
+and final signed closeout deadline `2026-10-24T20:45:00Z`. Pilot ID
+`phase2-batch-b-20261024` uses the fresh Git-ignored root
+`data/phase2-pilot-20261024` (mode `0700`) and its own Ed25519 key at
+`secrets/pilot_ed25519.key` (mode `0600`); the public key and SHA-256 key ID
+are pinned in `config/phase2_protocol.json`. Never print or commit the private
+key. The fixed plan has **48** 15-minute slots and **720** exact one-minute GSG
+locators. The first worker starts `2026-10-24T08:45:00Z`, the last starts
+`2026-10-24T20:30:00Z`; no out-of-window timestamp or backfill is allowed.
+
+The integer engineering acceptance gate remains **at least 46 of 48** fully
+verified reporting slots (95.833333...%), stopping at `coverage_gate` when
+**three** slots become irrecoverably uncovered. Each slot verifies only if all
+15 planned minutes have authenticated `complete_gzip` or `verified_empty`
+outcomes; an `unresolved_provider_gap` uncovers its slot. Independent unsafe
+unsigned transport failures, timeouts, truncation, tampering, or hard-cap
+violations can halt immediately under the existing fail-closed safety rules;
+they do not fabricate signed receipts or `TerminalGapEvidence`. The frozen
+99.5% research coverage gate remains unchanged and is not authorized for
+real-data execution.
+
+Rights are approved only for internal English Bitcoin GSG title-metadata
+research and immutable local CAS retention of exact raw response bytes,
+including incidental fields and unrelated titles, through review with GDELT
+attribution and no external redistribution. The sole endpoint is
+`https://data.gdeltproject.org/gdeltv3/gsg/{timestamp}.gsg.json.gz`.
+`real_provider_rights_approved: true` and `network_pilot_authorized: true`
+apply only to this window. The unchanged caps are 500,000,000 cumulative
+downloaded bytes, 2,000,000,000 retained bytes, 900 seconds per worker, at
+least five seconds between request starts, 10-second HTTP timeout, at most
+three retries/four attempts, and $0.00 incremental cost. Publisher scraping,
+body-text collection, real scoring, model downloads, indicators/features,
+market joins, real training/backtests, research-gate execution, and holdout
+access/evaluation remain prohibited.
+
+After a clean local `main` commit, run
+`.venv/bin/python scripts/run_phase2_pilot.py check` and, only if preflight
+passes before the anchor, arm with
+`.venv/bin/python scripts/run_phase2_pilot.py arm`. This setup does not arm,
+collect, or claim accepted coverage. A missed anchor requires a separately
+approved successor, not a shifted/replayed run. Keep changes local; do not push.
+
+## Historical October 23 19:00 UTC bounded pilot setup
+
+This 12-hour setup was **not armed and collected no data** before its anchor.
+Its key, approvals, and setup record are preserved as historical evidence;
+the following then-authorized arming instruction is inactive. No reset,
+re-arm, replay, merge, or backfill is authorized.
+
+The human authority had approved a forward-only **12-hour engineering pilot**
+with UTC anchor `2026-10-23T19:00:00Z` (02:00 October 24 Vietnam time), half-open
+observation window `[2026-10-23T19:00:00Z, 2026-10-24T07:00:00Z)`, and final
+retrieval and signed closeout deadline `2026-10-24T07:45:00Z`. Pilot ID
+`phase2-batch-b-20261023` uses the new Git-ignored root
+`data/phase2-pilot-20261023` (mode `0700`). The fixed schedule has **48**
+15-minute reporting slots and **720** exact one-minute GSG locators, 15 per
+slot. The first worker starts at `2026-10-23T19:45:00Z`; the last starts at
+`2026-10-24T07:30:00Z`. The 45-minute tail does not add observations or
+permit backfill. All prior pilot journals, claims, signers, receipts, gaps,
+and raw CAS remain immutable historical evidence; this generation does not
+reset, replay, merge, or relabel them.
+
+The approved rights cover internal English Bitcoin GSG title-metadata research
+and immutable local CAS retention of exact raw response bytes, including
+incidental fields and unrelated titles, through review with GDELT attribution
+and no external redistribution. The sole endpoint is
+`https://data.gdeltproject.org/gdeltv3/gsg/{timestamp}.gsg.json.gz`.
+`real_provider_rights_approved: true` and `network_pilot_authorized: true`
+apply only to this exact window. Publisher-page scraping, body-text collection,
+real scoring, model downloads, indicators/features, market-data joins, real
+training/backtests, research-gate execution, and holdout access/evaluation
+remain unauthorized.
+
+The `batch-b-gsg-minute-coverage-v2` three-state protocol applies: each minute
+must be authenticated `complete_gzip` or `verified_empty` to verify its slot;
+an `unresolved_provider_gap` leaves the slot uncovered. The integer acceptance
+gate is **at least 46 of 48** fully verified slots (46/48 = 95.833333...%).
+The denominator never shrinks. Stop at `coverage_gate` when **three** slots
+are irrecoverably uncovered, since then 46/48 is unattainable. Missed scheduled
+slots remain uncovered local incidents, not fabricated provider responses.
+An unsafe unsigned transport failure, timeout, truncation, tamper event, or
+hard-cap violation may independently stop the worker immediately under the
+existing fail-closed safety contract; it does not create a signed provider
+receipt or `TerminalGapEvidence` merely to count toward the gate.
+
+The unchanged hard caps are 500,000,000 cumulative downloaded bytes,
+2,000,000,000 retained bytes, at most 900 seconds per worker, at least 5.0
+seconds between request starts (0.2 Hz maximum), 10-second HTTP timeout,
+at most three retries/four attempts, and $0.00 incremental cost. The fresh
+Ed25519 private key belongs only at
+`data/phase2-pilot-20261023/secrets/pilot_ed25519.key` (mode `0600`), with its
+raw public key and SHA-256 key ID pinned in `config/phase2_protocol.json`.
+Never print or commit the private key. After a clean local `main` commit, run
+`.venv/bin/python scripts/run_phase2_pilot.py check`; arm only before the
+anchor using `.venv/bin/python scripts/run_phase2_pilot.py arm` if preflight
+passes. Missing the anchor requires separate human authorization for a new
+prospective generation, not a shifted run. Setup alone does not establish
+collection, coverage, or closeout. Keep all changes local without pushing.
+
+## Historical October 22 04:00 UTC prospective live pilot authority
+
+The following records the then-authorized 24-hour generation only. Its
+arming instruction and 96-slot gate are not current authority. No October 22
+journal, claim, signer, receipt, gap or CAS object may be reset or backfilled.
+
+The human authority approved one bounded 24-hour GDELT GSG network pilot with
 UTC anchor `2026-10-22T04:00:00Z` (11:00 Vietnam time), half-open observation
 window `[2026-10-22T04:00:00Z, 2026-10-23T04:00:00Z)`, and final retrieval and
 signed closeout deadline `2026-10-23T04:45:00Z`. Its distinct pilot ID is
@@ -93,7 +200,7 @@ minute, not a lost provider minute. This is an accounting amendment, not a
 retroactive reinterpretation of any stopped journal or permission to run the
 elapsed October 21 schedule again.
 
-Classify each of the fixed 1,440 planned minutes into exactly one of three
+Classify each planned minute into exactly one of three
 coverage outcomes; only the first two are verified:
 
 | Minute outcome | Required evidence | Coverage meaning |
@@ -116,10 +223,11 @@ research gate, or historical signed evidence is silently migrated.
 
 A 15-minute reporting slot is verified coverage only when all 15 distinct
 planned minutes have `complete_gzip` or `verified_empty` outcomes. It is
-uncovered if even one minute is `unresolved_provider_gap`. The fixed integer
-pilot gate is still at least 92 of 96 verified slots; the denominator never
-shrinks. Stop at `coverage_gate` only after five irrecoverably uncovered slots,
-because then 92/96 is unattainable. A missed scheduled slot is unresolved for
+uncovered if even one minute is `unresolved_provider_gap`. The historical
+24-hour gate was 92 of 96 verified slots; the active 12-hour amendment above
+has 720 minutes and an integer 46-of-48 gate. Neither denominator shrinks.
+Stop the active pilot after three irrecoverably uncovered slots, because then
+46/48 is unattainable. A missed scheduled slot is unresolved for
 coverage accounting, but is a local schedule incident, not an invented provider
 response or signed `TerminalGapEvidence`. A raised stream exception or unsafe
 incomplete attempt can independently stop the worker under the existing
@@ -127,8 +235,8 @@ fail-closed safety rules, without inventing a signed provider response or
 verified coverage. The existing
 download, retained-storage, worker-time, pacing, timeout, retry and cost caps
 are unchanged. The amendment originally authorized offline source, test and
-governance changes only. The separate October 22 authority above now approves
-one forward-only live window with an isolated identity and signer, subject to
+governance changes only. The separate October 24 authority above now approves
+one forward-only bounded window with an isolated identity and signer, subject to
 preflight and timely arming; it does not broaden any earlier authority.
 
 ## Historical October 21 04:00 UTC replacement prospective pilot authority
@@ -652,8 +760,9 @@ transfer; it cannot be re-armed, resumed, replayed, or backfilled. The
 October 21 generation was separately authorized and subsequently stopped at
 `coverage_gate`; its former schedule is historical and cannot be armed,
 resumed, relabeled or backfilled. No accepted coverage is claimed. The
-October 22 generation is separately authorized under the active section above;
-its readiness and execution remain subject to the stated pre-anchor checks.
+October 22 generation is historical. The separately authorized October 23
+12-hour generation is active under the bounded-pilot section above, subject to
+the stated pre-anchor checks.
 
 The historical October 21 fixed UTC anchor was `2026-10-21T04:00:00Z`. Its
 observation window is half-open:
@@ -677,19 +786,19 @@ human-approved successor specification with a new prospective date.
 | HTTP timeout | 10.0 seconds with verified-TLS real transport and a hard worker watchdog; mocked transport remains available only for offline tests |
 | Cost | $0.00 incremental billed cost; no paid service or infrastructure; any positive or unknown third-party charge blocks execution |
 
-The 900-second cap applies to each process, not to the 24-hour calendar span. The authorized
-runner schedules at most one worker for each of the 96 reporting intervals.
+The 900-second cap applies to each process, not to the calendar span. The active
+bounded runner schedules at most one worker for each of its 48 reporting intervals.
 Worker `i` has a processing slot from `anchor + (i+1)*900s + 1800s` to that time plus
 900 seconds. Workers do not overlap; each deadline is the earlier of actual process
 start plus 900 seconds and its fixed processing-slot end. Late starts cannot move a
 deadline, and a missed worker cannot be relaunched to extend it. There is no continuously
-running 24-hour collector; scheduler setup and explicit arming are separate operations.
+running collector; scheduler setup and explicit arming are separate operations.
 Global byte, storage, retry, and rate budgets survive all invocations and
 restarts. A reset or a fresh process cannot replenish them. Budget state must be durable
 and locked against concurrent workers; missing or inconsistent budget state stops the pilot.
 
-These 96 reporting intervals are not the GSG terminal ledger: each contains exactly 15
-one-minute intervals, for 1,440 distinct planned gzip locators. Under the
+These 48 reporting intervals are not the GSG terminal ledger: each contains exactly 15
+one-minute intervals, for 720 distinct planned gzip locators. Under the
 prospective `batch-b-gsg-minute-coverage-v2` amendment, all 15 minutes must
 verify as `complete_gzip` or `verified_empty` for their reporting interval to
 count. The former all-gzip interpretation remains historical only. Preserve
@@ -702,10 +811,10 @@ in ascending order and retain strictly increasing publication chronology.
 Batch A's frozen `PROVIDER_LAG` is 1,800 seconds: a file timestamp `t` is due at `t+30m`.
 The schedule accommodates this release-arrival allowance by starting each worker at its
 reporting interval's end plus 30 minutes, when all 15 files are due. For the
-active October 22 generation, the first worker starts
-`2026-10-22T04:45:00Z`; the last starts `2026-10-23T04:30:00Z` and must finish,
-including closeout, by `2026-10-23T04:45:00Z`. This explicitly specified 45-minute
-retrieval/closeout tail does not extend the 24-hour observation window or admit next-day
+active October 24 generation, the first worker starts
+`2026-10-24T08:45:00Z`; the last starts `2026-10-24T20:30:00Z` and must finish,
+including closeout, by `2026-10-24T20:45:00Z`. This explicitly specified 45-minute
+retrieval/closeout tail does not extend the 12-hour observation window or admit out-of-window
 file timestamps. No later catch-up is allowed. The 30-minute value is the accepted
 engineering policy, not a newly verified provider SLA; late files remain subject to
 bounded retries and genuine gap evidence. No live arrival behavior is claimed offline.
@@ -731,9 +840,9 @@ authenticated zero-body HTTP 404 after the 30-minute release allowance is
 `verified_empty` for that planned minute, recorded with its signed receipt and
 `TerminalGapEvidence`; it does not by itself stop the session or skip the other
 14 minutes. An incomplete, premature or unauthenticated 404 is unresolved, not
-no news. Incomplete transfers remain fatal, and five truly unresolved
+no news. Incomplete transfers remain fatal, and three truly unresolved
 reporting intervals make the
-92-of-96 gate unattainable and stop the pilot. HTTP 200 proceeds to bounded parsing.
+46-of-48 gate unattainable and stop the active pilot. HTTP 200 proceeds to bounded parsing.
 Preserve global five-second request-start spacing and valid longer
 `Retry-After` for 429/503 in addition to completion-relative delays. Authentication, payment,
 redirect and scope violations stop the pilot. A restart cannot reset per-file attempts;
@@ -790,7 +899,7 @@ null predecessor. The previous-receipt hash chain detects internal modification 
 reordering, but cannot alone detect removal of a valid suffix.
 
 Require a signed closeout record binding the pilot ID, fixed expected-plan SHA-256,
-all 96 slot outcomes, final receipt-chain head and count, and SHA-256 of the canonical
+all 48 active slot outcomes, final receipt-chain head and count, and SHA-256 of the canonical
 complete payload inventory (including signatures, gaps, and reports but excluding the
 closeout itself). Sign its RFC 8785 body with the approved Ed25519 key and domain prefix
 `KrypX Batch B closeout v1` followed by LF. Independently pin the final closeout hash and
@@ -849,16 +958,16 @@ violation, invalid authority, broken signature/hash, conflicting identity, unsaf
 object, publication collision, clock regression, incompatible schema, missing signing key,
 or inconsistent durable counter. Attempt-level exhausted retries/invalid snapshots can be
 recorded as genuine evidenced gaps if the future compatible implementation permits it.
-After a fifth irrecoverably uncovered reporting interval, whether caused by
-an evidenced `unresolved_provider_gap` or a missed scheduled slot, 92/96 is
+After a third irrecoverably uncovered reporting interval, whether caused by
+an evidenced `unresolved_provider_gap` or a missed scheduled slot, 46/48 is
 unattainable; stop and
-retain a failed report with the denominator still 96. Never delete evidence or expand any
+retain a failed report with the denominator still 48. Never delete evidence or expand any
 budget to reach acceptance.
 
 Before human network authorization, the authorized offline implementation and independent
 review must prove:
 
-1. Exact planned HTTPS GSG locators and the 96-to-1,440 schedule mapping, gzip/JSONL
+1. Exact planned HTTPS GSG locators and the active 48-to-720 schedule mapping, gzip/JSONL
    parsing under the accepted snapshot-v2 bounds, complete transfer and gzip integrity,
    and empty-file behavior. Truncation or unknown completeness makes a minute unverified;
    an HTML error or empty transport body is not a valid empty gzip snapshot. No DOC
@@ -981,9 +1090,9 @@ Local `origin/main` reflog records a push of `a4ce157` at `2026-09-11T00:11:49+0
 the actor and authorization cannot be established by that record. This corrective task
 performs only the authorized local commit on `main`, with no push or remote verification.
 
-After a separately authorized new live pilot, acceptance requires at least **92 of 96** fully
-verified reporting intervals (`92/96 = 95.833333...%`, satisfying `>=95.83%`). The
-integer gate of 92, not a rounded percentage, is authoritative. An interval
+For the separately authorized October 23 bounded pilot, acceptance requires at least
+**46 of 48** fully verified reporting intervals (`46/48 = 95.833333...%`). The
+integer gate of 46, not a rounded percentage, is authoritative. An interval
 counts once only when every one of its 15 planned minutes is `complete_gzip` or
 `verified_empty` with its respective complete, signed, bounded and replayed
 evidence fully reconciled to the frozen plan. A valid zero-line gzip is
@@ -993,13 +1102,13 @@ truncation, local stops, missing signatures, unattempted slots, and duplicate
 receipts never count as verified coverage.
 
 Each verified reporting interval requires 15 verified minute intervals; report the
-1,440-minute denominator separately. GSG archive-file coverage is not a claim of complete
+720-minute denominator separately. GSG archive-file coverage is not a claim of complete
 news coverage: isolated stories absent from GSG remain outside this source's coverage.
 Publish coverage from the frozen plan plus verified receipts and terminal evidence, never
 caller-supplied counters. Report `complete_gzip`, `verified_empty`, and
 `unresolved_provider_gap` minute counts separately, alongside slot, invalid,
 local-stop, and unattempted counts,
-byte/storage/runtime/cost totals, bounds, all hashes, and failures. Do not round 91/96
+byte/storage/runtime/cost totals, bounds, all hashes, and failures. Do not round 45/48
 up to a pass or shrink the denominator after stopping. This is a pilot engineering
 criterion; it neither changes nor approves the frozen 99.5% research coverage gate.
 
@@ -1020,14 +1129,14 @@ collection, holdout access/evaluation, paid services, credentials, and `git push
 Milestone 3 remains unauthorized. Offline setup alone never arms a scheduler or
 starts collection.
 
-The next action is to complete offline verification of the prospective
-three-state amendment, then await separate human authorization of a new
-forward-only pilot window. The stopped October 21 generation is not active
-network authority. Neither the transport nor minute-coverage amendment
-authorizes re-arming, retroactive coverage, or backfill. Historical live
-approvals had superseded v1's `await_human_network_pilot_authorization` action and
-the `prepare_batch_b_specification` action in the 2026-09-02 Batch A sign-off;
-those past approvals do not cover a successor; October 21 authority is also
-historical and ended at its stop. Earlier one-GiB/seven-day
+The next action is `execute_live_prospective_pilot` for the exact October 24
+12-hour window above, after a clean local commit, successful offline preflight,
+and arming before `2026-10-24T08:00:00Z`. The stopped October 21 and elapsed
+October 22 and missed/unarmed October 23 generations are not active network authority. Neither the
+transport nor minute-coverage amendment authorizes re-arming, retroactive
+coverage, or backfill. The three-uncovered-slot `coverage_gate` is distinct
+from an independent immediate fail-closed safety stop on unsigned transport,
+timeout, truncation, tampering, or cap violation; no provider receipt or
+`TerminalGapEvidence` may be fabricated for those incidents. Earlier one-GiB/seven-day
 collection proposals do not apply to this pilot. No
 accepted Batch A parser, interval, retry, storage, or Phase 1 contract is changed.

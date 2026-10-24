@@ -46,6 +46,7 @@ from crypto_ai.sentiment.receipts import (
 from crypto_ai.sentiment.storage import ContentAddressedStore
 
 PLAN = plan_retrieval("2026-09-09T00:00:00Z", "2026-09-10T00:00:00Z")
+PLAN_12H = plan_retrieval("2026-09-09T00:00:00Z", "2026-09-09T12:00:00Z")
 KEY = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
 PUBLIC = KEY.public_key()
 RAW = gzip.compress(
@@ -117,6 +118,7 @@ class Transport:
 def client_at(tmp_path: Path, *responses: Response, **kwargs):
     clock = kwargs.pop("clock", Clock())
     transport = kwargs.pop("transport", Transport(clock, *responses))
+    plan = kwargs.pop("plan", PLAN)
     store = ContentAddressedStore(tmp_path)
     client = GSGNetworkClient(
         store,
@@ -124,7 +126,7 @@ def client_at(tmp_path: Path, *responses: Response, **kwargs):
         specification_id="phase2-batch-b-offline-implementation-v1",
         protocol_sha256="a" * 64,
         code_commit="b" * 40,
-        plan=PLAN,
+        plan=plan,
         transport=transport,
         private_key=KEY,
         public_key=PUBLIC,
@@ -275,18 +277,18 @@ def test_four_attempt_exhaustion_bound_to_versioned_terminal_evidence(tmp_path):
 
 
 @pytest.mark.parametrize("status", [301, 400, 401, 402, 403, 408])
-def test_permanent_http_errors_do_not_retry_and_halt(tmp_path, status):
+def test_permanent_http_errors_do_not_retry_and_preserve_bounded_gap_budget(tmp_path, status):
     client, _, transport = client_at(tmp_path, Response(b"no", status))
     with client:
         with pytest.raises(RetrievalFailure) as failure:
             client.retrieve(minute())
         assert failure.value.result.gap_evidence.attempt_count == 1
-        assert client.budget.halted
+        assert not client.budget.halted
     journal = tmp_path / ".network-budgets" / client.budget.directory_name
     events = [
         json.loads(path.read_bytes())["event"] for path in sorted(journal.glob("event-*.json"))
     ]
-    assert events[-1] == {"kind": "stop", "reason": "retrieval_failed"}
+    assert not any(event["kind"] == "stop" for event in events)
     transport.open.assert_called_once()
 
 
@@ -522,6 +524,57 @@ def test_fifth_distinct_unresolved_reporting_slot_stops_unattainable_pilot(tmp_p
         with resumed:
             pass
     resumed_transport.open.assert_not_called()
+
+
+def test_twelve_hour_mixed_verified_slot_and_48_slot_closeout(tmp_path):
+    client, _, transport = client_at(
+        tmp_path,
+        Response(),
+        *(Response(b"", 404, {"Content-Length": "0"}) for _ in range(14)),
+        plan=PLAN_12H,
+    )
+    with client:
+        for index in range(15):
+            result = client.retrieve(PLAN_12H.intervals[index].filename_timestamp)
+            assert result.snapshot is not None if index == 0 else result.gap_evidence is not None
+        closeout = client.closeout()
+        assert len(closeout["body"]["slot_outcomes"]) == 48
+        assert closeout["body"]["slot_outcomes"][0]["outcome"] == "verified"
+        assert not client.budget.halted
+        verified = verify_retained_closeout(
+            client.budget,
+            public_key=PUBLIC,
+            receipts=client.receipts,
+            expected_closeout_sha256=canonical_sha256(closeout),
+            expected_plan_sha256=PLAN_12H.plan_id,
+        )
+    assert transport.open.call_count == 15
+    assert len(verified["slot_outcomes"]) == 48
+
+
+def test_twelve_hour_third_unresolved_reporting_slot_stops_46_of_48_gate(tmp_path):
+    for slot in range(3):
+        clock = Clock()
+        clock.start += timedelta(minutes=15 * slot)
+        client, _, transport = client_at(
+            tmp_path,
+            Response(b"unavailable", 400),
+            clock=clock,
+            plan=PLAN_12H,
+            create_pilot=slot == 0,
+        )
+        with client:
+            timestamp = PLAN_12H.intervals[slot * 15].filename_timestamp
+            if slot < 2:
+                with pytest.raises(RetrievalFailure) as failure:
+                    client.retrieve(timestamp)
+                assert failure.value.result.gap_evidence is not None
+                assert not client.budget.halted
+            else:
+                with pytest.raises(NetworkSafetyError, match="46/48 unattainable"):
+                    client.retrieve(timestamp)
+                assert client.budget.halted
+        transport.open.assert_called_once()
 
 
 @pytest.mark.parametrize("raw", [b"", b"not gzip", RAW[:-3], gzip.compress(b"{bad json}", mtime=0)])

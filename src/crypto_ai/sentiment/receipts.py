@@ -152,15 +152,23 @@ def _context(body: dict[str, Any]) -> None:
     )
 
 
-@lru_cache(maxsize=16)
-def _plan_hash(start_at: str) -> str:
+@lru_cache(maxsize=32)
+def _plan_minute_count(start_at: str, plan_sha256: str) -> int:
+    """Resolve the signed plan hash to one frozen duration without schema migration.
+
+    Historical 24-hour receipts remain valid; the bounded 12-hour amendment has
+    a distinct plan hash and cannot be substituted into the older schedule.
+    """
     start = _timestamp(start_at, "plan_start_at_utc")
     _require(start.second == 0 and start.microsecond == 0, "plan must start on a minute boundary")
     try:
-        end = format_utc_timestamp(start + timedelta(days=1))
-        return plan_retrieval(start_at, end, maximum_intervals=1_440).plan_id
+        for minute_count in (720, 1_440):
+            end = format_utc_timestamp(start + timedelta(minutes=minute_count))
+            if plan_retrieval(start_at, end, maximum_intervals=1_440).plan_id == plan_sha256:
+                return minute_count
     except (ValueError, OverflowError) as exc:
-        raise ReceiptValidationError("invalid 24-hour receipt plan") from exc
+        raise ReceiptValidationError("invalid bounded receipt plan") from exc
+    raise ReceiptValidationError("receipt plan hash mismatch")
 
 
 def _receipt_body(body: object, live_authority: LiveAuthority | None = None) -> dict[str, Any]:
@@ -189,15 +197,17 @@ def _receipt_body(body: object, live_authority: LiveAuthority | None = None) -> 
     )
     _hash(body["previous_receipt_sha256"], "previous_receipt_sha256", nullable=True)
     plan_start = _timestamp(body["plan_start_at_utc"], "plan_start_at_utc")
+    plan_minutes = _plan_minute_count(body["plan_start_at_utc"], body["plan_sha256"])
     _require(
-        body["plan_sha256"] == _plan_hash(body["plan_start_at_utc"]), "receipt plan hash mismatch"
+        body["interval_index"] < plan_minutes // 15,
+        "receipt reporting slot is outside its bounded plan",
     )
     minute = _timestamp(body["filename_timestamp"], "filename_timestamp")
     _require(
         minute.second == 0 and minute.microsecond == 0, "filename timestamp must be minute aligned"
     )
     offset = int((minute - plan_start).total_seconds())
-    _require(0 <= offset < 86_400, "receipt minute is outside the 24-hour plan")
+    _require(0 <= offset < plan_minutes * 60, "receipt minute is outside the bounded plan")
     _require(
         offset // 900 == body["interval_index"], "receipt minute does not match its reporting slot"
     )
@@ -370,15 +380,29 @@ def _closeout_body(body: object, live_authority: LiveAuthority | None = None) ->
         "closeout head and receipt count disagree",
     )
     outcomes = body["slot_outcomes"]
+    expected_slots = (
+        len(
+            plan_retrieval(
+                live_authority.value["approval_record"]["anchor_utc"],
+                live_authority.value["approval_record"]["end_exclusive_utc"],
+            ).intervals
+        )
+        // 15
+        if live_authority
+        else None
+    )
     _require(
-        type(outcomes) is list and len(outcomes) == 96, "closeout must account for exactly 96 slots"
+        type(outcomes) is list
+        and len(outcomes) in (48, 96)
+        and (expected_slots is None or len(outcomes) == expected_slots),
+        "closeout must account for every reporting slot in its bounded plan",
     )
     for index, slot in enumerate(outcomes):
         _require(
             type(slot) is dict and slot.keys() == {"interval_index", "outcome"},
             "invalid closeout slot fields",
         )
-        _integer(slot["interval_index"], "slot interval_index", 0, 95)
+        _integer(slot["interval_index"], "slot interval_index", 0, len(outcomes) - 1)
         _require(
             slot["interval_index"] == index, "closeout slots must be ordered without omissions"
         )
@@ -448,7 +472,7 @@ def sign_closeout(
     *,
     live_authority: LiveAuthority | None = None,
 ) -> dict[str, Any]:
-    """Sign a complete 96-slot inventory commitment; verification also needs pins."""
+    """Sign a complete bounded-plan inventory commitment; verification also needs pins."""
     return _sign(body, private_key, closeout=True, live_authority=live_authority)
 
 
@@ -665,6 +689,12 @@ def verify_closeout(
         receipts, public_key, body["final_receipt_sha256"], live_authority=live_authority
     )
     _require(len(verified) == body["receipt_count"], "closeout receipt count mismatch")
+    if verified:
+        _require(
+            len(body["slot_outcomes"])
+            == _plan_minute_count(verified[0]["plan_start_at_utc"], body["plan_sha256"]) // 15,
+            "closeout slot count differs from its signed retrieval plan",
+        )
     for receipt in verified:
         _require(
             all(receipt[field] == body[field] for field in _CONTEXT_FIELDS),

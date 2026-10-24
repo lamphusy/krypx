@@ -168,8 +168,17 @@ def test_plan_is_verified_before_transport_exists(plan):
 
 def test_short_plan_is_not_a_live_pilot():
     short = plan_retrieval("2026-09-13T00:00:00Z", "2026-09-13T00:01:00Z")
-    with pytest.raises(NetworkSafetyError, match="24-hour"):
+    with pytest.raises(NetworkSafetyError, match="12- or 24-hour"):
         RealGSGTransport(short)
+
+
+def test_exact_twelve_hour_plan_is_allowlisted_without_widening_historical_plan():
+    bounded = plan_retrieval("2026-09-13T00:00:00Z", "2026-09-13T12:00:00Z")
+    transport = RealGSGTransport(bounded)
+    assert len(transport._allowed_urls) == 720
+    assert expected_gsg_source_locator(bounded.intervals[-1]) in transport._allowed_urls
+    assert expected_gsg_source_locator(PLAN.intervals[720]) not in transport._allowed_urls
+    assert len(RealGSGTransport(PLAN)._allowed_urls) == 1440
 
 
 @pytest.mark.parametrize("status", ["301 Moved", "302 Found", "307 Temporary", "308 Permanent"])

@@ -1,6 +1,6 @@
 """Explicitly armed, calendar-bounded live pilot; importing never opens a network.
 
-The macOS scheduler starts independent workers, not a 24-hour collector. Each
+The macOS scheduler starts independent workers, not a continuous collector. Each
 worker has a process watchdog and an immutable invocation claim. Nothing here
 launches a job until the human runs ``arm`` before the observation anchor.
 """
@@ -53,6 +53,15 @@ def _utc(value: str) -> datetime:
     if result is None or format_utc_timestamp(result) != value:
         raise NetworkSafetyError("pilot UTC must be canonical")
     return result
+
+
+def _reporting_slots(pilot: dict) -> int:
+    """Return the frozen bounded schedule size, preserving historical 24h runs."""
+    duration = _utc(pilot["end_exclusive_utc"]) - _utc(pilot["anchor_utc"])
+    slots = {timedelta(hours=12): 48, timedelta(days=1): 96}.get(duration)
+    if slots is None:
+        raise NetworkSafetyError("live pilot requires an approved 12- or 24-hour window")
+    return slots
 
 
 def _json(raw: bytes) -> dict[str, Any]:
@@ -165,10 +174,9 @@ def load_setup(repo: Path) -> tuple[dict, dict, ContentAddressedStore, Ed25519Pr
         if approval[field] != pilot[field]:
             raise NetworkSafetyError("approval and pilot schedule disagree")
     start, end = _utc(pilot["anchor_utc"]), _utc(pilot["end_exclusive_utc"])
-    if end - start != timedelta(days=1) or _utc(pilot["closeout_deadline_utc"]) != end + timedelta(
-        minutes=45
-    ):
-        raise NetworkSafetyError("live pilot requires the exact 24-hour window and 45-minute tail")
+    _reporting_slots(pilot)
+    if _utc(pilot["closeout_deadline_utc"]) != end + timedelta(minutes=45):
+        raise NetworkSafetyError("live pilot requires an approved window and 45-minute tail")
     if _utc(approval["approved_at_utc"]) >= start:
         raise NetworkSafetyError("human approval must precede the anchor")
     root = _pilot_root(repo, pilot["store_path"])
@@ -253,7 +261,7 @@ def calendar_jobs(repo: Path, pilot: dict, python: str) -> list[tuple[str, bytes
         r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}", pilot["pilot_id"]
     ):
         raise NetworkSafetyError("invalid pilot scheduler identity")
-    for index in range(96):
+    for index in range(_reporting_slots(pilot)):
         start = _utc(pilot["anchor_utc"]) + timedelta(minutes=45 + index * 15)
         local = start.astimezone()
         label = f"org.krypx.{pilot['pilot_id']}.slot-{index:02d}"
@@ -343,7 +351,7 @@ def arm(repo: Path, *, now: datetime | None = None) -> dict:
             {
                 "schema_version": "batch-b-live-schedule-ready-v1",
                 "authority_sha256": canonical_sha256(envelope),
-                "jobs": 96,
+                "jobs": _reporting_slots(pilot),
                 "ready_at_utc": format_utc_timestamp(ready_at),
             },
             key,
@@ -360,13 +368,19 @@ def arm(repo: Path, *, now: datetime | None = None) -> dict:
         if datetime.now(UTC) >= _utc(pilot["anchor_utc"]):
             budget.stop("readiness_publication_exceeded_anchor")
             raise NetworkSafetyError("durable scheduler readiness missed the anchor")
-    return {"status": "ARMED", "jobs": 96, "launch_authority_sha256": canonical_sha256(envelope)}
+    return {
+        "status": "ARMED",
+        "jobs": _reporting_slots(pilot),
+        "launch_authority_sha256": canonical_sha256(envelope),
+    }
 
 
 def worker(repo: Path, index: int) -> dict:
-    if type(index) is not int or not 0 <= index < 96:
-        raise NetworkSafetyError("worker slot must be an integer from zero through 95")
+    if type(index) is not int or index < 0:
+        raise NetworkSafetyError("worker slot must be a non-negative integer")
     config, pilot, store, key = load_setup(repo)
+    if index >= _reporting_slots(pilot):
+        raise NetworkSafetyError("worker slot is outside the approved pilot window")
     now = datetime.now(UTC)
     slot_start = _utc(pilot["anchor_utc"]) + timedelta(minutes=45 + index * 15)
     slot_end = slot_start + timedelta(minutes=15)
@@ -393,7 +407,7 @@ def _worker_run(repo: Path, index: int, config: dict, pilot: dict, store, key) -
     expected_ready = {
         "schema_version": "batch-b-live-schedule-ready-v1",
         "authority_sha256": canonical_sha256(_sign_launch(launch, key)),
-        "jobs": 96,
+        "jobs": _reporting_slots(pilot),
         "ready_at_utc": format_utc_timestamp(ready_at),
     }
     expected_ready_envelope = _sign_launch(expected_ready, key, domain=READY_DOMAIN)
@@ -442,13 +456,18 @@ def _worker_run(repo: Path, index: int, config: dict, pilot: dict, store, key) -
             },
             metadata={"launch_authority_sha256": canonical_sha256(_sign_launch(launch, key))},
         )
-        terminal_failure = False
-        try:
-            for minute in plan.intervals[index * 15 : (index + 1) * 15]:
+        for minute in plan.intervals[index * 15 : (index + 1) * 15]:
+            try:
                 client.retrieve(minute.filename_timestamp)
-        except RetrievalFailure:
-            terminal_failure = True
-        if index == 95 or terminal_failure:
+            except RetrievalFailure:
+                # A signed terminal outcome belongs to this planned minute.
+                # Continue the remaining minutes and future reporting slots;
+                # the collector's coverage gate alone decides when further
+                # collection becomes mathematically futile. An unsafe transfer
+                # may independently halt the budget and must never be retried.
+                if client.budget.halted:
+                    raise
+        if index == _reporting_slots(pilot) - 1:
             closeout = client.closeout()
             verify_retained_closeout(
                 client.budget,
@@ -459,14 +478,14 @@ def _worker_run(repo: Path, index: int, config: dict, pilot: dict, store, key) -
                 live_authority=authority,
             )
             return {
-                "status": (
-                    "HALTED_CLOSED_OUT_NOT_ACCEPTED"
-                    if terminal_failure
-                    else "CLOSED_OUT_NOT_YET_ACCEPTED"
-                ),
+                "status": "CLOSED_OUT_NOT_YET_ACCEPTED",
                 "closeout_sha256": canonical_sha256(closeout),
             }
-        return {"status": "WORKER_FINISHED", "slot": index, "receipt_count": len(client.receipts)}
+        return {
+            "status": "WORKER_FINISHED",
+            "slot": index,
+            "receipt_count": len(client.receipts),
+        }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -476,7 +495,7 @@ def main(argv: list[str] | None = None) -> int:
     provision_parser = sub.add_parser("provision", help="create isolated signer once; no network")
     provision_parser.add_argument("--root", default=DEFAULT_ROOT)
     sub.add_parser("check", help="validate local pins/configuration; no network or scheduling")
-    sub.add_parser("arm", help="before anchor, install 96 bounded live calendar jobs")
+    sub.add_parser("arm", help="before anchor, install bounded live calendar jobs")
     slot_parser = sub.add_parser("worker", help="run one pre-armed fixed slot; real HTTPS")
     slot_parser.add_argument("--slot", type=int, required=True)
     args = parser.parse_args(argv)
