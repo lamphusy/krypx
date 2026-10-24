@@ -24,6 +24,7 @@ from crypto_ai.sentiment.canonical import canonical_sha256, canonicalize
 from crypto_ai.sentiment.contracts import format_utc_timestamp, parse_utc_timestamp
 from crypto_ai.sentiment.exceptions import (
     NETWORK_FAILURE_STAGES,
+    NetworkFailureDiagnostic,
     NetworkSafetyError,
     NetworkStageError,
 )
@@ -594,11 +595,34 @@ class GSGNetworkClient:
                 and not self._closed_out
                 and (not receipts or receipts[-1]["body"]["transfer_complete"] is not True)
             ):
-                self.budget.stop("retrieval_failed")
+                diagnostic = None
+                if receipts:
+                    body = receipts[-1]["body"]
+                    length = body["content_length"]
+                    received = body["bytes_received"]
+                    diagnostic = NetworkFailureDiagnostic(
+                        http_status=body["http_status"],
+                        content_length=length,
+                        bytes_received=received,
+                        error_category=(
+                            "length_mismatch"
+                            if length is not None and received != length
+                            else "stream_error"
+                        ),
+                    )
+                self.budget.stop(
+                    "retrieval_failed",
+                    stage="response_body" if diagnostic is not None else None,
+                    diagnostic=diagnostic,
+                )
             raise
         except NetworkSafetyError as exc:
             if self._active and not self._closed_out:
-                self.budget.stop("retrieval_failed", stage=self._failure_stage(exc))
+                self.budget.stop(
+                    "retrieval_failed",
+                    stage=self._failure_stage(exc),
+                    diagnostic=exc.diagnostic if type(exc) is NetworkStageError else None,
+                )
             raise
         except Exception as exc:
             if self._active and not self._closed_out:

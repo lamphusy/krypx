@@ -10,7 +10,11 @@ import pytest
 
 from crypto_ai.sentiment import network_budget as budget_module
 from crypto_ai.sentiment.canonical import canonicalize, sha256_bytes
-from crypto_ai.sentiment.exceptions import NETWORK_FAILURE_STAGES, NetworkSafetyError
+from crypto_ai.sentiment.exceptions import (
+    NETWORK_FAILURE_STAGES,
+    NetworkFailureDiagnostic,
+    NetworkSafetyError,
+)
 from crypto_ai.sentiment.network_budget import PilotBudget
 from crypto_ai.sentiment.storage import ContentAddressedStore
 
@@ -126,6 +130,80 @@ def test_staged_stop_is_durable_and_does_not_clear_pending_intent(
     with pytest.raises(NetworkSafetyError, match="unresolved prior request intent"):
         with make_budget(tmp_path).locked():
             pytest.fail("staged stop cleared the pending request")
+
+
+def test_response_body_diagnostic_is_durable_and_contains_only_fixed_fields(tmp_path: Path) -> None:
+    budget = make_budget(tmp_path, create=True)
+    diagnostic = NetworkFailureDiagnostic(200, 5, 3, "connection_reset")
+    with budget.locked():
+        request(budget)
+        budget.record_received(3)
+        budget.stop("retrieval_failed", stage="response_body", diagnostic=diagnostic)
+    event = json.loads((journal(tmp_path, budget) / "event-000002.json").read_bytes())["event"]
+    assert event == {
+        "kind": "stop",
+        "reason": "retrieval_failed",
+        "stage": "response_body",
+        "diagnostic": {
+            "http_status": 200,
+            "content_length": 5,
+            "bytes_received": 3,
+            "error_category": "connection_reset",
+        },
+    }
+    with pytest.raises(NetworkSafetyError, match="unresolved prior request intent"):
+        with make_budget(tmp_path).locked():
+            pytest.fail("diagnostic stop cleared the pending request")
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"http_status": True},
+        {"http_status": 600},
+        {"content_length": -1},
+        {"content_length": True},
+        {"bytes_received": -1},
+        {"bytes_received": 500_000_001},
+        {"error_category": "credential=secret"},
+        {"unexpected": "credential=secret"},
+    ],
+)
+def test_stop_rejects_malformed_or_unredacted_diagnostic(
+    tmp_path: Path, mutation: dict[str, object]
+) -> None:
+    details: dict[str, object] = {
+        "http_status": 200,
+        "content_length": 5,
+        "bytes_received": 3,
+        "error_category": "connection_reset",
+    }
+    details.update(mutation)
+    event = {
+        "kind": "stop",
+        "reason": "retrieval_failed",
+        "stage": "response_body",
+        "diagnostic": details,
+    }
+    with pytest.raises(NetworkSafetyError) as failure:
+        make_budget(tmp_path)._validate_event(event)
+    assert "secret" not in str(failure.value)
+
+
+@pytest.mark.parametrize(
+    "reason,stage", [("session_failed", "response_body"), ("retrieval_failed", "tls_context")]
+)
+def test_diagnostic_is_only_allowed_on_response_body_retrieval_stop(
+    tmp_path: Path, reason: str, stage: str
+) -> None:
+    event = {
+        "kind": "stop",
+        "reason": reason,
+        "stage": stage,
+        "diagnostic": NetworkFailureDiagnostic(200, 5, 3, "timeout").as_event(),
+    }
+    with pytest.raises(NetworkSafetyError, match="diagnostic"):
+        make_budget(tmp_path)._validate_event(event)
 
 
 @pytest.mark.parametrize(

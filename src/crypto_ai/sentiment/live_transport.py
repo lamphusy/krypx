@@ -7,6 +7,7 @@ and streaming. Tests replace the connection boundary and perform no network I/O.
 
 from __future__ import annotations
 
+import errno
 import http.client
 import math
 import re
@@ -18,7 +19,11 @@ from types import MappingProxyType
 from typing import Any
 
 from crypto_ai.exceptions import CryptoAIError
-from crypto_ai.sentiment.exceptions import NetworkSafetyError, NetworkStageError
+from crypto_ai.sentiment.exceptions import (
+    NetworkFailureDiagnostic,
+    NetworkSafetyError,
+    NetworkStageError,
+)
 from crypto_ai.sentiment.live_deadline import hard_deadline
 from crypto_ai.sentiment.providers.gdelt_gsg import (
     RetrievalPlan,
@@ -37,6 +42,19 @@ _CONTENT_LENGTH = re.compile(r"(?:0|[1-9][0-9]{0,8})\Z")
 # discard a legitimate completed HTTP response. Framing and interpretation-
 # critical fields remain singular below, including Content-Length.
 _REPEATABLE_HEADERS = frozenset({"cache-control", "vary", "x-goog-hash"})
+
+
+def _body_error_category(exc: Exception) -> str:
+    """Classify a stream failure without retaining its text or provider metadata."""
+    if isinstance(exc, ssl.SSLEOFError):
+        return "tls_eof"
+    if isinstance(exc, http.client.IncompleteRead):
+        return "length_mismatch"
+    if isinstance(exc, ConnectionResetError) or getattr(exc, "errno", None) == errno.ECONNRESET:
+        return "connection_reset"
+    if isinstance(exc, TimeoutError):
+        return "timeout"
+    return "stream_error"
 
 
 def _timeout(value: float) -> float:
@@ -131,6 +149,22 @@ class RealGSGResponse:
         self._closed = False
         self._eof = False
         self._pending_failure = False
+        self._failure_diagnostic: NetworkFailureDiagnostic | None = None
+
+    @property
+    def failure_diagnostic(self) -> NetworkFailureDiagnostic | None:
+        """Return only bounded local fields, never headers or exception text."""
+        return self._failure_diagnostic
+
+    def _mark_failure(self, category: str) -> NetworkFailureDiagnostic:
+        diagnostic = NetworkFailureDiagnostic(
+            http_status=self.status,
+            content_length=self._content_length,
+            bytes_received=self._received,
+            error_category=category,
+        )
+        self._failure_diagnostic = diagnostic
+        return diagnostic
 
     def read(self, maximum_bytes: int, *, timeout: float) -> bytes:
         seconds = _timeout(timeout)
@@ -140,7 +174,11 @@ class RealGSGResponse:
             raise NetworkSafetyError("HTTPS body cannot be read after close")
         if self._pending_failure:
             self.close()
-            raise NetworkStageError("response_body", "HTTPS response stream terminated prematurely")
+            raise NetworkStageError(
+                "response_body",
+                "HTTPS response stream terminated prematurely",
+                diagnostic=self._failure_diagnostic,
+            )
         if self._eof:
             return b""
         read_started = False
@@ -158,6 +196,7 @@ class RealGSGResponse:
             if type(partial) is bytes and 0 < len(partial) <= maximum_bytes:
                 self._received += len(partial)
                 self._pending_failure = True
+                self._mark_failure(_body_error_category(exc))
                 return partial
             if (
                 read_started
@@ -172,8 +211,11 @@ class RealGSGResponse:
                 self._eof = True
                 self.transfer_complete = True
                 return b""
+            diagnostic = self._mark_failure(_body_error_category(exc))
             self.close()
-            raise NetworkStageError("response_body", "HTTPS response body read failed") from None
+            raise NetworkStageError(
+                "response_body", "HTTPS response body read failed", diagnostic=diagnostic
+            ) from None
         if type(chunk) is not bytes or len(chunk) > maximum_bytes:
             self.close()
             raise NetworkSafetyError("HTTPS response stream violated its read bound")
@@ -183,6 +225,10 @@ class RealGSGResponse:
             self.transfer_complete = (
                 self._content_length is None or self._received == self._content_length
             )
+            if not self.transfer_complete:
+                self._mark_failure("length_mismatch")
+        elif self._content_length is not None and self._received > self._content_length:
+            self._mark_failure("length_mismatch")
         return chunk
 
     def close(self) -> None:

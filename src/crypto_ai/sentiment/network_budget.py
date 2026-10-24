@@ -25,7 +25,11 @@ from crypto_ai.sentiment.contracts import (
     format_utc_timestamp,
     parse_utc_timestamp,
 )
-from crypto_ai.sentiment.exceptions import NETWORK_FAILURE_STAGES, NetworkSafetyError
+from crypto_ai.sentiment.exceptions import (
+    NETWORK_FAILURE_STAGES,
+    NetworkFailureDiagnostic,
+    NetworkSafetyError,
+)
 from crypto_ai.sentiment.storage import (
     ContentAddressedStore,
     _ensure_directory_at,
@@ -238,12 +242,22 @@ class PilotBudget:
         self._validate_event(event)
         self._append(event)
 
-    def stop(self, reason: str, *, stage: str | None = None) -> None:
-        """Persist a fatal stop, optionally with a fixed, non-sensitive local stage."""
+    def stop(
+        self,
+        reason: str,
+        *,
+        stage: str | None = None,
+        diagnostic: NetworkFailureDiagnostic | None = None,
+    ) -> None:
+        """Persist a fatal stop with only bounded, non-sensitive local evidence."""
         self._require_lock()
         event = {"kind": "stop", "reason": reason}
         if stage is not None:
             event["stage"] = stage
+        if diagnostic is not None:
+            if type(diagnostic) is not NetworkFailureDiagnostic:
+                raise NetworkSafetyError("stop diagnostic must be validated local evidence")
+            event["diagnostic"] = diagnostic.as_event()
         self._validate_event(event)
         self._append(event)
 
@@ -282,6 +296,7 @@ class PilotBudget:
         elif kind == "stop" and set(event) in (
             {"kind", "reason"},
             {"kind", "reason", "stage"},
+            {"kind", "reason", "stage", "diagnostic"},
         ):
             if not isinstance(event["reason"], str) or not 1 <= len(event["reason"]) <= 128:
                 raise NetworkSafetyError("stop reason must be a bounded nonempty string")
@@ -289,6 +304,17 @@ class PilotBudget:
                 type(event["stage"]) is not str or event["stage"] not in NETWORK_FAILURE_STAGES
             ):
                 raise NetworkSafetyError("stop stage must be an allowlisted code")
+            if "diagnostic" in event:
+                details = event["diagnostic"]
+                if (
+                    event["reason"] != "retrieval_failed"
+                    or event["stage"] != "response_body"
+                    or type(details) is not dict
+                    or set(details)
+                    != {"http_status", "content_length", "bytes_received", "error_category"}
+                ):
+                    raise NetworkSafetyError("invalid response-body stop diagnostic")
+                NetworkFailureDiagnostic(**details)
         else:
             raise NetworkSafetyError("unknown or malformed budget event")
 

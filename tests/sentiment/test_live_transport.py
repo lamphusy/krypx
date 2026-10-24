@@ -340,6 +340,7 @@ def test_200_exact_142688_byte_body_accepts_ragged_tls_eof(monkeypatch):
     assert response.transfer_complete is False
     assert response.read(65_536, timeout=1.0) == b""
     assert response.transfer_complete is True
+    assert response.failure_diagnostic is None
     assert stream.read1.call_count == 4
     assert connection.sock.timeouts == [1.0] * 4
     assert response.read(65_536, timeout=1.0) == b""
@@ -600,6 +601,79 @@ def test_stream_error_is_sanitized_and_closes_connection(monkeypatch):
     assert caught.value.__suppress_context__ is True
     assert response.transfer_complete is False
     connection.close.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "interruption, category",
+    [
+        (ssl.SSLEOFError("credential=secret; ragged TLS stream"), "tls_eof"),
+        (ConnectionResetError("credential=secret; connection reset"), "connection_reset"),
+        (TimeoutError("credential=secret; timed out"), "timeout"),
+        (OSError("credential=secret; unknown stream failure"), "stream_error"),
+    ],
+)
+def test_interrupted_stream_exposes_only_bounded_failure_diagnostic(
+    monkeypatch, interruption, category
+):
+    connection, _ = _connection(monkeypatch, body=b"", headers=[("Content-Length", "5")])
+    response = RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    stream = Mock()
+    stream.read1.side_effect = [b"abc", interruption]
+    connection.response.fp = stream
+
+    assert response.read(65_536, timeout=1.0) == b"abc"
+    with pytest.raises(NetworkStageError) as caught:
+        response.read(65_536, timeout=1.0)
+    assert caught.value.stage == "response_body"
+    diagnostic = caught.value.diagnostic
+    assert diagnostic is response.failure_diagnostic
+    assert (
+        diagnostic.http_status,
+        diagnostic.content_length,
+        diagnostic.bytes_received,
+        diagnostic.error_category,
+    ) == (200, 5, 3, category)
+    assert "secret" not in str(caught.value)
+    assert "secret" not in repr(diagnostic)
+    assert response.transfer_complete is False
+    connection.close.assert_called_once()
+
+
+def test_partial_connection_reset_keeps_counted_bytes_and_original_category(monkeypatch):
+    connection, _ = _connection(monkeypatch, body=b"", headers=[("Content-Length", "5")])
+    response = RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    interrupted = ConnectionResetError("credential=secret; partial reset")
+    interrupted.partial = b"abc"
+    stream = Mock()
+    stream.read1.side_effect = interrupted
+    connection.response.fp = stream
+
+    assert response.read(65_536, timeout=1.0) == b"abc"
+    with pytest.raises(NetworkStageError) as caught:
+        response.read(65_536, timeout=1.0)
+    assert stream.read1.call_count == 1
+    assert caught.value.diagnostic is response.failure_diagnostic
+    assert caught.value.diagnostic.error_category == "connection_reset"
+    assert caught.value.diagnostic.bytes_received == 3
+    assert "secret" not in str(caught.value)
+    assert "secret" not in repr(caught.value.diagnostic)
+    connection.close.assert_called_once()
+
+
+def test_clean_eof_with_declared_length_mismatch_has_safe_diagnostic(monkeypatch):
+    _connection(monkeypatch, body=b"abc", headers=[("Content-Length", "4")])
+    response = RealGSGTransport(PLAN).open(URL, timeout=1.0)
+    assert response.read(65_536, timeout=1.0) == b"abc"
+    assert response.read(65_536, timeout=1.0) == b""
+    assert response.transfer_complete is False
+    diagnostic = response.failure_diagnostic
+    assert (
+        diagnostic.http_status,
+        diagnostic.content_length,
+        diagnostic.bytes_received,
+        diagnostic.error_category,
+    ) == (200, 4, 3, "length_mismatch")
+    response.close()
 
 
 @pytest.mark.parametrize(

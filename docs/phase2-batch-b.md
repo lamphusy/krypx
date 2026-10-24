@@ -575,6 +575,16 @@ about where the local worker failed, not an observed HTTP status, signed receipt
 provider gap, or permission to retry a claimed minute. Raw exception text, URLs,
 headers, and response bytes are never written to that field.
 
+For future response-body failures, the stop event may additionally carry a
+strictly bounded local `diagnostic` object: `http_status`, declared
+`content_length` (or null), per-request `bytes_received`, and one allowlisted
+`error_category` (`tls_eof`, `connection_reset`, `timeout`, `length_mismatch`,
+or `stream_error`). This records neither exception text nor headers, URLs,
+credentials, or response content. It is not a signed provider receipt or
+verified coverage, and it cannot authorize a retry or backfill. Earlier budget
+journals, including the stopped October 24 pilot, remain immutable and retain
+their original event format.
+
 The real path must preserve verified TLS, exact URL allowlisting/no redirects, bounded raw
 stream accounting, five-second dispatch spacing, four attempts only for HTTP 429/5xx,
 10-second HTTP timeouts, atomic CAS, signature chaining and signed closeout verification.

@@ -453,6 +453,90 @@ def test_uncompleted_request_records_only_redacted_failure_stage(
     assert not any("attempt-" in path.name for path in client.store.publications_root.iterdir())
 
 
+@pytest.mark.parametrize(
+    "interruption, category",
+    [
+        (ssl.SSLEOFError("credential=secret; ragged TLS stream"), "tls_eof"),
+        (ConnectionResetError("credential=secret; reset"), "connection_reset"),
+        (TimeoutError("credential=secret; timed out"), "timeout"),
+    ],
+)
+def test_interrupted_real_response_records_only_safe_diagnostic_in_budget_journal(
+    tmp_path, interruption, category
+):
+    # The real body reader is exercised through the mock-only collector. It
+    # cannot open a socket, and every returned partial byte must be journaled.
+    clock = Clock()
+    connection = Mock()
+    socket = Mock()
+    http_response = Mock(status=200)
+    http_response.fp.read1.side_effect = [b"abc", interruption]
+    url = expected_gsg_source_locator(PLAN.intervals[0])
+    real_response = RealGSGResponse(
+        connection, http_response, socket, url, {"content-length": "5"}, 5
+    )
+    transport = Transport(clock, real_response)
+    client, _, _ = client_at(tmp_path, transport=transport, clock=clock)
+
+    with pytest.raises(NetworkSafetyError):
+        with client:
+            client.retrieve(minute())
+
+    journal = tmp_path / ".network-budgets" / client.budget.directory_name
+    events = [
+        json.loads(path.read_bytes())["event"] for path in sorted(journal.glob("event-*.json"))
+    ]
+    assert [event["count"] for event in events if event["kind"] == "received"] == [3]
+    assert events[-2] == {
+        "kind": "stop",
+        "reason": "retrieval_failed",
+        "stage": "response_body",
+        "diagnostic": {
+            "http_status": 200,
+            "content_length": 5,
+            "bytes_received": 3,
+            "error_category": category,
+        },
+    }
+    assert events[-1] == {"kind": "stop", "reason": "session_failed"}
+    assert not any(event["kind"] == "finish" for event in events)
+    assert b"secret" not in b"".join(path.read_bytes() for path in journal.iterdir())
+    assert not any("attempt-" in path.name for path in client.store.publications_root.iterdir())
+
+
+def test_partial_reset_records_partial_bytes_and_original_cause_in_budget_journal(tmp_path):
+    clock = Clock()
+    connection = Mock()
+    socket = Mock()
+    http_response = Mock(status=200)
+    interruption = ConnectionResetError("credential=secret; partial reset")
+    interruption.partial = b"abc"
+    http_response.fp.read1.side_effect = interruption
+    url = expected_gsg_source_locator(PLAN.intervals[0])
+    real_response = RealGSGResponse(
+        connection, http_response, socket, url, {"content-length": "5"}, 5
+    )
+    transport = Transport(clock, real_response)
+    client, _, _ = client_at(tmp_path, transport=transport, clock=clock)
+
+    with pytest.raises(NetworkSafetyError):
+        with client:
+            client.retrieve(minute())
+
+    journal = tmp_path / ".network-budgets" / client.budget.directory_name
+    events = [
+        json.loads(path.read_bytes())["event"] for path in sorted(journal.glob("event-*.json"))
+    ]
+    assert [event["count"] for event in events if event["kind"] == "received"] == [3]
+    assert events[-2]["diagnostic"] == {
+        "http_status": 200,
+        "content_length": 5,
+        "bytes_received": 3,
+        "error_category": "connection_reset",
+    }
+    assert b"secret" not in b"".join(path.read_bytes() for path in journal.iterdir())
+
+
 def test_truncated_http_404_remains_a_fatal_transfer_failure(tmp_path):
     client, _, transport = client_at(tmp_path, Response(b"", 404, {"Content-Length": "1"}))
     with client:
@@ -460,6 +544,37 @@ def test_truncated_http_404_remains_a_fatal_transfer_failure(tmp_path):
             client.retrieve(minute())
         assert failure.value.result.gap_evidence is not None
         assert client.budget.halted
+    transport.open.assert_called_once()
+
+
+def test_clean_length_mismatch_is_signed_and_diagnosed_without_secret_text(tmp_path):
+    client, _, transport = client_at(tmp_path, Response(b"", 404, {"Content-Length": "1"}))
+    with client:
+        with pytest.raises(RetrievalFailure) as failure:
+            client.retrieve(minute())
+        assert failure.value.result.gap_evidence is not None
+        assert client.budget.halted
+        body = verify_receipt_chain(client.receipts, PUBLIC)[0]
+        assert body["http_status"] == 404
+        assert body["content_length"] == 1
+        assert body["bytes_received"] == 0
+        assert body["transfer_complete"] is False
+    journal = tmp_path / ".network-budgets" / client.budget.directory_name
+    events = [
+        json.loads(path.read_bytes())["event"] for path in sorted(journal.glob("event-*.json"))
+    ]
+    assert events[-1] == {
+        "kind": "stop",
+        "reason": "retrieval_failed",
+        "stage": "response_body",
+        "diagnostic": {
+            "http_status": 404,
+            "content_length": 1,
+            "bytes_received": 0,
+            "error_category": "length_mismatch",
+        },
+    }
+    assert events[-2] == {"kind": "finish"}
     transport.open.assert_called_once()
 
 
