@@ -64,7 +64,7 @@
   "created_at": "2026-08-12T09:52:48Z",
   "approval_state": "batch_a_accepted_batch_b_offline_accepted_live_pilot_deferred_without_backfill_milestone3_offline_mock_foundation_accepted_milestone4_accepted_synthetic_only_milestone5_accepted_offline_only_milestone6_accepted_offline_only_milestone7_accepted_offline_only_milestone8_accepted_offline_only_milestone9_accepted_offline_only_milestone10_accepted_offline_only",
   "approved": true,
-  "approval_scope": "accepted_offline_foundations_through_milestone10_plus_exact_length_tls_eof_and_three_state_minute_coverage_amendments_active_october_24_12_hour_gsg_network_pilot_only_prior_pilot_evidence_immutable_no_replay_or_backfill_no_real_scoring_features_training_backtests_holdout_production_training_promotion_activation_or_push",
+  "approval_scope": "accepted_offline_foundations_through_milestone10_plus_exact_length_tls_eof_and_three_state_minute_coverage_amendments_active_october_25_12_hour_gsg_network_pilot_only_prior_pilot_evidence_immutable_no_replay_or_backfill_no_real_scoring_features_training_backtests_holdout_production_training_promotion_activation_or_push",
   "milestone_3_offline_foundation": {
     "status": "ACCEPTED_OFFLINE_ONLY",
     "authorization_authority": "human_authority",
@@ -1176,7 +1176,7 @@
     "status": "SPECIFICATION_FROZEN_COMPATIBLE",
     "batch_a_signoff_commit": "e7c189bf180c9b3fd72892544fa72805998f765d",
     "batch_a_engineering_completion_commit": "bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5",
-    "implementation_readiness": "PROSPECTIVE_THREE_STATE_IMPLEMENTED_VERIFIED_ACTIVE_OCTOBER_24_BOUNDED_LIVE_PILOT_AUTHORIZED",
+    "implementation_readiness": "PROSPECTIVE_THREE_STATE_IMPLEMENTED_VERIFIED_ACTIVE_OCTOBER_25_BOUNDED_LIVE_PILOT_AUTHORIZED",
     "compatibility_scope": "accepted_gsg_archive_locator_payload_parser_and_underlying_identity_chronology_and_gap_semantics_not_completed_live_transport_or_signed_evidence",
     "network_pilot_authorized": true,
     "milestone_3_scoring_authorized": false,
@@ -1252,10 +1252,10 @@
       "storage_namespace": "isolated_local_pilot_generation_outside_git"
     },
     "schedule": {
-      "current_status": "OCTOBER_24_12_HOUR_PROSPECTIVE_LIVE_PILOT_AUTHORIZED_NOT_ARMED",
+      "current_status": "OCTOBER_25_12_HOUR_PROSPECTIVE_LIVE_PILOT_AUTHORIZED_NOT_ARMED",
       "historical_authorization_recorded_at_utc": "2026-10-20T04:16:15Z",
       "prior_october_20_halt_recorded_on": "2026-10-20",
-      "current_authorization_recorded_at_utc": "2026-10-24T06:54:48Z",
+      "current_authorization_recorded_at_utc": "2026-10-24T19:26:17Z",
       "current_network_dispatch_authorized": true,
       "october_21_authorization_is_historical_only": true,
       "prospective_minute_coverage_amendment": "batch-b-gsg-minute-coverage-v2",
@@ -1266,8 +1266,8 @@
         "retained_for": "historical_frozen_schedule_and_synthetic_mock_fixtures_only_no_backfill"
       },
       "successor_prospective_anchor_requires_explicit_human_approval": true,
-      "prospective_anchor_utc": "2026-10-24T08:00:00Z",
-      "end_exclusive_utc": "2026-10-24T20:00:00Z",
+      "prospective_anchor_utc": "2026-10-24T20:00:00Z",
+      "end_exclusive_utc": "2026-10-25T08:00:00Z",
       "observation_duration_seconds": 43200,
       "reporting_interval_seconds": 900,
       "expected_reporting_intervals": 48,
@@ -1278,9 +1278,9 @@
       "worker_processing_slot_seconds": 900,
       "worker_deadline": "minimum_of_actual_monotonic_start_plus_900_seconds_and_fixed_processing_slot_end",
       "late_or_missed_worker_policy": "no_deadline_extension_no_relaunch_after_missed_slot",
-      "first_worker_start_utc": "2026-10-24T08:45:00Z",
-      "last_worker_start_utc": "2026-10-24T20:30:00Z",
-      "retrieval_and_closeout_end_exclusive_utc": "2026-10-24T20:45:00Z",
+      "first_worker_start_utc": "2026-10-24T20:45:00Z",
+      "last_worker_start_utc": "2026-10-25T08:30:00Z",
+      "retrieval_and_closeout_end_exclusive_utc": "2026-10-25T08:45:00Z",
       "post_observation_retrieval_and_closeout_tail_seconds": 2700,
       "tail_admits_next_day_file_timestamps": false,
       "process_duration_scope": "per_invocation_wall_time_including_waits_retries_parsing_publication_and_cleanup",
@@ -1622,9 +1622,9 @@
   },
   "batch_b_bounded_pilot_amendment": {
     "authority": "human_authority_2026_10_23_12_hour_pilot_instruction",
-    "current_window_authority": "human_authority_2026_10_24_replacement_prospective_window_instruction",
+    "current_window_authority": "human_authority_2026_10_24_20_00_utc_successor_prospective_window_instruction",
     "scope": "prospective_engineering_pilot_only",
-    "pilot_id": "phase2-batch-b-20261024",
+    "pilot_id": "phase2-batch-b-20261025",
     "observation_duration_seconds": 43200,
     "reporting_interval_seconds": 900,
     "reporting_intervals": 48,
@@ -1639,7 +1639,7 @@
   },
   "batch_b_minute_coverage_amendment": {
     "policy_id": "batch-b-gsg-minute-coverage-v2",
-    "status": "PROSPECTIVE_IMPLEMENTED_VERIFIED_LIVE_OCTOBER_24_BOUNDED_PILOT_AUTHORIZED",
+    "status": "PROSPECTIVE_IMPLEMENTED_VERIFIED_LIVE_OCTOBER_25_BOUNDED_PILOT_AUTHORIZED",
     "authority": "human_authority_2026_10_21_three_state_minute_coverage_instruction",
     "applies_to": "future_separately_authorized_forward_only_gdelt_gsg_pilot_generations_only",
     "applies_to_stopped_october_21_journal_or_claim": false,
@@ -1678,7 +1678,7 @@
     "new_real_collection_requires_separate_human_authorization": true
   },
   "batch_b_live_pilot": {
-    "status": "AUTHORIZED_NOT_ARMED_OCTOBER_24_12_HOUR_PROSPECTIVE_PILOT",
+    "status": "AUTHORIZED_NOT_ARMED_OCTOBER_25_12_HOUR_PROSPECTIVE_PILOT",
     "deferral": {
       "authorized_by": "human_authority",
       "recorded_on": "2026-09-14",
@@ -1718,7 +1718,7 @@
       "normalizer_state_v3_migration": false,
       "pilot_outputs": "raw_CAS_verified_parser_observations_signed_attempts_terminal_gaps_and_48_slot_closeout_not_sentiment_or_research_features"
     },
-    "replacement_window_authorized_at_utc": "2026-10-24T06:54:48Z",
+    "replacement_window_authorized_at_utc": "2026-10-24T19:26:17Z",
     "prior_authorized_window": {
       "anchor_utc": "2026-09-13T00:00:00Z",
       "end_exclusive_utc": "2026-09-14T00:00:00Z",
@@ -1897,19 +1897,31 @@
       "private_key_and_setup_evidence_preserved": true,
       "reset_rearm_resume_replay_merge_or_backfill_authorized": false
     },
-    "pilot_id": "phase2-batch-b-20261024",
+    "october_24_stopped_generation": {
+      "pilot_id": "phase2-batch-b-20261024",
+      "anchor_utc": "2026-10-24T08:00:00Z",
+      "end_exclusive_utc": "2026-10-24T20:00:00Z",
+      "closeout_deadline_utc": "2026-10-24T20:45:00Z",
+      "store_path": "data/phase2-pilot-20261024",
+      "status": "STOPPED_AFTER_RESPONSE_BODY_RETRIEVAL_FAILURE_NO_ACCEPTED_COVERAGE",
+      "retained_journal_stop_reasons": ["retrieval_failed", "session_failed"],
+      "retained_failure_stage": "response_body",
+      "journal_claim_signer_receipts_gaps_and_raw_cas_remain_immutable": true,
+      "reset_rearm_resume_replay_merge_or_backfill_authorized": false
+    },
+    "pilot_id": "phase2-batch-b-20261025",
     "specification_id": "phase2-batch-b-live-prospective-v1",
     "base_specification_id": "phase2-batch-b-prospective-ingestion-v2",
     "accepted_offline_commit": "14769aff7d72a44c17e520c99f6f90588e83101a",
-    "anchor_utc": "2026-10-24T08:00:00Z",
-    "end_exclusive_utc": "2026-10-24T20:00:00Z",
-    "closeout_deadline_utc": "2026-10-24T20:45:00Z",
+    "anchor_utc": "2026-10-24T20:00:00Z",
+    "end_exclusive_utc": "2026-10-25T08:00:00Z",
+    "closeout_deadline_utc": "2026-10-25T08:45:00Z",
     "expected_reporting_intervals": 48,
     "expected_minute_files": 720,
-    "store_path": "data/phase2-pilot-20261024",
+    "store_path": "data/phase2-pilot-20261025",
     "private_key_path": "secrets/pilot_ed25519.key",
-    "public_key_hex": "68c4c23ec7f4379a1ec1ad8cddf17dc20866d25d4f0eba8ea5013009110c68c9",
-    "signer_key_id": "963ce48adcf8578eae849ae353e178409812b7a249b74e63bcec533a7c56b8d8",
+    "public_key_hex": "8d4043bcdfc6df597527ba3bc21c75a8c69dfa4153bf744db4800c9ab53658e7",
+    "signer_key_id": "c4d26036ab7fdf72d613567a2040d809c4568c7e13abcd2e446967836da63560",
     "network_pilot_authorized": true,
     "real_provider_rights_approved": true,
     "accepted_pilot_coverage_established": false,
@@ -1937,7 +1949,7 @@
     "incremental_cost_usd": 0,
     "approval_record": {
       "approved_at_utc": "2026-09-12T17:46:20Z",
-      "window_authorized_at_utc": "2026-10-24T06:54:48Z",
+      "window_authorized_at_utc": "2026-10-24T19:26:17Z",
       "approved": true,
       "network_pilot_authorized": true,
       "real_provider_rights_approved": true,
@@ -1946,9 +1958,9 @@
       "scope": "gdelt_gsg_english_btc_titles",
       "attribution": "GDELT",
       "permitted_url_template": "https://data.gdeltproject.org/gdeltv3/gsg/{timestamp}.gsg.json.gz",
-      "anchor_utc": "2026-10-24T08:00:00Z",
-      "end_exclusive_utc": "2026-10-24T20:00:00Z",
-      "closeout_deadline_utc": "2026-10-24T20:45:00Z",
+      "anchor_utc": "2026-10-24T20:00:00Z",
+      "end_exclusive_utc": "2026-10-25T08:00:00Z",
+      "closeout_deadline_utc": "2026-10-25T08:45:00Z",
       "approved_internal_usage": [
         "title_metadata_ingestion",
         "immutable_exact_raw_retention",
@@ -2376,7 +2388,7 @@
     },
     "exact_next_action_at_batch_a_signoff": "prepare_batch_b_specification"
   },
-  "verdict": "AUTHORIZED_OCTOBER_24_12_HOUR_PROSPECTIVE_PILOT_NOT_ARMED",
+  "verdict": "AUTHORIZED_OCTOBER_25_12_HOUR_PROSPECTIVE_PILOT_NOT_ARMED",
   "next_action": "execute_live_prospective_pilot",
   "article_contract_version": "article-contract-v1",
   "contract_versions": {
@@ -4505,7 +4517,7 @@
     }
   },
   "human_decisions_required": [
-    "separately_authorize_any_pilot_window_after_the_october_24_bounded_generation_no_backfill",
+    "separately_authorize_any_pilot_window_after_the_october_25_bounded_generation_no_backfill",
     "independently_accept_live_pilot_result_and_pin_closeout_checkpoint_after_collection",
     "separately_authorize_any_successor_pilot_or_retention_disposal_change",
     "approve_scorer_and_model_weight_license",
@@ -4514,7 +4526,7 @@
     "later_approve_exact_development_cutoff_selected_model_control_and_future_holdout_start"
   ],
   "unresolved_decisions": [
-    "future_successor_window_after_october_24_bounded_pilot_requires_separate_network_authorization",
+    "future_successor_window_after_october_25_bounded_pilot_requires_separate_network_authorization",
     "independent_live_pilot_acceptance_and_final_closeout_checkpoint_pin",
     "authorization_for_any_later_window_or_changed_retention_policy",
     "llama2_license_account_weight_hash_and_hardware_approval",
@@ -4526,8 +4538,8 @@
     "future_holdout_evaluation_authorization"
   ],
   "required_authorizations": {
-    "provider_data_download": "authorized_only_for_october_24_12_hour_prospective_gsg_pilot_exact_720_https_locators_and_frozen_caps_after_pre_anchor_arming",
-    "provider_api_call": "authorized_only_for_october_24_12_hour_prospective_gsg_pilot_exact_720_https_locators_and_frozen_caps_after_pre_anchor_arming",
+    "provider_data_download": "authorized_only_for_october_25_12_hour_prospective_gsg_pilot_exact_720_https_locators_and_frozen_caps_after_pre_anchor_arming",
+    "provider_api_call": "authorized_only_for_october_25_12_hour_prospective_gsg_pilot_exact_720_https_locators_and_frozen_caps_after_pre_anchor_arming",
     "publisher_page_fetch": "not_authorized",
     "market_data_fetch": "not_authorized",
     "account_or_credentials": "not_authorized",
@@ -4553,12 +4565,12 @@
     "future_holdout_evaluation": "separate_explicit_authorization_required"
   },
   "next_authorized_task": {
-    "status": "BATCH_B_OCTOBER_24_12_HOUR_PROSPECTIVE_LIVE_PILOT_AUTHORIZED_NOT_ARMED",
+    "status": "BATCH_B_OCTOBER_25_12_HOUR_PROSPECTIVE_LIVE_PILOT_AUTHORIZED_NOT_ARMED",
     "action": "execute_live_prospective_pilot",
     "canonical_batch_a_completion_commit": "bb6d4d3854103d41d5f4c7338de9445aa1b3dbe5",
     "batch_a_status": "ACCEPTED_COMPLETED",
     "batch_b_specification_status": "SPECIFICATION_FROZEN_COMPATIBLE",
-    "description": "Phase 2 offline engineering remains accepted. Prior GSG pilot journals, claims, signers, receipts, gaps and raw CAS remain immutable without reset, re-arm, replay or backfill. The October 23 bounded setup was not armed and is historical. The separately authorized October 24 forward-only 12-hour engineering pilot uses the three-state minute coverage protocol, 720 exact HTTPS locators and the integer 46-of-48 slot gate, stopping at three irrecoverably uncovered slots. Its fresh isolated signer is pinned and it must be armed once before 2026-10-24T08:00:00Z. Real scoring, model downloads, indicators, feature joining, training, holdout evaluation, production promotion and activation remain unauthorized; no push is authorized.",
+    "description": "Phase 2 offline engineering remains accepted. Prior GSG pilot journals, claims, signers, receipts, gaps and raw CAS remain immutable without reset, re-arm, replay or backfill. The October 24 generation halted after a response-body retrieval failure and has no accepted coverage. The separately authorized October 25 forward-only 12-hour engineering pilot uses the three-state minute coverage protocol, 720 exact HTTPS locators and the integer 46-of-48 slot gate, stopping at three irrecoverably uncovered slots. Its fresh isolated signer is pinned and it must be armed once before 2026-10-24T20:00:00Z. Real scoring, model downloads, indicators, feature joining, training, holdout evaluation, production promotion and activation remain unauthorized; no push is authorized.",
     "milestone_4_specification_id": "phase2-milestone4-offline-aggregation-v1",
     "milestone_4_status": "ACCEPTED",
     "milestone_4_implementation_authorized": true,
@@ -4627,7 +4639,8 @@
     "current_instruction_new_october_21_pilot_authorized": false,
     "current_instruction_new_october_22_pilot_authorized": false,
     "current_instruction_new_october_23_bounded_pilot_authorized": false,
-    "current_instruction_new_october_24_bounded_pilot_authorized": true,
+    "current_instruction_new_october_24_bounded_pilot_authorized": false,
+    "current_instruction_new_october_25_bounded_pilot_authorized": true,
     "historical_october_21_pilot_authorization_preserved_in_batch_b_live_pilot_approval_record": true,
     "october_21_network_authorization_now_inactive_after_stop": true,
     "current_instruction_new_network_window_authorized": true,

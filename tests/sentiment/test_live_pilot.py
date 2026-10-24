@@ -346,7 +346,7 @@ def test_malformed_live_byte_counts_fail_with_project_exception(tmp_path, bad):
         verify_receipt(envelope, PUBLIC, live_authority=authority)
 
 
-def test_october_24_bounded_authority_is_active_and_prior_evidence_is_preserved():
+def test_october_25_bounded_authority_is_active_and_prior_evidence_is_preserved():
     config = json.loads((Path(__file__).parents[2] / "config/phase2_protocol.json").read_bytes())
     assert config["network_pilot_authorized"] is True
     assert config["real_network_calls_prohibited"] is False
@@ -360,17 +360,17 @@ def test_october_24_bounded_authority_is_active_and_prior_evidence_is_preserved(
     assert pilot["scheduler_armed_during_setup"] is False
     assert pilot["live_pilot_completed"] is False
     assert pilot["accepted_pilot_coverage_established"] is False
-    assert pilot["pilot_id"] == "phase2-batch-b-20261024"
-    assert pilot["store_path"] == "data/phase2-pilot-20261024"
+    assert pilot["pilot_id"] == "phase2-batch-b-20261025"
+    assert pilot["store_path"] == "data/phase2-pilot-20261025"
     assert pilot["private_key_path"] == "secrets/pilot_ed25519.key"
     assert pilot["expected_reporting_intervals"] == 48
     assert pilot["expected_minute_files"] == 720
     assert len(bytes.fromhex(pilot["public_key_hex"])) == 32
     assert sha256_bytes(bytes.fromhex(pilot["public_key_hex"])) == pilot["signer_key_id"]
     for field, expected in {
-        "anchor_utc": "2026-10-24T08:00:00Z",
-        "end_exclusive_utc": "2026-10-24T20:00:00Z",
-        "closeout_deadline_utc": "2026-10-24T20:45:00Z",
+        "anchor_utc": "2026-10-24T20:00:00Z",
+        "end_exclusive_utc": "2026-10-25T08:00:00Z",
+        "closeout_deadline_utc": "2026-10-25T08:45:00Z",
     }.items():
         assert pilot[field] == pilot["approval_record"][field] == expected
     assert pilot["approval_record"]["network_pilot_authorized"] is True
@@ -383,6 +383,15 @@ def test_october_24_bounded_authority_is_active_and_prior_evidence_is_preserved(
     assert pilot["approval_record"]["external_redistribution_authorized"] is False
     assert config["milestone_3_scoring_authorized"] is False
     assert LiveAuthority.from_config(config).value["pilot_id"] == pilot["pilot_id"]
+
+    stopped = pilot["october_24_stopped_generation"]
+    assert stopped["pilot_id"] == "phase2-batch-b-20261024"
+    assert stopped["store_path"] == "data/phase2-pilot-20261024"
+    assert stopped["anchor_utc"] == "2026-10-24T08:00:00Z"
+    assert stopped["retained_journal_stop_reasons"] == ["retrieval_failed", "session_failed"]
+    assert stopped["retained_failure_stage"] == "response_body"
+    assert stopped["journal_claim_signer_receipts_gaps_and_raw_cas_remain_immutable"] is True
+    assert stopped["reset_rearm_resume_replay_merge_or_backfill_authorized"] is False
 
     previous = pilot["prior_october_21_generation"]
     assert previous["pilot_id"] == "phase2-batch-b-20261021"

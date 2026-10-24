@@ -37,19 +37,28 @@ fix was committed on `main` at `9d35265ac074722e3642ca7916b6c1e004dffe66`.
 The separately authorized October 22 window below was a distinct, forward-only
 generation; its authority is historical and is not extended by the new bounded pilot.
 
-## Active October 24 08:00 UTC bounded live pilot authority
+## Historical October 24 08:00 UTC bounded live pilot stop
+
+The October 24 generation was armed and subsequently stopped before accepted
+coverage or a signed closeout was established. Its journal, claim, signer,
+receipts, raw CAS, and bounded diagnostics remain immutable audit evidence.
+The human-reported stop is historical, not authority to reset, re-arm, replay,
+merge, or backfill any minute from that window. Its network authority has
+elapsed. The following successor is a new, isolated, forward-only generation.
+
+## Active October 24 20:00 UTC bounded live pilot authority
 
 The human authority approves a distinct, forward-only **12-hour engineering
-pilot** with UTC anchor `2026-10-24T08:00:00Z` (15:00 October 24 Vietnam time),
-half-open observation window `[2026-10-24T08:00:00Z, 2026-10-24T20:00:00Z)`,
-and final signed closeout deadline `2026-10-24T20:45:00Z`. Pilot ID
-`phase2-batch-b-20261024` uses the fresh Git-ignored root
-`data/phase2-pilot-20261024` (mode `0700`) and its own Ed25519 key at
+pilot** with UTC anchor `2026-10-24T20:00:00Z` (03:00 October 25 Vietnam time),
+half-open observation window `[2026-10-24T20:00:00Z, 2026-10-25T08:00:00Z)`,
+and final signed closeout deadline `2026-10-25T08:45:00Z`. Pilot ID
+`phase2-batch-b-20261025` uses the fresh Git-ignored root
+`data/phase2-pilot-20261025` (mode `0700`) and its own Ed25519 key at
 `secrets/pilot_ed25519.key` (mode `0600`); the public key and SHA-256 key ID
 are pinned in `config/phase2_protocol.json`. Never print or commit the private
 key. The fixed plan has **48** 15-minute slots and **720** exact one-minute GSG
-locators. The first worker starts `2026-10-24T08:45:00Z`, the last starts
-`2026-10-24T20:30:00Z`; no out-of-window timestamp or backfill is allowed.
+locators. The first worker starts `2026-10-24T20:45:00Z`, the last starts
+`2026-10-25T08:30:00Z`; no out-of-window timestamp or backfill is allowed.
 
 The integer engineering acceptance gate remains **at least 46 of 48** fully
 verified reporting slots (95.833333...%), stopping at `coverage_gate` when
@@ -821,9 +830,9 @@ in ascending order and retain strictly increasing publication chronology.
 Batch A's frozen `PROVIDER_LAG` is 1,800 seconds: a file timestamp `t` is due at `t+30m`.
 The schedule accommodates this release-arrival allowance by starting each worker at its
 reporting interval's end plus 30 minutes, when all 15 files are due. For the
-active October 24 generation, the first worker starts
-`2026-10-24T08:45:00Z`; the last starts `2026-10-24T20:30:00Z` and must finish,
-including closeout, by `2026-10-24T20:45:00Z`. This explicitly specified 45-minute
+active October 24 20:00 UTC successor generation, the first worker starts
+`2026-10-24T20:45:00Z`; the last starts `2026-10-25T08:30:00Z` and must finish,
+including closeout, by `2026-10-25T08:45:00Z`. This explicitly specified 45-minute
 retrieval/closeout tail does not extend the 12-hour observation window or admit out-of-window
 file timestamps. No later catch-up is allowed. The 30-minute value is the accepted
 engineering policy, not a newly verified provider SLA; late files remain subject to
@@ -1140,9 +1149,10 @@ Milestone 3 remains unauthorized. Offline setup alone never arms a scheduler or
 starts collection.
 
 The next action is `execute_live_prospective_pilot` for the exact October 24
-12-hour window above, after a clean local commit, successful offline preflight,
-and arming before `2026-10-24T08:00:00Z`. The stopped October 21 and elapsed
-October 22 and missed/unarmed October 23 generations are not active network authority. Neither the
+20:00 UTC through October 25 08:00 UTC 12-hour window above, after a clean local
+commit, successful offline preflight, and arming before `2026-10-24T20:00:00Z`.
+The stopped October 21, elapsed October 22, missed/unarmed October 23, and
+stopped October 24 08:00 UTC generations are not active network authority. Neither the
 transport nor minute-coverage amendment authorizes re-arming, retroactive
 coverage, or backfill. The three-uncovered-slot `coverage_gate` is distinct
 from an independent immediate fail-closed safety stop on unsigned transport,
